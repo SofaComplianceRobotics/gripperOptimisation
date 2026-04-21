@@ -1,6 +1,6 @@
 {
-  "label": "Grasp Hold",
-  "description": "Current cube-lift benchmark",
+  "label": "Grasp Hold: 1 run",
+  "description": "Maximizes grip by moving the cube in eratic patterns and trying to hold it",
   "default_selected": true,
   "run_count": 1
 }

@@ -1,6 +1,6 @@
 {
-  "label": "Random Cube Pick",
-  "description": "Single scene, repeated 3 runs (small/medium/large)",
+  "label": "Random Cube Pick: 3 runs",
+  "description": "Maximizes adaptability by picking up cubes of different sizes and weights",
   "default_selected": false,
   "run_count": 3
 }

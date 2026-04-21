@@ -41,28 +41,15 @@ JSON
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin: 14px 0; align-items: stretch;">
 
 <div style="border: 1px solid #d8dde3; border-radius: 12px; padding: 14px 16px; background: #fafbfc; display: flex; flex-direction: column; height: 100%; min-height: 250px;">
-<p align="center"><strong>Default SOFA build</strong></p>
-<p align="center">Launch scene</p>
+<p align="center"><strong>Custom SOFA build</strong></p>
+
+<p align="center">Recording scene</p>
 
 <div style="margin-top: auto; display: grid; gap: 10px;">
-
-#runsofa-button("assets/labs/lab_shapeOPT/lab_shapeOPT.py")
-
-<p align="center">Launch recording scene</p>
 
 #runsofa-button("assets/labs/lab_shapeOPT/lab_shapeOPT_recording.py")
 
-<p align="center">Launch optimisation</p>
-
-#python-button("assets/labs/lab_shapeOPT/app/src/launch/launch_optimize.py")
-</div>
-</div>
-
-<div style="border: 1px solid #d8dde3; border-radius: 12px; padding: 14px 16px; background: #fafbfc; display: flex; flex-direction: column; height: 100%; min-height: 250px;">
-<p align="center"><strong>Custom SOFA build</strong></p>
 <p align="center">Launch scene</p>
-
-<div style="margin-top: auto; display: grid; gap: 10px;">
 
 #python-button("assets/labs/lab_shapeOPT/app/src/launch/launch_scene_custom_sofa.py")
 

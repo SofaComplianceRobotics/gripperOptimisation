@@ -35,6 +35,7 @@ def prompt_for_tests(
     root.attributes("-topmost", True)
 
     result: list[str] = []
+    weights: dict[str, tk.StringVar] = {}
     selected_indices = [idx for idx, item in enumerate(items) if item.name in defaults]
 
     container = ttk.Frame(root, padding=14)
@@ -85,6 +86,51 @@ def prompt_for_tests(
             listbox.selection_set(index)
         listbox.see(selected_indices[0])
 
+    # --- Weights UI ---
+    weights_frame = ttk.Frame(container)
+    weights_frame.pack(fill="x", pady=(10, 0))
+
+    weights_labels: dict[str, ttk.Label] = {}
+    weights_entries: dict[str, ttk.Entry] = {}
+
+    def update_weights_fields(*_):
+        # Clear previous widgets
+        for widget in weights_frame.winfo_children():
+            widget.destroy()
+        weights.clear()
+        weights_labels.clear()
+        weights_entries.clear()
+        # Get selected test names
+        selected = [listbox.get(i) for i in listbox.curselection()]
+        selected_items = [item for item in items if item.display_label in selected]
+        if not selected_items:
+            return
+        # Default: equal weights
+        default_weight = 100 // len(selected_items) if selected_items else 100
+        remainder = 100 - default_weight * len(selected_items)
+        for idx, item in enumerate(selected_items):
+            var = tk.StringVar()
+            val = str(default_weight + (1 if idx == 0 and remainder else 0))
+            var.set(val)
+            weights[item.name] = var
+            lbl = ttk.Label(
+                weights_frame, text=f"Weight for {item.display_label} (%) :"
+            )
+            lbl.grid(row=idx, column=0, sticky="w", padx=(0, 6), pady=2)
+            entry = ttk.Entry(weights_frame, textvariable=var, width=5)
+            entry.grid(row=idx, column=1, sticky="w", pady=2)
+            weights_labels[item.name] = lbl
+            weights_entries[item.name] = entry
+        # Info label
+        info = ttk.Label(weights_frame, text="Sum must be 100%", foreground="#555")
+        info.grid(
+            row=len(selected_items), column=0, columnspan=2, sticky="w", pady=(4, 0)
+        )
+
+    listbox.bind("<<ListboxSelect>>", update_weights_fields)
+    # Initialize weights fields for default selection
+    root.after(100, update_weights_fields)
+
     button_row = ttk.Frame(container)
     button_row.pack(fill="x", pady=(12, 0))
 
@@ -98,11 +144,28 @@ def prompt_for_tests(
                     break
         if not names:
             names.extend(defaults)
+        # Validate weights
+        if names:
+            try:
+                total = sum(int(weights[n].get()) for n in names)
+            except Exception:
+                tk.messagebox.showerror(
+                    "Invalid input", "All weights must be integers."
+                )
+                return
+            if total != 100:
+                tk.messagebox.showerror(
+                    "Invalid weights", f"Sum of weights must be 100% (got {total}%)"
+                )
+                return
         result[:] = names
+        # Attach weights as attribute for downstream use
+        result.weights = {n: int(weights[n].get()) for n in names} if names else {}
         root.destroy()
 
     def _cancel() -> None:
         result[:] = list(defaults)
+        result.weights = {n: 100 // len(defaults) for n in defaults} if defaults else {}
         root.destroy()
 
     ok_button = ttk.Button(button_row, text="OK", command=_accept)
