@@ -218,6 +218,8 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Ignore all files in site-packages
-app/src/../../runtime/modules/site-packages/
-app/src/../../runtime/recordings/
-app/src/../../runtime/trials/
+runtime/modules/site-packages/
+runtime/recordings/
+runtime/trials/
+runtime/gripper_opt.db
+runtime/exports/
