@@ -1,0 +1,6 @@
+{
+  "label": "Random Cube Pick",
+  "description": "Single scene, repeated 3 runs (small/medium/large)",
+  "default_selected": false,
+  "run_count": 3
+}

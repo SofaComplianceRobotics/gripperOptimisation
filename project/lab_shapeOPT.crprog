@@ -1,0 +1,13 @@
+<?xml version='1.0'?>
+<!DOCTYPE program>
+<program>
+    <track>
+        <action name="startmove" wp="0.000000 -150.000000 0.000000 0.000000 0.000000 0.000000 1.000000 " duration="0.5" freeInRotation="true" comment="Start waypoint"/>
+        <action name="move" wp="0.000000 -150.000000 0.000000 -0.798200 0.088406 -0.545933 0.238785 " duration="1" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="pick" duration="1" closing="35" opening="70" release="true" comment="Place"/>
+        <action name="move" wp="0.000000 -175.000000 0.000000 -0.532276 0.124313 -0.809375 0.214806 " duration="1" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="pick" duration="1" closing="5" opening="70" release="false" comment="Pick"/>
+        <action name="move" wp="0.000000 -110.000000 0.000000 -0.796519 0.055699 -0.580752 0.158690 " duration="1" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="pick" duration="1" closing="5" opening="40" release="true" comment="Place"/>
+    </track>
+</program>

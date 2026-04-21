@@ -1,0 +1,6 @@
+{
+  "label": "Grasp Hold",
+  "description": "Current cube-lift benchmark",
+  "default_selected": true,
+  "run_count": 1
+}

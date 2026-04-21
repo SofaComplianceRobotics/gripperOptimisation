@@ -1,0 +1,61 @@
+[Window.Program]
+programDirPath = C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\assets\labs\lab_optimisation
+programFilename = lab_optimisation.crprog
+open = true
+dockId = 6
+
+
+[Window.Input/Output]
+open = false
+
+
+[Window.My Robot]
+open = true
+dockId = 4
+
+
+[Window.Move]
+open = true
+dockId = 3
+
+
+[Window.Plotting]
+open = false
+
+
+[Window.Viewport]
+open = true
+dockId = 5
+
+
+[Window.Scene Graph]
+open = false
+
+
+[Window.Log]
+open = false
+
+
+[Window.2]
+width = 480.000000
+height = 963.000000
+
+
+[Window.4]
+width = 480.000000
+height = 433.000000
+
+
+[Window.3]
+width = 480.000000
+height = 529.000000
+
+
+[Window.6]
+width = 1429.000000
+height = 339.000000
+
+
+[Window.5]
+width = 1429.000000
+height = 623.000000

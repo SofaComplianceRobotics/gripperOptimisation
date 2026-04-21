@@ -1,0 +1,22 @@
+{
+  "cylinder_radius": 26.5,
+  "cylinder_height": 4.0,
+  "cylinder_hole_thickness": 3.0,
+  "pincer_profile_width": 3.3717731938742075,
+  "pincer_profile_height": 6.853900266445262,
+  "pincer_path_scale": 0.4,
+  "pincer_tilt_y_deg": 90.0,
+  "pincer_round_ends": true,
+  "p0_hout_dist": 28.498613565727982,
+  "p0_hout_angle_deg": 12.279193747938962,
+  "p1_dist": 71.54154318134918,
+  "p1_angle_deg": -43.86994434630155,
+  "p1_hin_dist": 13.275058910885962,
+  "p1_hin_angle_deg": 199.11693574519876,
+  "leg_attachement_tilt_angle": -7.370496986413091,
+  "mesh_size_max": 9,
+  "mesh_size_min": 6,
+  "mesh_collision_size": 90.0,
+  "mesh_angle_smooth": 20.0,
+  "mesh_size_from_curvature": 12
+}
