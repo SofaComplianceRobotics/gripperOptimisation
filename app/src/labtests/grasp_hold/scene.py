@@ -15,7 +15,6 @@ Everything else comes from core.
 from __future__ import annotations
 
 import os
-import random
 import sys
 from pathlib import Path
 
@@ -38,7 +37,7 @@ def _ensure_scene_paths() -> tuple[Path, Path, Path, Path]:
     return script_dir, src_root, app_root, lab_root
 
 
-# ── Path bootstrap (same pattern as before) ───────────────────────────────────
+# ── Path bootstrap ─────────────────────────────────────────────────────────────
 SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = _ensure_scene_paths()
 
 # ── Config from environment ───────────────────────────────────────────────────
@@ -70,10 +69,6 @@ UNDERCUBE_MARGIN = float(os.environ.get("UNDERCUBE_MARGIN", "0.0"))
 ENABLE_UNDERCUBE_CHECK = os.environ.get("ENABLE_UNDERCUBE_CHECK", "0") == "1"
 SHAPEOPT_FRICTION_COEF = float(os.environ.get("SHAPEOPT_FRICTION_COEF", "0.6"))
 SHOW_CUBE_Y_GRAPH = os.environ.get("SHOW_CUBE_Y_GRAPH", "0") == "1"
-SHAPEOPT_TEST_MODE = os.environ.get("SHAPEOPT_TEST_MODE", "").strip().lower()
-SHAPEOPT_FINISH_BONUS = float(os.environ.get("SHAPEOPT_FINISH_BONUS", "2.0"))
-SHAPEOPT_CUBE_WEIGHT_MIN = float(os.environ.get("SHAPEOPT_CUBE_WEIGHT_MIN", "0.02"))
-SHAPEOPT_CUBE_WEIGHT_MAX = float(os.environ.get("SHAPEOPT_CUBE_WEIGHT_MAX", "0.2"))
 SHAPEOPT_FLOOR_CENTER_Y = float(os.environ.get("SHAPEOPT_FLOOR_CENTER_Y", "-230.0"))
 SHAPEOPT_CUBE_SPAWN_CLEARANCE = float(
     os.environ.get("SHAPEOPT_CUBE_SPAWN_CLEARANCE", "10")
@@ -90,45 +85,10 @@ SHAPEOPT_CUBE_PRESPAWN_OFFSET = float(
 )
 
 DT = 0.01
-IS_RANDOM_CUBE_MODE = SHAPEOPT_TEST_MODE == "random_cube_pick"
 
-
-def _resolve_record_file() -> str:
-    target = os.environ.get("LAB_SHAPEOPT_RECORDING_TARGET", "").strip()
-    if not target:
-        target = os.environ.get("OPTUNA_TEST_NAME", "").strip()
-
-    if target:
-        target_path = (
-            LAB_ROOT / "runtime" / "recordings" / target / "motor_recording.json"
-        )
-        legacy = LAB_ROOT / "runtime" / "motor_recording.json"
-        if target == "grasp_hold" and not target_path.exists() and legacy.exists():
-            return str(legacy)
-        return str(target_path)
-
-    legacy = LAB_ROOT / "runtime" / "motor_recording.json"
-    if legacy.exists():
-        return str(legacy)
-    return str(
-        LAB_ROOT / "runtime" / "recordings" / "grasp_hold" / "motor_recording.json"
-    )
-
-
-def _resolve_random_cube_case() -> tuple[list[float], float] | None:
-    if SHAPEOPT_TEST_MODE != "random_cube_pick":
-        return None
-
-    size_cycle = ([5, 5, 5], [8, 8, 8], [20, 20, 20])
-    test_run_index = int(os.environ.get("LAB_SHAPEOPT_TEST_RUN_INDEX", str(OPTUNA_RUN)))
-    cycle_index = max(0, (test_run_index - 1) % 3)
-    cube_scale = list(size_cycle[cycle_index])
-
-    lo = min(SHAPEOPT_CUBE_WEIGHT_MIN, SHAPEOPT_CUBE_WEIGHT_MAX)
-    hi = max(SHAPEOPT_CUBE_WEIGHT_MIN, SHAPEOPT_CUBE_WEIGHT_MAX)
-    rng = random.Random(OPTUNA_GEN)
-    cube_mass = rng.uniform(lo, hi)
-    return cube_scale, cube_mass
+RECORD_FILE = str(
+    LAB_ROOT / "runtime" / "recordings" / "grasp_hold" / "motor_recording.json"
+)
 
 
 # ── createScene ───────────────────────────────────────────────────────────────
@@ -144,30 +104,14 @@ def createScene(rootnode):
     from labtests.core.modules.motor_playback import setup as setup_playback
     from labtests.core.scoring import ScoreWriter
 
-    # ── Cube config (normal or random) ────────────────────────────────────────
-    random_cube_case = _resolve_random_cube_case()
-    if random_cube_case is not None:
-        cube_scale, cube_mass_start = random_cube_case
-        cube_mass_max = cube_mass_start  # fixed mass for random-cube mode
-        print(
-            f"[cube] random_cube_pick run={os.environ.get('LAB_SHAPEOPT_TEST_RUN_INDEX', str(OPTUNA_RUN))} "
-            f"gen={OPTUNA_GEN} scale={cube_scale} mass={cube_mass_start:.5f}kg"
-        )
-    else:
-        cube_scale = [5.0, 5.0, 5.0]
-        cube_mass_start = CUBE_MASS_START
-        cube_mass_max = CUBE_MASS_MAX
-
     # ── Base scene (rootnode + Emio) ──────────────────────────────────────────
     nodes = build_base_scene(rootnode, inverse=False, friction=SHAPEOPT_FRICTION_COEF)
     if nodes is None:
         return
     print(f"[contact] friction configured with mu={SHAPEOPT_FRICTION_COEF:.6f}")
 
-    # Required plugins (unchanged from original)
     _add_required_plugins(nodes.simulation)
-
-    rootnode.dt = DT  # base_scene sets dt=0.01 for direct, but be explicit
+    rootnode.dt = DT
 
     # ── Modules ───────────────────────────────────────────────────────────────
     gripper_collision = setup_collision(nodes.emio, GRIPPER_MESH_PATH)
@@ -175,13 +119,13 @@ def createScene(rootnode):
     cube_handles = setup_cube_floor(
         nodes.simulation,
         gripper_collision,
-        cube_scale=cube_scale,
-        cube_mass=cube_mass_start,
+        cube_scale=[5.0, 5.0, 5.0],
+        cube_mass=CUBE_MASS_START,
         floor_center_y=SHAPEOPT_FLOOR_CENTER_Y,
         cube_spawn_clearance=SHAPEOPT_CUBE_SPAWN_CLEARANCE,
     )
 
-    playback = setup_playback(nodes.emio, _resolve_record_file())
+    playback = setup_playback(nodes.emio, RECORD_FILE)
 
     # ── ScoreWriter ───────────────────────────────────────────────────────────
     writer = ScoreWriter(
@@ -218,7 +162,7 @@ def createScene(rootnode):
             self.pickup_y_threshold = None
             self.cube_has_spawned = False
             self.spawn_contact_check_frames = 0
-            self._set_cube_mass(cube_mass_start)
+            self._set_cube_mass(CUBE_MASS_START)
             writer.write_status(
                 {
                     "state": "running",
@@ -270,7 +214,7 @@ def createScene(rootnode):
 
         def _update_overload_mass(self) -> None:
             if self.frame < self.recorded_frames:
-                self._set_cube_mass(cube_mass_start)
+                self._set_cube_mass(CUBE_MASS_START)
                 return
             overload_t = (self.frame - self.recorded_frames) * DT
             alpha = (
@@ -279,7 +223,7 @@ def createScene(rootnode):
                 else max(0.0, min(1.0, overload_t / CUBE_MASS_RAMP_TIME))
             )
             self._set_cube_mass(
-                cube_mass_start + (cube_mass_max - cube_mass_start) * alpha
+                CUBE_MASS_START + (CUBE_MASS_MAX - CUBE_MASS_START) * alpha
             )
 
         def _get_cube_gripper_contact_count(self) -> int:
@@ -514,15 +458,7 @@ def createScene(rootnode):
 
             # ── End of frames ──────────────────────────────────────────────────
             if self.frame >= self.total_frames:
-                if IS_RANDOM_CUBE_MODE:
-                    score = self.hold_time + SHAPEOPT_FINISH_BONUS
-                    writer.write_score_and_stop(
-                        score,
-                        f"horizon complete t={sim_time:.2f}s hold_time={self.hold_time:.2f}s "
-                        f"finish_bonus={SHAPEOPT_FINISH_BONUS:.2f}",
-                    )
-                else:
-                    writer.write_pruned_and_stop(f"horizon complete t={sim_time:.2f}s")
+                writer.write_pruned_and_stop(f"horizon complete t={sim_time:.2f}s")
                 return
 
             # ── Motor replay ───────────────────────────────────────────────────

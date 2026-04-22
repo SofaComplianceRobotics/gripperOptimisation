@@ -65,7 +65,11 @@ lab_shapeOPT/
 │   │   ├── ...
 │   │   └── previews/           # Flat preview gallery across all generations
 │   ├── exports/                # Exported meshes
-│   └── motor_recording.json    # Recorded inverse trajectory
+│   └── recordings/  # Recorded inverse trajectory
+│       ├──grasp_hold/
+│       │  └──motor_recording.json
+│       └──random_cube_pick/
+│          └──motor_recording.json
 ├── sections/                   # Documentation sections
 │   ├── 1_introduction.md
 │   ├── 2_parameters.md
