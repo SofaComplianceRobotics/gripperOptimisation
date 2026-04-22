@@ -141,7 +141,6 @@ lab_shapeOPT/
 1. Pre-creates trial/run status files for the monitor
 2. For each trial (serial): geometry generation → preview render → SOFA launch
 3. Waits for all SOFA instances to finish (parallel)
-4. Collects scores and applies consistency penalties
 5. Writes generation summary and progress updates
 6. Cleans up collision STL files
 
@@ -206,11 +205,11 @@ lab_shapeOPT/
 
 ### 1d. **optimize_scoring.py** — Score Collection & Progress
 
-**Purpose:** Read simulation results, apply consistency penalties, and track progress.
+**Purpose:** Read simulation results and track progress.
 
 **Key Functions:**
 - `read_score(score_path)` — Parse cube_z_final from JSON, return -inf if missing
-- `aggregate_trial_scores(valid_scores)` — Apply mean/median aggregation and consistency penalty
+- `aggregate_trial_scores(valid_scores)` — Apply mean/median aggregation
 - `write_run_status(path, data)` — Atomic write of per-run status for the monitor window
 - `write_gen_summary(gen_dir, gen_index, scores)` — Compute and write generation summary.json
 - `write_progress(gen_index, trials_done_in_gen, all_scores)` — Write progress.json for UI progress bar
@@ -376,27 +375,24 @@ python analyze_results.py
 - `TRIALS_DIR` — Base directory for all trial data
 - `TOP_X = 10` — Number of top trials to display in leaderboard
 - `CENTERED_AVG_HALF_WINDOW = 10` — Rolling average window size
-- `CONSISTENCY_PENALTY_COEF` — Loaded from environment for consistency penalty
 - `SCORE_AGGREGATION` — Loaded from environment (mean or median selection)
 
 ---
 
 ### 2b. **analyze_io.py** — Trial Data Loading
 
-**Purpose:** Comprehensive data aggregation from trials directory with fallback logic.
+**Purpose:** Load trial_state.json files from the trials directory.
 
 **Key Function:**
 - `load_all_trials()` — Walks all gen_*/trial_* folders and aggregates results
-  - Handles both modern format (trial_stats.json) and legacy format (separate JSON files)
-  - Applies consistency penalty if applicable
+  - Reads trial_state.json for each trial
   - Returns list of trial dicts with: gen_index, trial_index, score, final_score, failed, run_scores
   
 - `load_gen_summaries()` — Read pre-computed generation summary files if available
 
 **Handles:**
-- Missing score files (treated as failure)
+- Trial-level run slots in trial_state.json
 - Runs with multiple scores per trial (applies aggregation)
-- Legacy single-score format compatibility
 
 ---
 

@@ -40,6 +40,7 @@ from optimize_config import (
     LAB_ROOT,
     MAX_ACTIVE_SOFA_PROCS,
     SELECTED_TEST_NAMES,
+    SELECTED_TEST_WEIGHTS,
     RUN_PLAN,
     TRIALS_DIR,
     GEN_PROGRESS_POLL_INTERVAL,
@@ -61,13 +62,15 @@ from optimize_sofa import (
     wait_for_geometry_slot,
 )
 from optimize_scoring import (
-    read_score,
-    write_run_status,
     write_gen_summary,
     write_progress,
     cleanup_generation_status_files,
     aggregate_trial_scores,
-    write_jsonc,
+    init_trial_state,
+    update_trial_run,
+    read_trial_run,
+    read_trial_state,
+    update_trial_summary,
 )
 from optimize_utils import (
     reset_trials_dir,
@@ -89,7 +92,7 @@ def wait_for_sofa_runs(
 
     Inputs:
         gen_index (int): Generation number for status display.
-        processes (list[tuple]): List of (trial_index, trial, [(Popen, score_path, status_path), ...]).
+        processes (list[tuple]): List of (trial_index, trial, [(Popen, trial_state_path, run_slot), ...]).
         all_scores (list[float]): Completed-trial scores from previous generations.
         n_repeats (int): Number of repeated runs per trial.
 
@@ -139,23 +142,30 @@ def wait_for_sofa_runs(
     )
 
 
-def generation_progress_fraction(status_paths_by_trial: list[list[Path]]) -> float:
+def generation_progress_fraction(trial_state_paths_by_trial: list[Path]) -> float:
     """
     Estimate generation progress from per-run frame progress only.
 
     Inputs:
-        status_paths_by_trial (list[list[Path]]): Expected status files for each trial/run.
+        trial_state_paths_by_trial (list[Path]): One trial_state.json path per trial.
 
     Returns:
         float: Generation progress as a fraction in [0, 1].
     """
     total = 0.0
 
-    for runs in status_paths_by_trial:
+    for trial_state_path in trial_state_paths_by_trial:
         trial_total = 0.0
-        for status_path in runs:
+        runs = []
+        try:
+            runs = (read_trial_state(trial_state_path) or {}).get("runs", [])
+            if not isinstance(runs, list):
+                runs = []
+        except Exception:
+            runs = []
+        for run_data in runs:
             try:
-                data = json.loads(status_path.read_text(encoding="utf-8"))
+                data = run_data if isinstance(run_data, dict) else {}
                 state = str(data.get("state", "")).lower()
                 reason = str(data.get("reason", "")).lower()
 
@@ -182,15 +192,15 @@ def generation_progress_fraction(status_paths_by_trial: list[list[Path]]) -> flo
         if runs:
             total += trial_total / len(runs)
 
-    if not status_paths_by_trial:
+    if not trial_state_paths_by_trial:
         return 0.0
 
-    return max(0.0, min(1.0, total / len(status_paths_by_trial)))
+    return max(0.0, min(1.0, total / len(trial_state_paths_by_trial)))
 
 
 def generation_progress_writer(
     gen_index: int,
-    status_paths_by_trial: list[list[Path]],
+    trial_state_paths_by_trial: list[Path],
     all_scores: list[float],
     stop_event: threading.Event,
 ) -> None:
@@ -199,7 +209,7 @@ def generation_progress_writer(
 
     Inputs:
         gen_index (int): Current generation number.
-        status_paths_by_trial (list[list[Path]]): Expected status files for the generation.
+        trial_state_paths_by_trial (list[Path]): Expected trial_state files for the generation.
         all_scores (list[float]): All collected scores so far.
         stop_event (threading.Event): Signals when to stop writing progress.
 
@@ -209,7 +219,7 @@ def generation_progress_writer(
     while not stop_event.is_set():
         write_progress(
             gen_index,
-            generation_progress_fraction(status_paths_by_trial) * N_PARALLEL,
+            generation_progress_fraction(trial_state_paths_by_trial) * N_PARALLEL,
             all_scores,
         )
         stop_event.wait(GEN_PROGRESS_POLL_INTERVAL)
@@ -243,43 +253,27 @@ def run_generation(
 
     processes = (
         []
-    )  # list of (trial_index, trial, [(Popen, score_path, status_path), ...])
+    )  # list of (trial_index, trial, [(Popen, trial_state_path, run_slot), ...])
     collision_stls_by_trial: dict[int, Path] = {}
-    status_paths_by_trial: list[list[Path]] = []
+    trial_state_paths_by_trial: list[Path] = []
 
-    # Pre-create all trial/run status files in deterministic order
+    # Pre-create one trial_state.json per trial with deterministic run slots.
     for trial_index in range(1, N_PARALLEL + 1):
         trial_dir = gen_dir / f"trial_{trial_index:02d}"
-        trial_status_paths: list[Path] = []
         trial_dir.mkdir(exist_ok=True)
-        for run_index, (test_name, test_run_index, test_run_total) in enumerate(
-            RUN_PLAN, start=1
-        ):
-            status_path = trial_dir / f"status_run{run_index-1}.json"
-            trial_status_paths.append(status_path)
-            write_run_status(
-                status_path,
-                {
-                    "gen": gen_index,
-                    "trial": trial_index,
-                    "run": run_index,
-                    "test_name": test_name,
-                    "test_run_index": test_run_index,
-                    "test_run_total": test_run_total,
-                    "run_label": f"{test_name} {test_run_index}/{test_run_total}",
-                    "state": "not-started",
-                    "current_frame": 0,
-                    "total_frames": None,
-                    "sim_time": 0.0,
-                    "updated_at": time.time(),
-                },
-            )
-        status_paths_by_trial.append(trial_status_paths)
+        trial_state_path = trial_dir / "trial_state.json"
+        init_trial_state(
+            trial_state_path,
+            gen_index=gen_index,
+            trial_index=trial_index,
+            run_plan=list(RUN_PLAN),
+        )
+        trial_state_paths_by_trial.append(trial_state_path)
 
     progress_stop = threading.Event()
     progress_thread = threading.Thread(
         target=generation_progress_writer,
-        args=(gen_index, status_paths_by_trial, all_scores, progress_stop),
+        args=(gen_index, trial_state_paths_by_trial, all_scores, progress_stop),
         daemon=True,
     )
     progress_thread.start()
@@ -308,32 +302,24 @@ def run_generation(
             collision_stl, visual_stl_copy = generate_stl_for_trial(
                 trial_dir, full_config
             )
+            trial_state_path = trial_dir / "trial_state.json"
             render_stl_preview(
                 visual_stl_copy, trial_dir, gen_index, trial_index, failed_preview
             )
 
             runs = []
-            for r, (test_name, test_run_index, test_run_total) in enumerate(
-                RUN_PLAN
-            ):
+            for r, (test_name, test_run_index, test_run_total) in enumerate(RUN_PLAN):
                 test_spec = get_test_spec(test_name)
-                score_path = trial_dir / f"score_run{r}.json"
-                status_path = trial_dir / f"status_run{r}.json"
-                write_run_status(
-                    status_path,
+                update_trial_run(
+                    trial_state_path,
+                    r + 1,
                     {
-                        "gen": gen_index,
-                        "trial": trial_index,
-                        "run": r + 1,
-                        "test_name": test_name,
-                        "test_run_index": test_run_index,
-                        "test_run_total": test_run_total,
-                        "run_label": f"{test_name} {test_run_index}/{test_run_total}",
                         "state": "launching",
                         "current_frame": 0,
                         "total_frames": None,
                         "sim_time": 0.0,
-                        "updated_at": time.time(),
+                        "score": None,
+                        "reason": "",
                     },
                 )
                 p = launch_sofa(
@@ -342,8 +328,8 @@ def run_generation(
                     test_run_index,
                     test_run_total,
                     collision_stl,
-                    score_path,
-                    status_path,
+                    trial_state_path,
+                    r + 1,
                     gen_index,
                     trial_index,
                     r + 1,
@@ -352,7 +338,7 @@ def run_generation(
                 print(
                     f"[sofa] Gen {gen_index:04d} Trial {trial_index:02d} Run {r+1}/{N_REPEATS} [{test_name} {test_run_index}/{test_run_total}]"
                 )
-                runs.append((p, score_path, status_path))
+                runs.append((p, trial_state_path, r + 1))
 
             collision_stls_by_trial[trial_index] = collision_stl
             processes.append((trial_index, trial, runs))
@@ -376,31 +362,24 @@ def run_generation(
                         f"Trial {trial_index:02d}: {preview_err}"
                     )
 
-            for r in range(N_REPEATS):
-                status_path = trial_dir / f"status_run{r}.json"
-                write_run_status(
-                    status_path,
+            trial_state_path = trial_dir / "trial_state.json"
+            for r in range(len(RUN_PLAN)):
+                update_trial_run(
+                    trial_state_path,
+                    r + 1,
                     {
-                        "gen": gen_index,
-                        "trial": trial_index,
-                        "run": r + 1,
-                        "test_name": RUN_PLAN[r][0],
-                        "test_run_index": RUN_PLAN[r][1],
-                        "test_run_total": RUN_PLAN[r][2],
-                        "run_label": f"{RUN_PLAN[r][0]} {RUN_PLAN[r][1]}/{RUN_PLAN[r][2]}",
                         "state": "failed",
+                        "score": None,
                         "reason": str(e),
-                        "updated_at": time.time(),
                     },
                 )
 
             print(f"[error] Gen {gen_index:04d} Trial {trial_index:02d}: {e}")
             study.tell(trial, HARD_FAIL_SCORE)
-            write_jsonc(
-                trial_dir / "trial_stats.json",
+            update_trial_summary(
+                trial_state_path,
                 {
-                    "trial": trial_index,
-                    "gen": gen_index,
+                    "state": "failed",
                     "final_score": HARD_FAIL_SCORE,
                     "outcome": f"geometry export failed: {type(e).__name__}",
                 },
@@ -410,6 +389,25 @@ def run_generation(
         except Exception as e:
             print(f"[error] Gen {gen_index:04d} Trial {trial_index:02d}: {e}")
             study.tell(trial, HARD_FAIL_SCORE)
+            trial_state_path = trial_dir / "trial_state.json"
+            for r in range(len(RUN_PLAN)):
+                update_trial_run(
+                    trial_state_path,
+                    r + 1,
+                    {
+                        "state": "failed",
+                        "score": None,
+                        "reason": str(e),
+                    },
+                )
+            update_trial_summary(
+                trial_state_path,
+                {
+                    "state": "failed",
+                    "final_score": HARD_FAIL_SCORE,
+                    "outcome": f"runtime failure: {type(e).__name__}",
+                },
+            )
             prelaunch_scores.append(HARD_FAIL_SCORE)
             all_scores.append(HARD_FAIL_SCORE)
 
@@ -418,12 +416,6 @@ def run_generation(
         wait_for_sofa_runs(gen_index, processes, all_scores, N_REPEATS)
 
         gen_scores = prelaunch_scores.copy()
-
-        def _read_status_data(path: Path) -> dict | None:
-            try:
-                return json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                return None
 
         def _is_pruned_status(status_data: dict | None) -> bool:
             if not isinstance(status_data, dict):
@@ -440,15 +432,22 @@ def run_generation(
         # Collect scores from all trials
         for trial_index, trial, runs in processes:
             trial_dir = gen_dir / f"trial_{trial_index:02d}"
+            trial_state_path = trial_dir / "trial_state.json"
             run_scores = []
             run_plan_entries = list(RUN_PLAN)
-            test_score_map: dict[str, list[float]] = {}
 
-            for run_number, (p, score_path, status_path) in enumerate(runs, start=1):
-                score = read_score(score_path)
+            for run_number, (p, _trial_state_path, run_slot) in enumerate(
+                runs, start=1
+            ):
+                run_data = read_trial_run(trial_state_path, run_slot) or {}
+                raw_score = run_data.get("score")
+                score = (
+                    float(raw_score)
+                    if isinstance(raw_score, (int, float))
+                    else float("-inf")
+                )
                 run_scores.append(score)
-                test_name, test_run_index, test_run_total = run_plan_entries[run_number - 1]
-                test_score_map.setdefault(test_name, []).append(score)
+                test_name, _, _ = run_plan_entries[run_number - 1]
 
             # Check for failures and pruning
             if any(score == float("-inf") for score in run_scores):
@@ -460,6 +459,14 @@ def run_generation(
                 )
                 gen_scores.append(final_score)
                 all_scores.append(final_score)
+                update_trial_summary(
+                    trial_state_path,
+                    {
+                        "state": "failed",
+                        "final_score": final_score,
+                        "outcome": "generation failure",
+                    },
+                )
                 continue
 
             valid_scores = [s for s in run_scores if s != float("-inf")]
@@ -469,6 +476,14 @@ def run_generation(
                 study.tell(trial, final_score)
                 gen_scores.append(final_score)
                 all_scores.append(final_score)
+                update_trial_summary(
+                    trial_state_path,
+                    {
+                        "state": "failed",
+                        "final_score": final_score,
+                        "outcome": "no valid run scores",
+                    },
+                )
                 continue
 
             # Aggregate scores per test first so a 3-run test still contributes one
@@ -480,13 +495,19 @@ def run_generation(
                 if test_name in per_test_details:
                     continue
                 scores_for_test = [
-                    s for (t_name, _, _), s in zip(run_plan_entries, run_scores) if t_name == test_name
+                    s
+                    for (t_name, _, _), s in zip(run_plan_entries, run_scores)
+                    if t_name == test_name
                 ]
                 valid_for_test = [s for s in scores_for_test if s != float("-inf")]
                 if not valid_for_test:
                     continue
                 test_names_in_order.append(test_name)
-                test_aggregate, _, _, test_median = aggregate_trial_scores(valid_for_test)
+                # Aggregate repeated runs for a single test — no weighting here,
+                # weights only apply when combining across different tests.
+                test_aggregate, _, _, test_median = aggregate_trial_scores(
+                    valid_for_test
+                )
                 per_test_scores.append(test_aggregate)
                 per_test_details[test_name] = {
                     "run_count": len(valid_for_test),
@@ -494,6 +515,9 @@ def run_generation(
                     "aggregate_score": round(test_aggregate, 4),
                     "median_score": round(test_median, 4),
                     "run_total": test_run_total,
+                    "weight_pct": round(
+                        SELECTED_TEST_WEIGHTS.get(test_name, 0.0) * 100, 1
+                    ),
                 }
 
             if not per_test_scores:
@@ -501,19 +525,36 @@ def run_generation(
                 study.tell(trial, final_score)
                 gen_scores.append(final_score)
                 all_scores.append(final_score)
+                update_trial_summary(
+                    trial_state_path,
+                    {
+                        "state": "failed",
+                        "final_score": final_score,
+                        "outcome": "no valid per-test scores",
+                    },
+                )
                 continue
 
-            aggregate_score, consistency_penalty, final_score, median_score = (
-                aggregate_trial_scores(per_test_scores)
+            # Combine per-test scores into one trial score using the user-defined
+            # weights.
+            aggregate_score, _, final_score, median_score = aggregate_trial_scores(
+                per_test_scores,
+                weights=SELECTED_TEST_WEIGHTS,
+                names=test_names_in_order,
             )
             study.tell(trial, final_score)
 
-            # Write trial statistics
+            # Write trial summary directly into trial_state.json
             trial_stats = {
                 "trial": trial_index,
                 "gen": gen_index,
+                "state": "done",
                 "n_runs": len(valid_scores),
                 "test_names": list(SELECTED_TEST_NAMES),
+                "test_weights": {
+                    name: round(SELECTED_TEST_WEIGHTS.get(name, 0.0) * 100, 1)
+                    for name in SELECTED_TEST_NAMES
+                },
                 "run_test_names": [name for name, _, _ in run_plan_entries],
                 "test_scores": per_test_details,
                 "avg_score": round(sum(valid_scores) / len(valid_scores), 4),
@@ -521,15 +562,14 @@ def run_generation(
                 "aggregate_score": round(aggregate_score, 4),
                 "best_run": round(max(valid_scores), 4),
                 "worst_run": round(min(valid_scores), 4),
-                "consistency_penalty": round(consistency_penalty, 4),
                 "final_score": round(final_score, 4),
                 "run_scores": [round(s, 4) for s in run_scores],
             }
-            write_jsonc(trial_dir / "trial_stats.json", trial_stats)
+            update_trial_summary(trial_state_path, trial_stats)
 
             print(
                 f"[score] trial_{trial_index:02d} → {final_score:.2f} "
-                f"(avg: {aggregate_score:.2f}, penalty: {consistency_penalty:.2f})"
+                f"(weighted_agg: {aggregate_score:.2f}"
             )
 
             gen_scores.append(final_score)

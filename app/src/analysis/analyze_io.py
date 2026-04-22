@@ -1,164 +1,143 @@
 """
 analyze_io.py — Data loading and I/O for trial and generation results.
 
-Loads trial results from the trials directory and aggregates them into
-convenient data structures for analysis and visualization.
+Loads trial results from trial_state.json files in the trials directory and
+aggregates them into convenient data structures for analysis and visualization.
 """
 
 import json
-import os
 import statistics
 from pathlib import Path
 
 from analyze_config import (
     TRIALS_DIR,
-    CONSISTENCY_PENALTY_COEF,
     HARD_FAIL_SCORE,
     SCORE_AGGREGATION,
 )
 
 
 def load_all_trials() -> list[dict]:
-    """Load all trial results, including failures, from the trials directory.
-    Computes final_score with consistency penalty using the current runtime settings.
-
-    Returns:
-        list[dict]: Trial records in chronological order.
-    """
     records = []
     chron = 0
-    failed_states = {"failed", "error", "cancelled", "skipped"}
 
     for gen_dir in sorted(TRIALS_DIR.glob("gen_*")):
         gen_index = int(gen_dir.name.split("_")[1])
         for trial_dir in sorted(gen_dir.glob("trial_*")):
             trial_index = int(trial_dir.name.split("_")[1])
 
-            run_files = sorted(trial_dir.glob("score_run*.json"))
-            status_files = sorted(trial_dir.glob("status_run*.json"))
-
-            if not run_files:
-                failed_from_status = False
-                fail_reason = "no score files"
-                trial_stats_path = trial_dir / "trial_stats.json"
-
-                if trial_stats_path.exists():
-                    try:
-                        trial_stats = json.loads(trial_stats_path.read_text())
-                        stats_valid_scores = trial_stats.get("run_scores_valid", [])
-                        stats_all_scores = trial_stats.get("run_scores", [])
-                        records.append(
-                            {
-                                "gen_index": gen_index,
-                                "trial_index": trial_index,
-                                "gen_name": gen_dir.name,
-                                "trial_name": trial_dir.name,
-                                "score": trial_stats.get(
-                                    "aggregate_score", trial_stats.get("avg_score", 0.0)
-                                ),
-                                "final_score": trial_stats.get("final_score", 0.0),
-                                "failed": False,
-                                "fail_reason": str(trial_stats.get("outcome", "")),
-                                "outcome_reason": str(trial_stats.get("outcome", "")),
-                                "n_runs": int(trial_stats.get("n_runs", 0)),
-                                "run_scores": [
-                                    float(s)
-                                    for s in stats_valid_scores
-                                    if isinstance(s, (int, float))
-                                ],
-                                "all_run_scores": [
-                                    float(s)
-                                    for s in stats_all_scores
-                                    if isinstance(s, (int, float))
-                                ],
-                                "chron": chron,
-                            }
-                        )
-                        chron += 1
-                        continue
-                    except Exception:
-                        pass
-
-                for sf in status_files:
-                    try:
-                        s = json.loads(sf.read_text())
-                    except Exception:
-                        continue
-                    state = str(s.get("state", "")).lower()
-                    reason = str(s.get("reason", "")).lower()
-                    if state in failed_states or "geometry export failed" in reason:
-                        failed_from_status = True
-                        if reason:
-                            fail_reason = reason
-                        break
-
-                if failed_from_status or trial_dir.exists():
-                    records.append(
-                        {
-                            "gen_index": gen_index,
-                            "trial_index": trial_index,
-                            "gen_name": gen_dir.name,
-                            "trial_name": trial_dir.name,
-                            "score": 0.0,
-                            "final_score": 0.0,
-                            "failed": True,
-                            "fail_reason": fail_reason,
-                            "outcome_reason": fail_reason,
-                            "n_runs": 0,
-                            "run_scores": [],
-                            "all_run_scores": [],
-                            "chron": chron,
-                        }
-                    )
-                    chron += 1
+            trial_state_path = trial_dir / "trial_state.json"
+            if not trial_state_path.exists():
                 continue
 
+            try:
+                trial_state = json.loads(trial_state_path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(trial_state, dict):
+                continue
+
+            terminal_states = {
+                "done",
+                "failed",
+                "error",
+                "pruned",
+                "skipped",
+                "cancelled",
+            }
+
+            # --- Completion / failed from top-level state field ---
+            trial_level_state = str(trial_state.get("state", "")).lower()
+            is_complete = trial_level_state in terminal_states
+            failed = trial_level_state in {
+                "failed",
+                "error",
+                "pruned",
+                "skipped",
+                "cancelled",
+            }
+            fail_reason = str(trial_state.get("outcome", "") or "").lower()
+
+            # --- Scores ---
+            runs = trial_state.get("runs", [])
+            if not isinstance(runs, list):
+                runs = []
+
             run_scores = []
-            for sf in run_files:
-                try:
-                    payload = json.loads(sf.read_text())
-                    run_scores.append(float(payload.get("score", payload["score"])))
-                except Exception as e:
+            for run in runs:
+                if not isinstance(run, dict):
                     continue
+                raw_score = run.get("score")
+                if isinstance(raw_score, (int, float)):
+                    run_scores.append(float(raw_score))
 
-            valid = [s for s in run_scores if s != float("-inf")]
-            failed = len(valid) == 0
-            score = (
-                statistics.median(valid)
-                if valid and SCORE_AGGREGATION == "median"
-                else (statistics.mean(valid) if valid else 0.0)
-            )
-            outcome_reason = ""
+            valid = run_scores  # all numeric scores, including 0.0 and negatives
 
-            for sf in status_files:
-                try:
-                    s = json.loads(sf.read_text())
-                except Exception:
-                    continue
-                reason = str(s.get("reason", "")).strip()
-                if reason:
-                    outcome_reason = reason
-                    break
-
-            final_score = score
-            if valid and not failed:
-                consistency_penalty = CONSISTENCY_PENALTY_COEF * (
-                    max(valid) - min(valid)
+            # Prefer top-level aggregate_score, fall back to mean of run scores
+            if trial_state.get("aggregate_score") is not None:
+                score = float(trial_state["aggregate_score"])
+            elif valid:
+                score = (
+                    statistics.mean(valid)
+                    if SCORE_AGGREGATION != "median"
+                    else statistics.median(valid)
                 )
-                final_score = score - consistency_penalty
             else:
-                final_score = 0.0
+                score = 0.0
 
-            trial_stats_path = trial_dir / "trial_stats.json"
-            if trial_stats_path.exists():
-                try:
-                    trial_stats = json.loads(trial_stats_path.read_text())
-                    score = trial_stats.get(
-                        "aggregate_score", trial_stats.get("avg_score", score)
+            raw_final = trial_state.get("final_score")
+            if isinstance(raw_final, (int, float)):
+                final_score = float(raw_final)
+            else:
+                final_score = score
+
+            # --- Per-test breakdown ---
+            # Use top-level test_scores if present and complete
+            test_scores = trial_state.get("test_scores") or None
+
+            # If not present, reconstruct from runs using test_weights
+            if not test_scores and runs:
+                test_weights: dict = trial_state.get("test_weights") or {}
+                test_run_scores: dict[str, list[float]] = {}
+                for run in runs:
+                    if not isinstance(run, dict):
+                        continue
+                    tname = run.get("test_name")
+                    raw = run.get("score")
+                    if tname and isinstance(raw, (int, float)):
+                        test_run_scores.setdefault(tname, []).append(float(raw))
+
+                if test_run_scores:
+                    total_weight = sum(
+                        test_weights.get(t, 1.0) for t in test_run_scores
                     )
-                    final_score = trial_stats.get("final_score", final_score)
-                except Exception:
-                    pass
+                    test_scores = {}
+                    for tname, tscores in test_run_scores.items():
+                        agg = (
+                            statistics.mean(tscores)
+                            if SCORE_AGGREGATION != "median"
+                            else statistics.median(tscores)
+                        )
+                        wpct = (
+                            (test_weights.get(tname, 1.0) / total_weight * 100.0)
+                            if total_weight
+                            else 0.0
+                        )
+                        test_scores[tname] = {
+                            "run_count": len(tscores),
+                            "run_scores": tscores,
+                            "aggregate_score": agg,
+                            "median_score": statistics.median(tscores),
+                            "run_total": len(tscores),
+                            "weight_pct": wpct,
+                        }
+            if test_scores:
+                final_score = sum(
+                    float(info.get("aggregate_score", 0.0) or 0.0)
+                    * (float(info.get("weight_pct", 0.0) or 0.0) / 100.0)
+                    for info in test_scores.values()
+                    if isinstance(info, dict)
+                )
+                score = final_score
 
             records.append(
                 {
@@ -169,11 +148,13 @@ def load_all_trials() -> list[dict]:
                     "score": score,
                     "final_score": final_score,
                     "failed": failed,
-                    "fail_reason": outcome_reason.lower() if failed else "",
-                    "outcome_reason": outcome_reason.lower(),
+                    "fail_reason": fail_reason,
+                    "outcome_reason": fail_reason,
                     "n_runs": len(valid),
                     "run_scores": valid,
                     "all_run_scores": run_scores,
+                    "test_scores": test_scores,
+                    "is_complete": is_complete,
                     "chron": chron,
                 }
             )

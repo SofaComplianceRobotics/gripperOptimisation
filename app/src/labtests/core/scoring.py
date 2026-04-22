@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import os
+import time
+from pathlib import Path
 from typing import Any
 
 
@@ -25,24 +27,79 @@ class ScoreWriter:
 
     Inputs at construction:
         rootnode:   SOFA root node (used for rootnode.time in status payloads)
-        score_path: Path to write the final score JSON, or None (dry run / GUI mode)
-        status_path: Path to write live status JSON, or None
         run_info:   Dict with keys gen, trial, run — injected into every payload
     """
 
     def __init__(
         self,
         rootnode,
-        score_path: str | None,
-        status_path: str | None,
         run_info: dict[str, int],
+        trial_state_path: str,
+        run_slot: int,
     ) -> None:
         self.rootnode = rootnode
-        self.score_path = score_path
-        self.status_path = status_path
         self.run_info = run_info
+        self.trial_state_path = trial_state_path
+        self.run_slot = int(run_slot)
         self._finished = False
         self._last_status: dict[str, Any] = {}
+
+    def _acquire_lock(self, lock_path: Path, timeout_s: float = 5.0) -> bool:
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            try:
+                fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
+                return True
+            except FileExistsError:
+                time.sleep(0.01)
+            except Exception:
+                return False
+        return False
+
+    def _release_lock(self, lock_path: Path) -> None:
+        try:
+            if lock_path.exists():
+                lock_path.unlink()
+        except Exception:
+            pass
+
+    def _update_trial_state_run(self, payload: dict[str, Any]) -> bool:
+        path = Path(self.trial_state_path)
+        lock_path = path.with_suffix(path.suffix + ".lock")
+        if not self._acquire_lock(lock_path):
+            return False
+
+        try:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    data = {}
+            except Exception:
+                data = {}
+
+            runs = data.get("runs")
+            if not isinstance(runs, list):
+                runs = []
+            while len(runs) < self.run_slot:
+                runs.append({"run": len(runs) + 1})
+
+            slot = runs[self.run_slot - 1]
+            if not isinstance(slot, dict):
+                slot = {"run": self.run_slot}
+            slot.update(payload)
+            slot["run"] = self.run_slot
+            slot["updated_at"] = self.rootnode.time.value
+            runs[self.run_slot - 1] = slot
+
+            data["runs"] = runs
+            data["updated_at"] = self.rootnode.time.value
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            tmp.replace(path)
+            return True
+        finally:
+            self._release_lock(lock_path)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -59,21 +116,14 @@ class ScoreWriter:
         Returns:
             None
         """
-        if not self.status_path:
-            return
-        try:
-            full = {**self.run_info, **payload, "updated_at": self.rootnode.time.value}
-            self._last_status = dict(full)
-            tmp = self.status_path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(full, f, indent=2)
-            os.replace(tmp, self.status_path)
-        except Exception:
-            pass
+        full = {**self.run_info, **payload, "updated_at": self.rootnode.time.value}
+        self._last_status = dict(full)
+
+        self._update_trial_state_run(full)
 
     def write_score_and_stop(self, score: float, reason: str) -> None:
         """
-        Write the final score JSON, update status to 'done', stop the simulation.
+        Update the trial_state run slot to 'done', then stop the simulation.
 
         Safe to call multiple times — only the first call has any effect.
 
@@ -88,10 +138,6 @@ class ScoreWriter:
             return
         self._finished = True
 
-        if self.score_path:
-            with open(self.score_path, "w", encoding="utf-8") as f:
-                json.dump({"score": score}, f)
-
         final_status = dict(self._last_status)
         final_status.update({"state": "done", "score": score, "reason": reason})
         self.write_status(final_status)
@@ -101,7 +147,7 @@ class ScoreWriter:
 
     def write_pruned_and_stop(self, reason: str) -> None:
         """
-        Mark this run as pruned (no usable score), stop the simulation.
+        Mark this run as pruned in trial_state.json and stop the simulation.
 
         Used when the simulation reaches an undefined state that should not
         count as a scored trial (e.g. cube glitched through the floor after

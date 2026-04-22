@@ -5,6 +5,7 @@ This keeps the lab's current 3.10-based working environment intact while
 pointing the scene runner to the separate custom 3.12 build.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -76,6 +77,10 @@ def main() -> None:
     test_spec = get_test_spec(test_name)
     env["LAB_SHAPEOPT_TEST"] = test_name
     env["LAB_SHAPEOPT_TESTS"] = test_name
+
+    # For a single test the weight is always 100, but we pass it consistently
+    # so optimize_config and any downstream consumer always finds the variable.
+    env["LAB_SHAPEOPT_TEST_WEIGHTS"] = json.dumps(selected_tests.weights)
 
     default_stl = LAB_ROOT / "runtime" / "exports" / "new_gripper_collision.stl"
     if default_stl.exists():

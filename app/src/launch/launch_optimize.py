@@ -5,6 +5,7 @@ Reinstalls dependencies automatically when requirements.txt changes.
 """
 
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -69,6 +70,10 @@ def main() -> None:
     )
     env["LAB_SHAPEOPT_TESTS"] = ",".join(selected_tests)
     env["LAB_SHAPEOPT_TEST"] = selected_tests[0]
+
+    # Pass per-test weights as a JSON string, e.g. '{"grasp_hold": 60, "gripper_tilt": 40}'
+    # Falls back to equal weights in optimize_config if this var is absent or malformed.
+    env["LAB_SHAPEOPT_TEST_WEIGHTS"] = json.dumps(selected_tests.weights)
 
     if not REQUIREMENTS.exists():
         raise FileNotFoundError(f"Missing requirements file: {REQUIREMENTS}")

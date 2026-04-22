@@ -18,5 +18,4 @@ LIVE_REFRESH_SECONDS = 2.0  # Refresh interval for live monitoring
 
 HARD_FAIL_SCORE = float(os.environ.get("HARD_FAIL_SCORE", "-3.0"))
 HARD_FAIL_SCORE = float(os.environ.get("HARD_FAIL_SCORE", "-3.0"))
-CONSISTENCY_PENALTY_COEF = float(os.environ.get("CONSISTENCY_PENALTY_COEF", "0.1"))
 SCORE_AGGREGATION = os.environ.get("SCORE_AGGREGATION", "mean").strip().lower()

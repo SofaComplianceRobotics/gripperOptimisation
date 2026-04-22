@@ -5,6 +5,7 @@ Centralizes all hardcoded defaults, paths, and tuning parameters to minimize
 configuration scatter across the codebase.
 """
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -38,6 +39,52 @@ RUN_PLAN: tuple[tuple[str, int, int], ...] = tuple(
     (spec.name, run_index, spec.run_count)
     for spec in SELECTED_TEST_SPECS
     for run_index in range(1, spec.run_count + 1)
+)
+
+
+# ─────────────────────────────────────────────
+# Per-test weights
+# ─────────────────────────────────────────────
+def _parse_test_weights(raw: str | None, test_names: list[str]) -> dict[str, float]:
+    """
+    Parse LAB_SHAPEOPT_TEST_WEIGHTS into a normalised {test_name: fraction} dict.
+
+    The env var is expected to be a JSON object whose values are integer
+    percentages that sum to 100 (as produced by the UI).  If the variable is
+    absent, malformed, or the keys don't match the selected tests, equal
+    weights are used as fallback.
+
+    Inputs:
+        raw (str | None): Raw value of LAB_SHAPEOPT_TEST_WEIGHTS.
+        test_names (list[str]): Canonical list of selected test names.
+
+    Returns:
+        dict[str, float]: Mapping of test_name → weight fraction (sums to 1.0).
+    """
+    n = len(test_names)
+    equal = {name: 1.0 / n for name in test_names} if n else {}
+
+    if not raw:
+        return equal
+
+    try:
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return equal
+        # Verify all selected tests are present; ignore extra keys.
+        if not all(name in parsed for name in test_names):
+            return equal
+        total = sum(float(parsed[name]) for name in test_names)
+        if total <= 0:
+            return equal
+        return {name: float(parsed[name]) / total for name in test_names}
+    except Exception:
+        return equal
+
+
+SELECTED_TEST_WEIGHTS: dict[str, float] = _parse_test_weights(
+    os.environ.get("LAB_SHAPEOPT_TEST_WEIGHTS"),
+    list(SELECTED_TEST_NAMES),
 )
 
 # Where per-generation/trial working dirs live
@@ -163,9 +210,6 @@ SHAPEOPT_FRICTION_COEF = float(
 EARLY_CONTACT_PENALTY = float(os.environ.get("EARLY_CONTACT_PENALTY", "-1.0"))
 NO_PICKUP_PENALTY = float(os.environ.get("NO_PICKUP_PENALTY", "0.0"))
 UNDERCUBE_PENALTY = float(os.environ.get("UNDERCUBE_PENALTY", "-0.2"))
-CONSISTENCY_PENALTY_COEF = float(
-    os.environ.get("CONSISTENCY_PENALTY_COEF", "0.1")
-)  # lower values reduce risk-aversion
 _score_aggregation_raw = os.environ.get("SCORE_AGGREGATION", "auto").strip().lower()
 if _score_aggregation_raw == "auto":
     if len(SELECTED_TEST_NAMES) == 1 and SELECTED_TEST_NAMES[0] == "random_cube_pick":
@@ -256,4 +300,8 @@ def build_env() -> dict:
         for test_name, test_run_index, test_run_total in RUN_PLAN
     )
     env["LAB_SHAPEOPT_TEST"] = SELECTED_TEST_NAMES[0]
+    # Forward weights so any child process can reconstruct them if needed.
+    env["LAB_SHAPEOPT_TEST_WEIGHTS"] = json.dumps(
+        {name: round(frac * 100) for name, frac in SELECTED_TEST_WEIGHTS.items()}
+    )
     return env

@@ -18,10 +18,15 @@ import os
 import sys
 from pathlib import Path
 
+
 def _ensure_scene_paths() -> tuple[Path, Path, Path, Path]:
     script_dir = Path(__file__).resolve().parent
     src_root = next(
-        (candidate for candidate in (script_dir, *script_dir.parents) if (candidate / "labtests").is_dir()),
+        (
+            candidate
+            for candidate in (script_dir, *script_dir.parents)
+            if (candidate / "labtests").is_dir()
+        ),
         script_dir.parents[1],
     )
     app_root = src_root.parent
@@ -36,8 +41,8 @@ def _ensure_scene_paths() -> tuple[Path, Path, Path, Path]:
 SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = _ensure_scene_paths()
 
 # ── Config from environment ────────────────────────────────────────────────────
-SCORE_PATH = os.environ.get("OPTUNA_SCORE_PATH", None)
-STATUS_PATH = os.environ.get("OPTUNA_STATUS_PATH", None)
+TRIAL_STATE_PATH = os.environ.get("OPTUNA_TRIAL_STATE_PATH", None)
+OPTUNA_RUN_SLOT = int(os.environ.get("OPTUNA_RUN_SLOT", "0"))
 OPTUNA_GEN = int(os.environ.get("OPTUNA_GEN", "0"))
 OPTUNA_TRIAL = int(os.environ.get("OPTUNA_TRIAL", "0"))
 OPTUNA_RUN = int(os.environ.get("OPTUNA_RUN", "0"))
@@ -87,9 +92,9 @@ def createScene(rootnode):
     # ── ScoreWriter ────────────────────────────────────────────────────────────
     writer = ScoreWriter(
         rootnode,
-        score_path=SCORE_PATH,
-        status_path=STATUS_PATH,
         run_info={"gen": OPTUNA_GEN, "trial": OPTUNA_TRIAL, "run": OPTUNA_RUN},
+        trial_state_path=TRIAL_STATE_PATH,
+        run_slot=OPTUNA_RUN_SLOT,
     )
 
     # ── TiltController ─────────────────────────────────────────────────────────
