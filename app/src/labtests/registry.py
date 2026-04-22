@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import importlib.util
+import json
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
@@ -11,6 +13,34 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SRC_ROOT = SCRIPT_DIR.parent
 APP_ROOT = SRC_ROOT.parent
 LAB_ROOT = APP_ROOT.parent
+
+
+def _load_max_score(scoring_file: Path) -> float:
+    """
+    Import a test's scoring.py and return its MAX_SCORE constant.
+
+    Falls back to 1.0 (i.e. no normalization effect) if the attribute is
+    missing or the file cannot be imported, so existing tests without
+    MAX_SCORE keep working unchanged.
+
+    Inputs:
+        scoring_file (Path): Absolute path to the test's scoring.py.
+
+    Returns:
+        float: The declared maximum score for the test.
+    """
+    try:
+        spec = importlib.util.spec_from_file_location("_scoring_tmp", scoring_file)
+        if spec is None or spec.loader is None:
+            return 1.0
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+        return float(getattr(mod, "MAX_SCORE", 1.0))
+    except Exception as exc:
+        print(
+            f"[labtests.registry] Could not read MAX_SCORE from {scoring_file}: {exc}"
+        )
+        return 1.0
 
 
 @dataclass(frozen=True)
@@ -22,15 +52,13 @@ class TestSpec:
     description: str
     scene_file: Path
     scoring_file: Path
+    max_score: float = 1.0
     default_selected: bool = False
     run_count: int = 1
 
     @property
     def display_label(self) -> str:
         return f"{self.label} — {self.description}"
-
-
-import json
 
 
 def get_test_catalog() -> dict[str, TestSpec]:
@@ -58,12 +86,14 @@ def get_test_catalog() -> dict[str, TestSpec]:
         description = meta.get("description", "")
         default_selected = bool(meta.get("default_selected", False))
         run_count = int(meta.get("run_count", 1))
+        max_score = _load_max_score(scoring_file)
         test_catalog[name] = TestSpec(
             name=name,
             label=label,
             description=description,
             scene_file=scene_file,
             scoring_file=scoring_file,
+            max_score=max_score,
             default_selected=default_selected,
             run_count=run_count,
         )

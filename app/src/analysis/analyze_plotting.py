@@ -101,7 +101,8 @@ def _compute_contributions(record: dict) -> dict[str, float]:
 
 def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
     xs = [r["chron"] for r in records]
-    final_scores = [float(r.get("final_score", r.get("score", 0.0))) for r in records]
+    contributions = [_compute_contributions(r) for r in records]
+    final_scores = [sum(c.values()) for c in contributions]
     failed_mask = [bool(r.get("failed", False)) for r in records]
     is_complete = [bool(r.get("is_complete", True)) for r in records]
     contributions = [_compute_contributions(r) for r in records]
@@ -112,7 +113,7 @@ def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
         lo = max(0, i - CENTERED_AVG_HALF_WINDOW)
         hi = min(len(records) - 1, i + CENTERED_AVG_HALF_WINDOW)
         window = records[lo : hi + 1]
-        scores = [float(w.get("final_score", w.get("score", 0.0))) for w in window]
+        scores = [sum(_compute_contributions(w).values()) for w in window]
         avg_x.append(r["chron"])
         avg_y.append(sum(scores) / len(scores))
 
