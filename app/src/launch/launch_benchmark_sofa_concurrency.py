@@ -235,14 +235,15 @@ def _launch_sofa_batch(
         score_paths = []
 
         for proc_idx in range(concurrency):
-            score_file = trial_dir / f"score_batch{batch_idx}_proc{proc_idx}.json"
-            status_file = trial_dir / f"status_batch{batch_idx}_proc{proc_idx}.json"
-            score_paths.append(score_file)
+            trial_state_file = (
+                trial_dir / f"trial_state_batch{batch_idx}_proc{proc_idx}.json"
+            )
+            score_paths.append(trial_state_file)
 
             proc_env = env.copy()
             proc_env["OPTUNA_STL_PATH"] = str(gripper_mesh)
-            proc_env["OPTUNA_SCORE_PATH"] = str(score_file)
-            proc_env["OPTUNA_STATUS_PATH"] = str(status_file)
+            proc_env["OPTUNA_TRIAL_STATE_PATH"] = str(trial_state_file)
+            proc_env["OPTUNA_RUN_SLOT"] = "1"
 
             # Use the exact same flags as optimize.py for headless batch mode
             creation_flags = (

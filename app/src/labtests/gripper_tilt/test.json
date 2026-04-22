@@ -1,6 +1,6 @@
 {
-  "label": "Gripper Tilt Test",
-  "description": "Measures gripper tilt at left, center, and up positions in inverse mode. No collisions or cube.",
+  "label": "Tilt Test: 1 run",
+  "description": "Minimizes tilt of the gripper in edge cases",
   "default_selected": false,
   "run_count": 1
 }

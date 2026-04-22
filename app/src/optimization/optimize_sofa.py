@@ -151,8 +151,8 @@ def launch_sofa(
     test_run_index: int,
     test_run_total: int,
     collision_stl: Path,
-    score_path: Path,
-    status_path: Path,
+    trial_state_path: Path,
+    run_slot: int,
     gen_index: int,
     trial_index: int,
     run_index: int,
@@ -168,8 +168,8 @@ def launch_sofa(
         test_run_index (int): 1-based run index within the selected test.
         test_run_total (int): Total runs planned for the selected test.
         collision_stl (Path): Path to the collision STL, passed via OPTUNA_STL_PATH env var.
-        score_path (Path): Path where SOFA will write the score JSON.
-        status_path (Path): Path where SOFA will write per-frame run status.
+        trial_state_path (Path): Path to trial_state.json shared by this trial.
+        run_slot (int): 1-based run slot index within trial_state.json.
         gen_index (int): Generation index.
         trial_index (int): Trial index inside generation.
         run_index (int): Repeat index inside trial.
@@ -180,8 +180,8 @@ def launch_sofa(
     """
     trial_env = env.copy()
     trial_env["OPTUNA_STL_PATH"] = str(collision_stl)
-    trial_env["OPTUNA_SCORE_PATH"] = str(score_path)
-    trial_env["OPTUNA_STATUS_PATH"] = str(status_path)
+    trial_env["OPTUNA_TRIAL_STATE_PATH"] = str(trial_state_path)
+    trial_env["OPTUNA_RUN_SLOT"] = str(run_slot)
     trial_env["OPTUNA_GEN"] = str(gen_index)
     trial_env["OPTUNA_TRIAL"] = str(trial_index)
     trial_env["OPTUNA_RUN"] = str(run_index)
@@ -189,7 +189,9 @@ def launch_sofa(
     trial_env["LAB_SHAPEOPT_TEST"] = test_name
     trial_env["LAB_SHAPEOPT_TEST_RUN_INDEX"] = str(test_run_index)
     trial_env["LAB_SHAPEOPT_TEST_RUN_TOTAL"] = str(test_run_total)
-    trial_env["LAB_SHAPEOPT_RUN_LABEL"] = f"{test_name} {test_run_index}/{test_run_total}"
+    trial_env["LAB_SHAPEOPT_RUN_LABEL"] = (
+        f"{test_name} {test_run_index}/{test_run_total}"
+    )
 
     if SOFA_GUI in ("batch", "imgui", "glfw"):
         gui_mode = SOFA_GUI

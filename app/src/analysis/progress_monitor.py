@@ -49,17 +49,76 @@ def _read_json(path: Path) -> dict | None:
         return None
 
 
-def _iter_status_files() -> list[Path]:
+def _iter_trial_state_files() -> list[Path]:
     """
-    List per-run status JSON files under trials.
+    List one trial_state JSON file per trial under trials.
 
     Inputs:
         None
 
     Returns:
-        list[Path]: Status file paths.
+        list[Path]: trial_state file paths.
     """
-    return sorted(TRIALS_DIR.glob("gen_*/trial_*/status_run*.json"))
+    return sorted(TRIALS_DIR.glob("gen_*/trial_*/trial_state.json"))
+
+
+def _collect_run_statuses() -> list[dict]:
+    """Expand trial_state.json files into flat per-run status payloads."""
+    statuses: list[dict] = []
+    for path in _iter_trial_state_files():
+        data = _read_json(path)
+        if not isinstance(data, dict):
+            continue
+        runs = data.get("runs", [])
+        if not isinstance(runs, list):
+            continue
+        base_gen = int(data.get("gen", 0) or 0)
+        base_trial = int(data.get("trial", 0) or 0)
+        for idx, run in enumerate(runs, start=1):
+            if not isinstance(run, dict):
+                continue
+            row = dict(run)
+            row.setdefault("gen", base_gen)
+            row.setdefault("trial", base_trial)
+            row.setdefault("run", idx)
+            statuses.append(row)
+    return statuses
+
+
+def _weighted_trial_score(
+    aggregated_test_scores: list[float],
+    test_names_in_order: list[str],
+    weights: dict[str, int],
+) -> float:
+    """
+    Compute the weighted trial score from per-test aggregate scores.
+
+    Uses integer percentage weights from progress.json (summing to 100).
+    Falls back to a plain mean if weights are absent or don't sum to a
+    positive value.
+
+    Inputs:
+        aggregated_test_scores (list[float]): One aggregate score per test.
+        test_names_in_order (list[str]): Test names matching each score.
+        weights (dict[str, int]): Per-test weight percentages from progress.json.
+
+    Returns:
+        float: Weighted score.
+    """
+    if not aggregated_test_scores:
+        return 0.0
+
+    if not weights or len(test_names_in_order) != len(aggregated_test_scores):
+        return sum(aggregated_test_scores) / len(aggregated_test_scores)
+
+    total_weight = sum(weights.get(name, 0) for name in test_names_in_order)
+    if total_weight <= 0:
+        return sum(aggregated_test_scores) / len(aggregated_test_scores)
+
+    return sum(
+        score * weights.get(name, 0) / total_weight
+        for score, name in zip(aggregated_test_scores, test_names_in_order)
+    )
 
 
 # ─────────────────────────────────────────────
@@ -341,6 +400,9 @@ class MonitorApp:
         avg = progress.get("avg_score")
         best_str = f"{best:.2f}" if isinstance(best, (int, float)) else "--"
         avg_str = f"{avg:.2f}" if isinstance(avg, (int, float)) else "--"
+
+        # Show test names with their weights when available.
+        test_weights: dict[str, int] = progress.get("test_weights") or {}
         run_plan = progress.get("run_plan", [])
         if isinstance(run_plan, list) and run_plan:
             unique_counts: dict[str, int] = {}
@@ -351,13 +413,21 @@ class MonitorApp:
                 count = item.get("test_run_total", 1)
                 if name not in unique_counts and isinstance(count, int):
                     unique_counts[name] = count
-            tests_text = ", ".join(
-                f"{name} x{count}" for name, count in unique_counts.items()
-            )
+            tests_parts = []
+            for name, count in unique_counts.items():
+                w = test_weights.get(name)
+                weight_str = f" w={w}%" if isinstance(w, (int, float)) else ""
+                tests_parts.append(f"{name} x{count}{weight_str}")
+            tests_text = ", ".join(tests_parts)
         else:
             test_names = progress.get("test_names", [])
             if isinstance(test_names, list) and test_names:
-                tests_text = ", ".join(str(name) for name in test_names)
+                tests_parts = []
+                for name in test_names:
+                    w = test_weights.get(name)
+                    weight_str = f" w={w}%" if isinstance(w, (int, float)) else ""
+                    tests_parts.append(f"{name}{weight_str}")
+                tests_text = ", ".join(tests_parts)
             else:
                 tests_text = "--"
 
@@ -407,6 +477,13 @@ class MonitorApp:
             current_gen = self.last_gen_current
 
         self._sync_layout(progress)
+
+        # Extract weights from progress.json for use in the trial score display.
+        test_weights: dict[str, int] = {}
+        if isinstance(progress, dict):
+            raw_weights = progress.get("test_weights")
+            if isinstance(raw_weights, dict):
+                test_weights = raw_weights
 
         status_lookup = {
             (int(s.get("trial", 0)), int(s.get("run", 0))): s
@@ -535,6 +612,7 @@ class MonitorApp:
 
             test_score_bits = []
             aggregated_test_scores: list[float] = []
+            test_names_in_order: list[str] = []
             for test_name, scores in test_scores.items():
                 valid_test_scores = [
                     score for score in scores if score not in (None, float("-inf"))
@@ -544,20 +622,21 @@ class MonitorApp:
                     continue
                 test_score = sum(valid_test_scores) / len(valid_test_scores)
                 aggregated_test_scores.append(test_score)
-                test_score_bits.append(f"{test_name}={test_score:.3f}")
+                test_names_in_order.append(test_name)
+                w = test_weights.get(test_name)
+                weight_str = f" (w={w}%)" if isinstance(w, (int, float)) else ""
+                test_score_bits.append(f"{test_name}={test_score:.3f}{weight_str}")
 
             trial_score_text = "--"
             states = trial_slot_states.get(trial, [])
-            if (
-                aggregated_test_scores
-                and states
-                and all(s in terminal_states for s in states)
-            ):
-                trial_score_text = (
-                    f"{(sum(aggregated_test_scores) / len(aggregated_test_scores)):.3f}"
+            if aggregated_test_scores and states:
+                weighted = _weighted_trial_score(
+                    aggregated_test_scores, test_names_in_order, test_weights
                 )
-            elif aggregated_test_scores:
-                trial_score_text = f"{(sum(aggregated_test_scores) / len(aggregated_test_scores)):.3f} (partial)"
+                if all(s in terminal_states for s in states):
+                    trial_score_text = f"{weighted:.3f}"
+                else:
+                    trial_score_text = f"{weighted:.3f} (partial)"
             elif valid_scores:
                 trial_score_text = f"{(sum(valid_scores) / len(valid_scores)):.3f}"
 
@@ -577,16 +656,19 @@ class MonitorApp:
             self.header.configure(text="Waiting for optimizer...")
 
     def _read_run_score(self, gen: int, trial: int, run: int) -> float | None:
-        score_path = (
-            TRIALS_DIR
-            / f"gen_{gen:04d}"
-            / f"trial_{trial:02d}"
-            / f"score_run{run-1}.json"
+        trial_state_path = (
+            TRIALS_DIR / f"gen_{gen:04d}" / f"trial_{trial:02d}" / "trial_state.json"
         )
-        payload = _read_json(score_path)
+        payload = _read_json(trial_state_path)
         if not isinstance(payload, dict):
             return None
-        raw = payload.get("score", payload.get("score"))
+        runs = payload.get("runs", [])
+        if not isinstance(runs, list) or run <= 0 or run > len(runs):
+            return None
+        slot = runs[run - 1]
+        if not isinstance(slot, dict):
+            return None
+        raw = slot.get("score")
         try:
             return float(raw)
         except Exception:
@@ -646,8 +728,6 @@ class MonitorApp:
             if not bbox:
                 return
 
-            # Place the selected trial near the top of the viewport with a small,
-            # configurable margin so auto-focus feels stable.
             inner_top = bbox[1]
             inner_height = max(1, bbox[3] - bbox[1])
             canvas_h = max(1, self.runs_canvas.winfo_height())
@@ -662,11 +742,7 @@ class MonitorApp:
 
     def _tick(self) -> None:
         progress = _read_json(PROGRESS_FILE)
-        statuses = []
-        for path in _iter_status_files():
-            data = _read_json(path)
-            if isinstance(data, dict):
-                statuses.append(data)
+        statuses = _collect_run_statuses()
 
         self._update_top(progress, statuses)
         self._update_runs(progress, statuses)

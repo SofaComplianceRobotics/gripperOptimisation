@@ -1,17 +1,17 @@
 """
 optimize_scoring.py — Score reading, aggregation, progress tracking, and result reporting.
 
-Handles collection of simulation results, consistency penalties, and
+Handles collection of simulation results and
 aggregation into generation summaries and progress updates for the UI.
 """
 
 import json
+import os
 import statistics
 import time
 from pathlib import Path
 
 from optimize_config import (
-    CONSISTENCY_PENALTY_COEF,
     HARD_FAIL_SCORE,
     PROGRESS_FILE,
     N_PARALLEL,
@@ -20,6 +20,7 @@ from optimize_config import (
     GEN_PROGRESS_POLL_INTERVAL,
     SCORE_AGGREGATION,
     SELECTED_TEST_NAMES,
+    SELECTED_TEST_WEIGHTS,
     RUN_PLAN,
     TRIALS_DIR,
 )
@@ -42,6 +43,136 @@ def write_run_status(path: Path, data: dict) -> None:
     tmp_path.replace(path)
 
 
+def _acquire_lock(lock_path: Path, timeout_s: float = 5.0) -> bool:
+    """Acquire a simple cross-process file lock using exclusive create."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            return True
+        except FileExistsError:
+            time.sleep(0.01)
+        except Exception:
+            return False
+    return False
+
+
+def _release_lock(lock_path: Path) -> None:
+    try:
+        if lock_path.exists():
+            lock_path.unlink()
+    except Exception:
+        pass
+
+
+def _read_json_safe(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def init_trial_state(
+    path: Path,
+    *,
+    gen_index: int,
+    trial_index: int,
+    run_plan: list[tuple[str, int, int]],
+) -> None:
+    """Create one trial_state.json with all run slots pre-populated."""
+    runs = []
+    for run_index, (test_name, test_run_index, test_run_total) in enumerate(
+        run_plan, start=1
+    ):
+        runs.append(
+            {
+                "run": run_index,
+                "test_name": test_name,
+                "test_run_index": test_run_index,
+                "test_run_total": test_run_total,
+                "run_label": f"{test_name} {test_run_index}/{test_run_total}",
+                "state": "not-started",
+                "current_frame": 0,
+                "total_frames": None,
+                "sim_time": 0.0,
+                "score": None,
+                "reason": "",
+                "updated_at": time.time(),
+            }
+        )
+
+    payload = {
+        "gen": gen_index,
+        "trial": trial_index,
+        "state": "running",
+        "updated_at": time.time(),
+        "runs": runs,
+    }
+    write_jsonc(path, payload)
+
+
+def update_trial_run(path: Path, run_index: int, patch: dict) -> None:
+    """Atomically update one run slot in trial_state.json."""
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    if not _acquire_lock(lock_path):
+        return
+    try:
+        data = _read_json_safe(path)
+        runs = data.get("runs")
+        if not isinstance(runs, list):
+            runs = []
+        while len(runs) < run_index:
+            runs.append({"run": len(runs) + 1})
+        slot = runs[run_index - 1]
+        if not isinstance(slot, dict):
+            slot = {"run": run_index}
+        slot.update(patch)
+        slot["run"] = run_index
+        slot["updated_at"] = time.time()
+        runs[run_index - 1] = slot
+        data["runs"] = runs
+        data["updated_at"] = time.time()
+
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        _release_lock(lock_path)
+
+
+def read_trial_run(path: Path, run_index: int) -> dict | None:
+    """Read one run slot from trial_state.json."""
+    data = _read_json_safe(path)
+    runs = data.get("runs")
+    if not isinstance(runs, list) or run_index <= 0 or run_index > len(runs):
+        return None
+    slot = runs[run_index - 1]
+    return slot if isinstance(slot, dict) else None
+
+
+def read_trial_state(path: Path) -> dict:
+    """Read trial_state.json as a dict."""
+    return _read_json_safe(path)
+
+
+def update_trial_summary(path: Path, patch: dict) -> None:
+    """Atomically update top-level trial summary fields in trial_state.json."""
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    if not _acquire_lock(lock_path):
+        return
+    try:
+        data = _read_json_safe(path)
+        data.update(patch)
+        data["updated_at"] = time.time()
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        _release_lock(lock_path)
+
+
 def write_jsonc(path: Path, data: dict) -> None:
     """
     Write a dict as plain JSON to a .jsonc file.
@@ -54,27 +185,6 @@ def write_jsonc(path: Path, data: dict) -> None:
         None
     """
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
-def read_score(score_path: Path) -> float:
-    """
-    Read the time_held score written by SOFA's PlaybackController.
-
-    Inputs:
-        score_path (Path): Path to the JSON file written by SOFA.
-
-    Returns:
-        float: The score value, or -inf if the file is missing or malformed.
-    """
-    try:
-        with open(score_path) as f:
-            payload = json.load(f)
-            if "score" in payload:
-                return float(payload["score"])
-            return float(payload["score"])
-    except Exception as e:
-        print(f"[warn] Could not read score from {score_path}: {e}")
-        return float("-inf")
 
 
 def write_gen_summary(gen_dir: Path, gen_index: int, scores: list[float]) -> None:
@@ -139,6 +249,10 @@ def write_progress(
         "trials_per_gen": N_PARALLEL,
         "runs_per_trial": N_REPEATS,
         "test_names": list(SELECTED_TEST_NAMES),
+        # Weights as integer percentages for easy consumption by the monitor.
+        "test_weights": {
+            name: round(frac * 100) for name, frac in SELECTED_TEST_WEIGHTS.items()
+        },
         "run_plan": [
             {
                 "test_name": test_name,
@@ -179,19 +293,31 @@ def cleanup_generation_status_files(gen_dir: Path) -> None:
 
 def aggregate_trial_scores(
     valid_scores: list[float],
+    weights: dict[str, float] | None = None,
+    names: list[str] | None = None,
 ) -> tuple[float, float, float, float]:
     """
-    Aggregate multiple runs from a trial using configured aggregation method and consistency penalty.
+    Aggregate multiple scores using the configured method.
+
+    When ``weights`` and ``names`` are both provided (and their lengths match
+    ``valid_scores``), the aggregate is a weighted sum instead of a plain
+    mean/median.  This is used when combining one score per test into a single
+    trial score.  When aggregating repeated runs of the *same* test, weights
+    are not meaningful and should be omitted.
 
     Inputs:
-        valid_scores (list[float]): Valid scores from all runs in the trial.
+        valid_scores (list[float]): Valid scores to aggregate.
+        weights (dict[str, float] | None): Per-test weight fractions (sum to 1.0).
+            Keys must match ``names`` if provided; ignored otherwise.
+        names (list[str] | None): Test names corresponding to each score in
+            ``valid_scores``.  Required when ``weights`` is given.
 
     Returns:
         tuple[float, float, float, float]:
-            - aggregate_score: Mean or median depending on SCORE_AGGREGATION setting
-            - consistency_penalty: Penalty for high variance
-            - final_score: aggregate_score minus penalty
-            - median_score: Median of valid scores
+            - aggregate_score: Weighted or unweighted mean/median.
+            - consistency_penalty: Always 0.0 (penalty removed).
+            - final_score: aggregate_score.
+            - median_score: Median of valid_scores.
     """
     if not valid_scores:
         return 0.0, 0.0, 0.0, 0.0
@@ -205,16 +331,22 @@ def aggregate_trial_scores(
         final_score = aggregate_score
         return aggregate_score, consistency_penalty, final_score, median_score
 
-    if SCORE_AGGREGATION == "median":
+    # Weighted aggregation — only applies when combining per-test scores.
+    if (
+        weights is not None
+        and names is not None
+        and len(names) == len(valid_scores)
+        and all(name in weights for name in names)
+    ):
+        aggregate_score = sum(
+            score * weights[name] for score, name in zip(valid_scores, names)
+        )
+    elif SCORE_AGGREGATION == "median":
         aggregate_score = median_score
     else:
-        # Default to mean to reward occasional strong outcomes
+        # Default: mean (rewards occasional strong outcomes)
         aggregate_score = avg_score
 
-    # Apply consistency penalty: penalize high variance between runs
-    consistency_penalty = CONSISTENCY_PENALTY_COEF * (
-        max(valid_scores) - min(valid_scores)
-    )
-    final_score = aggregate_score - consistency_penalty
-
+    consistency_penalty = 0.0
+    final_score = aggregate_score
     return aggregate_score, consistency_penalty, final_score, median_score

@@ -73,8 +73,8 @@ for c in (str(LAB_ROOT), str(APP_ROOT), str(SRC_ROOT)):
 
 # Read whatever env vars your test needs
 MY_THRESHOLD = float(os.environ.get("MY_THRESHOLD", "10.0"))
-SCORE_PATH   = os.environ.get("OPTUNA_SCORE_PATH", None)
-STATUS_PATH  = os.environ.get("OPTUNA_STATUS_PATH", None)
+TRIAL_STATE_PATH = os.environ.get("OPTUNA_TRIAL_STATE_PATH", None)
+OPTUNA_RUN_SLOT = int(os.environ.get("OPTUNA_RUN_SLOT", "0"))
 OPTUNA_GEN   = int(os.environ.get("OPTUNA_GEN",   "0"))
 OPTUNA_TRIAL = int(os.environ.get("OPTUNA_TRIAL", "0"))
 OPTUNA_RUN   = int(os.environ.get("OPTUNA_RUN",   "0"))
@@ -104,9 +104,9 @@ def createScene(rootnode):
     )
     writer = ScoreWriter(
         rootnode,
-        score_path=SCORE_PATH,
-        status_path=STATUS_PATH,
         run_info={"gen": OPTUNA_GEN, "trial": OPTUNA_TRIAL, "run": OPTUNA_RUN},
+        trial_state_path=TRIAL_STATE_PATH,
+        run_slot=OPTUNA_RUN_SLOT,
     )
 
     class MyController(Sofa.Core.Controller):
@@ -148,8 +148,8 @@ for c in (str(LAB_ROOT), str(APP_ROOT), str(SRC_ROOT)):
     if c not in sys.path:
         sys.path.insert(0, c)
 
-SCORE_PATH  = os.environ.get("OPTUNA_SCORE_PATH",  None)
-STATUS_PATH = os.environ.get("OPTUNA_STATUS_PATH", None)
+TRIAL_STATE_PATH = os.environ.get("OPTUNA_TRIAL_STATE_PATH", None)
+OPTUNA_RUN_SLOT  = int(os.environ.get("OPTUNA_RUN_SLOT", "0"))
 OPTUNA_GEN   = int(os.environ.get("OPTUNA_GEN",   "0"))
 OPTUNA_TRIAL = int(os.environ.get("OPTUNA_TRIAL", "0"))
 OPTUNA_RUN   = int(os.environ.get("OPTUNA_RUN",   "0"))
@@ -165,6 +165,13 @@ def createScene(rootnode):
     nodes = build_base_scene(rootnode, inverse=True)
     if nodes is None:
         return
+
+    writer = ScoreWriter(
+        rootnode,
+        run_info={"gen": OPTUNA_GEN, "trial": OPTUNA_TRIAL, "run": OPTUNA_RUN},
+        trial_state_path=TRIAL_STATE_PATH,
+        run_slot=OPTUNA_RUN_SLOT,
+    )
 
     nodes.emio.addObject(AssemblyController(nodes.emio))
 

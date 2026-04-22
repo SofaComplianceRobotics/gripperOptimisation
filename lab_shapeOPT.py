@@ -12,6 +12,7 @@ import sys
 import math
 import json
 import random
+import time
 from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../")
@@ -24,8 +25,8 @@ GRIPPER_MESH_PATH = os.environ.get(
     "OPTUNA_STL_PATH",
     str(ASSETS_ROOT / "data" / "meshes" / "centerparts" / "new_gripper_collision.stl"),
 )
-SCORE_PATH = os.environ.get("OPTUNA_SCORE_PATH", None)
-STATUS_PATH = os.environ.get("OPTUNA_STATUS_PATH", None)
+TRIAL_STATE_PATH = os.environ.get("OPTUNA_TRIAL_STATE_PATH", None)
+OPTUNA_RUN_SLOT = int(os.environ.get("OPTUNA_RUN_SLOT", "0"))
 OPTUNA_GEN = int(os.environ.get("OPTUNA_GEN", "0"))
 OPTUNA_TRIAL = int(os.environ.get("OPTUNA_TRIAL", "0"))
 OPTUNA_RUN = int(os.environ.get("OPTUNA_RUN", "0"))
@@ -124,18 +125,61 @@ def _write_status(payload: dict) -> None:
     Returns:
         None
     """
-    if not STATUS_PATH:
+    if not TRIAL_STATE_PATH or OPTUNA_RUN_SLOT <= 0:
         return
 
+    lock_path = TRIAL_STATE_PATH + ".lock"
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            break
+        except FileExistsError:
+            time.sleep(0.01)
+        except Exception:
+            return
+
     try:
-        status_file = STATUS_PATH
-        tmp_file = status_file + ".tmp"
+        try:
+            trial_data = json.loads(Path(TRIAL_STATE_PATH).read_text(encoding="utf-8"))
+            if not isinstance(trial_data, dict):
+                trial_data = {}
+        except Exception:
+            trial_data = {}
+
+        runs = trial_data.get("runs")
+        if not isinstance(runs, list):
+            runs = []
+        while len(runs) < OPTUNA_RUN_SLOT:
+            runs.append({"run": len(runs) + 1})
+
+        slot = runs[OPTUNA_RUN_SLOT - 1]
+        if not isinstance(slot, dict):
+            slot = {"run": OPTUNA_RUN_SLOT}
+
+        full_payload = {
+            "gen": OPTUNA_GEN,
+            "trial": OPTUNA_TRIAL,
+            "run": OPTUNA_RUN,
+            **payload,
+        }
+        slot.update(full_payload)
+        slot["run"] = OPTUNA_RUN_SLOT
+        runs[OPTUNA_RUN_SLOT - 1] = slot
+        trial_data["runs"] = runs
+        trial_data["updated_at"] = payload.get("updated_at", time.time())
+
+        tmp_file = TRIAL_STATE_PATH + ".tmp"
         with open(tmp_file, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
-        os.replace(tmp_file, status_file)
-    except Exception:
-        # Status telemetry is best-effort; never fail the simulation because of it.
-        pass
+            json.dump(trial_data, f, indent=2)
+        os.replace(tmp_file, TRIAL_STATE_PATH)
+    finally:
+        try:
+            if os.path.exists(lock_path):
+                os.unlink(lock_path)
+        except Exception:
+            pass
 
 
 def createScene(rootnode):
