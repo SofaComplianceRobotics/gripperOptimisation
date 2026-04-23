@@ -74,17 +74,16 @@ def _compute_contributions(record: dict) -> dict[str, float]:
     test_scores: dict = record.get("test_scores") or {}
 
     if not test_scores:
-        # Legacy record or failed trial: no per-test breakdown
-        # Treat whole score as one block named "score"
         return {"score": float(record.get("final_score", record.get("score", 0.0)))}
 
-    # New format: compute weighted contributions from per-test breakdown
     contributions: dict[str, float] = {}
     for test_name, test_info in test_scores.items():
         if not isinstance(test_info, dict):
             continue
         agg = float(test_info.get("aggregate_score", 0.0) or 0.0)
-        max_score = float(test_info.get("max_score", 1.0) or 1.0)
+        raw_max = test_info.get("max_score")
+        # Treat missing/None as legacy (score already normalised); 0.0 means unknown.
+        max_score = float(raw_max) if raw_max is not None else 1.0
         wpct = float(test_info.get("weight_pct", 0.0) or 0.0)
         norm = min(agg / max_score, 1.0) if max_score > 0 else 0.0
         contributions[test_name] = norm * wpct
@@ -131,7 +130,7 @@ def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
             best_x.append(r["chron"])
             best_y.append(running_best)
 
-    # Generation tick marks
+    # Generation tick marks (one per unique generation boundary)
     gen_tick_positions, gen_tick_labels = [], []
     prev_gen = None
     for r in records:
@@ -173,8 +172,7 @@ def _draw_bars(
     • All positive contributions stack upward from 0.
     • All negative contributions stack downward from 0.
     • Each test has a consistent color regardless of contribution sign.
-    • A red horizontal tick marks the net contribution score,
-      positioned at y = sum(positive) + sum(negative) (algebraic sum).
+    • A red horizontal tick marks the net contribution score.
     • Failed trials are rendered at reduced opacity.
     • Incomplete (still running) trials are rendered with lower opacity.
     """
@@ -183,8 +181,7 @@ def _draw_bars(
     failed_mask = plot_data["failed_mask"]
     is_complete = plot_data["is_complete"]
 
-    tick_w = bar_width * 1  # final-score tick width
-    bars_drawn = 0
+    tick_w = bar_width * 1
 
     for i, (x, contrib, failed, complete) in enumerate(
         zip(xs, contributions, failed_mask, is_complete)
@@ -195,20 +192,15 @@ def _draw_bars(
         base_alpha = 0.30 if failed else 1.0
         pos_bottom = 0.0
         neg_bottom = 0.0
-
-        # Reduce opacity for incomplete trials
         incomplete_alpha = 0.5 if not complete else 1.0
 
-        # Render all contributions, using same color for each test
         for test_name in all_test_names:
             val = contrib.get(test_name, 0.0)
             if val == 0.0:
                 continue
 
-            bars_drawn += 1
             color = _test_color(test_name, all_test_names)
 
-            # All bars use the same color regardless of sign, and stack appropriately
             if val > 0:
                 ax.bar(
                     x,
@@ -225,20 +217,17 @@ def _draw_bars(
             else:
                 ax.bar(
                     x,
-                    val,  # negative height → bar extends downward
+                    val,
                     bottom=neg_bottom,
                     width=bar_width,
-                    color=color,  # Same color as positive
-                    alpha=0.85
-                    * base_alpha
-                    * incomplete_alpha,  # Same alpha regardless of sign
+                    color=color,
+                    alpha=0.85 * base_alpha * incomplete_alpha,
                     linewidth=0.5,
                     edgecolor=color,
                     zorder=2,
                 )
-                neg_bottom += val  # grows more negative
+                neg_bottom += val
 
-        # Red tick at the algebraic sum of all contributions (net result)
         net_score = pos_bottom + neg_bottom
         line_style = "--" if not complete else "-"
         ax.plot(
@@ -263,7 +252,6 @@ def _build_legend(ax, all_test_names: list[str]) -> None:
     for name in all_test_names:
         color = _test_color(name, all_test_names)
         handles.append(mpatches.Patch(facecolor=color, alpha=0.85, label=f"{name}"))
-    # Final score tick symbol
     handles.append(
         plt.Line2D([0], [0], color=C_FINAL, linewidth=2, label="Final score")
     )
@@ -282,7 +270,6 @@ def _build_legend(ax, all_test_names: list[str]) -> None:
             [0], [0], color=C_BEST, linestyle="-", linewidth=2, label="Best so far"
         )
     )
-    # Add incomplete indicator
     handles.append(
         mpatches.Patch(
             facecolor="#cccccc",
@@ -293,6 +280,24 @@ def _build_legend(ax, all_test_names: list[str]) -> None:
         )
     )
     ax.legend(handles=handles, loc="lower right", fontsize=9, framealpha=0.9, ncol=2)
+
+
+# ---------------------------------------------------------------------------
+# X-axis tick helper — avoids black-bar overload at many generations
+# ---------------------------------------------------------------------------
+
+
+def _set_gen_ticks(ax, positions: list, labels: list, max_ticks: int = 12) -> None:
+    n = len(positions)
+    if n == 0:
+        return
+    if n <= max_ticks:
+        ax.set_xticks(positions)
+        ax.set_xticklabels(labels, rotation=0, fontsize=10)
+    else:
+        step = max(1, (n + max_ticks - 1) // max_ticks)
+        ax.set_xticks(positions[::step])
+        ax.set_xticklabels(labels[::step], rotation=0, fontsize=10)
 
 
 # ---------------------------------------------------------------------------
@@ -316,69 +321,22 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
 
     all_test_names = _collect_all_test_names(records)
 
-    # Bar width: leave a small gap between bars
-    n = len(records)
-    xs_range = max(r["chron"] for r in records) - min(r["chron"] for r in records) + 1
-    bar_width = max(0.4, xs_range / n * 0.8)
+    def _compute_bar_width(recs: list[dict]) -> float:
+        n = len(recs)
+        xs_range = max(r["chron"] for r in recs) - min(r["chron"] for r in recs) + 1
+        return max(0.4, xs_range / n * 0.8)
 
+    bar_width = _compute_bar_width(records)
     plot_data = compute_plot_data(records, all_test_names)
 
     fig, ax = plt.subplots(figsize=(14, 8))
     fig.patch.set_facecolor(C_BG)
     ax.set_facecolor(C_SECTION)
-    fig.subplots_adjust(bottom=0.22)
-
-    # ── Draw bars ──────────────────────────────────────────────────────────
-    _draw_bars(ax, plot_data, all_test_names, bar_width, show_failed=True)
-
-    # ── Zero line ──────────────────────────────────────────────────────────
-    ax.axhline(0, color=C_BORDER, linewidth=1.0, zorder=1)
-
-    # ── Overlay lines ──────────────────────────────────────────────────────
-    (avg_line,) = ax.plot(
-        plot_data["avg_x"],
-        plot_data["avg_y"],
-        color=C_AVG,
-        linestyle="--",
-        linewidth=2,
-        label=f"Rolling avg (±{CENTERED_AVG_HALF_WINDOW})",
-        alpha=0.85,
-        zorder=5,
-    )
-    (best_line,) = ax.plot(
-        plot_data["best_x"],
-        plot_data["best_y"],
-        color=C_BEST,
-        linestyle="-",
-        linewidth=2,
-        label="Best so far",
-        alpha=0.85,
-        zorder=5,
-    )
-
-    # ── Axes ───────────────────────────────────────────────────────────────
-    ax.set_xlabel("Generation", fontsize=12, fontweight="bold")
-    ax.set_xticks(plot_data["gen_tick_positions"])
-    ax.set_xticklabels(plot_data["gen_tick_labels"], rotation=0, fontsize=10)
-    ax.set_ylabel("Score contribution", fontsize=12, fontweight="bold")
-    ax.set_title(
-        "Gripper Optimization — Per-Test Contributions",
-        fontsize=14,
-        fontweight="bold",
-        color=C_BANNER,
-    )
-    ax.grid(axis="y", which="both", alpha=0.25, linestyle="--")
-    ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=10))
-
-    for spine in ax.spines.values():
-        spine.set_edgecolor(C_BORDER)
-
-    _build_legend(ax, all_test_names)
+    fig.subplots_adjust(bottom=0.14)
 
     # ── State ──────────────────────────────────────────────────────────────
     state = {
         "live": False,
-        "controls_visible": True,
         "show_failed": True,
         "rolling_avg": True,
         "best_so_far": True,
@@ -386,8 +344,18 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
 
     # ── Redraw helper ──────────────────────────────────────────────────────
     def full_redraw(updated_records: list[dict]) -> None:
-        nonlocal records, plot_data
+        nonlocal records, plot_data, bar_width
+
         records = updated_records
+
+        # Refresh test names in-place so all closures stay consistent
+        new_names = _collect_all_test_names(records)
+        all_test_names.clear()
+        all_test_names.extend(new_names)
+
+        if records:
+            bar_width = _compute_bar_width(records)
+
         plot_data = compute_plot_data(records, all_test_names)
 
         ax.cla()
@@ -423,8 +391,11 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
             )
 
         ax.set_xlabel("Generation", fontsize=12, fontweight="bold")
-        ax.set_xticks(plot_data["gen_tick_positions"])
-        ax.set_xticklabels(plot_data["gen_tick_labels"], rotation=0, fontsize=10)
+        _set_gen_ticks(
+            ax,
+            plot_data["gen_tick_positions"],
+            plot_data["gen_tick_labels"],
+        )
         ax.set_ylabel("Score contribution", fontsize=12, fontweight="bold")
         ax.set_title(
             "Gripper Optimization — Per-Test Contributions",
@@ -462,9 +433,7 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
             x_pad = max(1.0, (max(xs) - min(xs)) * 0.02)
             ax.set_xlim(min(xs) - x_pad, max(xs) + x_pad)
 
-    _refit_axes()
-
-    # ── Buttons ────────────────────────────────────────────────────────────
+    # ── Buttons — single row ───────────────────────────────────────────────
     btn_colors = {True: "#a0a0a0", False: "#d7d7d7"}
 
     def style_btn(btn, on: bool) -> None:
@@ -472,25 +441,20 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         btn.hovercolor = "#bdbdbd"
         btn.ax.set_facecolor(btn_colors[on])
 
-    live_ax = fig.add_axes([0.02, 0.11, 0.09, 0.06])
-    panel_ax = fig.add_axes([0.12, 0.11, 0.13, 0.06])
-    failed_ax = fig.add_axes([0.02, 0.03, 0.11, 0.06])
-    avg_ax = fig.add_axes([0.14, 0.03, 0.11, 0.06])
-    best_ax = fig.add_axes([0.26, 0.03, 0.11, 0.06])
+    live_ax   = fig.add_axes([0.02, 0.04, 0.10, 0.06])
+    failed_ax = fig.add_axes([0.13, 0.04, 0.10, 0.06])
+    avg_ax    = fig.add_axes([0.24, 0.04, 0.10, 0.06])
+    best_ax   = fig.add_axes([0.35, 0.04, 0.10, 0.06])
 
-    btn_live = Button(live_ax, "Live: OFF")
-    btn_panel = Button(panel_ax, "Hide Controls")
+    btn_live   = Button(live_ax,   "Live: OFF")
     btn_failed = Button(failed_ax, "Failed")
-    btn_avg = Button(avg_ax, "Avg")
-    btn_best = Button(best_ax, "Best")
+    btn_avg    = Button(avg_ax,    "Avg")
+    btn_best   = Button(best_ax,   "Best")
 
-    style_btn(btn_live, state["live"])
+    style_btn(btn_live,   state["live"])
     style_btn(btn_failed, state["show_failed"])
-    style_btn(btn_avg, state["rolling_avg"])
-    style_btn(btn_best, state["best_so_far"])
-    style_btn(btn_panel, True)
-
-    panel_axes = [live_ax, failed_ax, avg_ax, best_ax]
+    style_btn(btn_avg,    state["rolling_avg"])
+    style_btn(btn_best,   state["best_so_far"])
 
     refresh_timer = fig.canvas.new_timer(interval=int(LIVE_REFRESH_SECONDS * 1000))
 
@@ -529,20 +493,10 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         style_btn(btn_best, state["best_so_far"])
         full_redraw(records)
 
-    def toggle_controls(_e) -> None:
-        state["controls_visible"] = not state["controls_visible"]
-        for pax in panel_axes:
-            pax.set_visible(state["controls_visible"])
-        btn_panel.label.set_text(
-            "Hide Controls" if state["controls_visible"] else "Show Controls"
-        )
-        fig.canvas.draw_idle()
-
     btn_live.on_clicked(toggle_live)
     btn_failed.on_clicked(toggle_failed)
     btn_avg.on_clicked(toggle_avg)
     btn_best.on_clicked(toggle_best)
-    btn_panel.on_clicked(toggle_controls)
 
     def on_close(_e) -> None:
         refresh_timer.stop()

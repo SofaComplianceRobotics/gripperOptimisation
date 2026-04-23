@@ -154,9 +154,17 @@ def load_all_trials() -> list[dict]:
                         test_run_scores.setdefault(tname, []).append(float(raw))
 
                 if test_run_scores:
+                    # Use ALL expected test names from the run plan so that
+                    # partial (still-running) trials get correct weight fractions
+                    # instead of 100% going to only the completed tests.
+                    all_run_test_names = {
+                        r.get("test_name")
+                        for r in runs
+                        if isinstance(r, dict) and r.get("test_name")
+                    }
                     total_weight = sum(
-                        test_weights.get(t, 1.0) for t in test_run_scores
-                    )
+                        test_weights.get(t, 1.0) for t in all_run_test_names
+                    ) or 1.0
                     test_scores = {}
                     for tname, tscores in test_run_scores.items():
                         agg = (

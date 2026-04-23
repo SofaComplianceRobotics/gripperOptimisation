@@ -80,6 +80,8 @@ def init_trial_state(
     gen_index: int,
     trial_index: int,
     run_plan: list[tuple[str, int, int]],
+    test_weights: dict | None = None,
+    test_max_scores: dict | None = None,
 ) -> None:
     """Create one trial_state.json with all run slots pre-populated."""
     runs = []
@@ -109,6 +111,8 @@ def init_trial_state(
         "state": "running",
         "updated_at": time.time(),
         "runs": runs,
+        "test_weights": test_weights or {},
+        "test_max_scores": test_max_scores or {},
     }
     write_jsonc(path, payload)
 

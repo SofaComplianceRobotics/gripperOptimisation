@@ -277,6 +277,11 @@ def run_generation(
             gen_index=gen_index,
             trial_index=trial_index,
             run_plan=list(RUN_PLAN),
+            test_weights={
+                name: round(SELECTED_TEST_WEIGHTS.get(name, 0.0) * 100, 1)
+                for name in SELECTED_TEST_NAMES
+            },
+            test_max_scores=dict(_SELECTED_TEST_MAX_SCORES),
         )
         trial_state_paths_by_trial.append(trial_state_path)
 
