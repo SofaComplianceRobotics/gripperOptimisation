@@ -1,5 +1,9 @@
-"""Scoring metadata for random-cube pickup."""
+"""Scoring helpers for the random cube benchmark."""
+
+from __future__ import annotations
 
 SCORE_KEY = "score"
-SCORE_LABEL = "Binary Success"
-SCORE_DESCRIPTION = "20 points when simulation reaches end horizon"
+TEST_NAME = "random"
+TEST_LABEL = "Random Cube"
+TEST_DESCRIPTION = "Random cube placement benchmark"
+MAX_SCORE = 6.0

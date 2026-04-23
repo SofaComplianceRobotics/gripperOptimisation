@@ -80,6 +80,16 @@ from optimize_utils import (
 # Global state
 TRAINING_STARTED_AT = 0.0
 
+# Build a max_scores lookup from the test registry once at import time.
+# Each test's scoring.py declares MAX_SCORE; the registry reads it via importlib.
+# Falls back to 1.0 for any test not found so older tests keep working.
+_SELECTED_TEST_MAX_SCORES: dict[str, float] = {}
+for _test_name in SELECTED_TEST_NAMES:
+    try:
+        _SELECTED_TEST_MAX_SCORES[_test_name] = get_test_spec(_test_name).max_score
+    except Exception:
+        _SELECTED_TEST_MAX_SCORES[_test_name] = 1.0
+
 
 def wait_for_sofa_runs(
     gen_index: int,
@@ -346,7 +356,6 @@ def run_generation(
         except (GeometryExportTimeoutError, GeometryExportFailureError) as e:
             if failed_preview:
                 try:
-                    # Publish the failed preview directly
                     trial_dir = gen_dir / f"trial_{trial_index:02d}"
                     local_path = trial_dir / "preview.png"
                     import shutil
@@ -449,7 +458,7 @@ def run_generation(
                 run_scores.append(score)
                 test_name, _, _ = run_plan_entries[run_number - 1]
 
-            # Check for failures and pruning
+            # Check for failures
             if any(score == float("-inf") for score in run_scores):
                 final_score = HARD_FAIL_SCORE
                 study.tell(trial, final_score)
@@ -503,11 +512,12 @@ def run_generation(
                 if not valid_for_test:
                     continue
                 test_names_in_order.append(test_name)
-                # Aggregate repeated runs for a single test — no weighting here,
-                # weights only apply when combining across different tests.
+                # Aggregate repeated runs for a single test — no weighting or
+                # normalization here; that only applies when combining across tests.
                 test_aggregate, _, _, test_median = aggregate_trial_scores(
                     valid_for_test
                 )
+                max_score = _SELECTED_TEST_MAX_SCORES.get(test_name, 1.0)
                 per_test_scores.append(test_aggregate)
                 per_test_details[test_name] = {
                     "run_count": len(valid_for_test),
@@ -515,8 +525,14 @@ def run_generation(
                     "aggregate_score": round(test_aggregate, 4),
                     "median_score": round(test_median, 4),
                     "run_total": test_run_total,
+                    "max_score": max_score,
                     "weight_pct": round(
                         SELECTED_TEST_WEIGHTS.get(test_name, 0.0) * 100, 1
+                    ),
+                    # Normalized score for this test in [0, 1], clamped at 1.
+                    "normalized_score": round(
+                        min(test_aggregate / max_score, 1.0) if max_score > 0 else 0.0,
+                        4,
                     ),
                 }
 
@@ -535,12 +551,13 @@ def run_generation(
                 )
                 continue
 
-            # Combine per-test scores into one trial score using the user-defined
-            # weights.
+            # Combine per-test scores into one trial score out of 100.
+            # Formula: Σ  min(score_i / max_i, 1.0)  *  weight_pct_i
             aggregate_score, _, final_score, median_score = aggregate_trial_scores(
                 per_test_scores,
                 weights=SELECTED_TEST_WEIGHTS,
                 names=test_names_in_order,
+                max_scores=_SELECTED_TEST_MAX_SCORES,
             )
             study.tell(trial, final_score)
 
@@ -553,6 +570,10 @@ def run_generation(
                 "test_names": list(SELECTED_TEST_NAMES),
                 "test_weights": {
                     name: round(SELECTED_TEST_WEIGHTS.get(name, 0.0) * 100, 1)
+                    for name in SELECTED_TEST_NAMES
+                },
+                "test_max_scores": {
+                    name: _SELECTED_TEST_MAX_SCORES.get(name, 1.0)
                     for name in SELECTED_TEST_NAMES
                 },
                 "run_test_names": [name for name, _, _ in run_plan_entries],
@@ -568,8 +589,8 @@ def run_generation(
             update_trial_summary(trial_state_path, trial_stats)
 
             print(
-                f"[score] trial_{trial_index:02d} → {final_score:.2f} "
-                f"(weighted_agg: {aggregate_score:.2f}"
+                f"[score] trial_{trial_index:02d} → {final_score:.2f}/100 "
+                f"(weighted_normalized_agg: {aggregate_score:.2f})"
             )
 
             gen_scores.append(final_score)
@@ -647,7 +668,7 @@ def main() -> None:
 
         try:
             best = study.best_trial
-            print(f"[best so far] Trial {best.number} → {best.value:.2f}")
+            print(f"[best so far] Trial {best.number} → {best.value:.2f}/100")
         except ValueError:
             print("[best so far] No valid trials yet.")
 
@@ -655,7 +676,7 @@ def main() -> None:
     try:
         best_trial = study.best_trial
         print(f"Best trial:  {best_trial.number}")
-        print(f"Best value:  {best_trial.value:.4f}")
+        print(f"Best value:  {best_trial.value:.4f}/100")
         print(f"Best params: {best_trial.params}")
     except ValueError:
         print("No valid trials found — all simulations failed.")

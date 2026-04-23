@@ -119,7 +119,7 @@ def createScene(rootnode):
     cube_handles = setup_cube_floor(
         nodes.simulation,
         gripper_collision,
-        cube_scale=[5.0, 5.0, 5.0],
+        cube_scale=[8, 8, 8],
         cube_mass=CUBE_MASS_START,
         floor_center_y=SHAPEOPT_FLOOR_CENTER_Y,
         cube_spawn_clearance=SHAPEOPT_CUBE_SPAWN_CLEARANCE,

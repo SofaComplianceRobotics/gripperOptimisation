@@ -84,8 +84,10 @@ def _compute_contributions(record: dict) -> dict[str, float]:
         if not isinstance(test_info, dict):
             continue
         agg = float(test_info.get("aggregate_score", 0.0) or 0.0)
+        max_score = float(test_info.get("max_score", 1.0) or 1.0)
         wpct = float(test_info.get("weight_pct", 0.0) or 0.0)
-        contributions[test_name] = agg * (wpct / 100.0)
+        norm = min(agg / max_score, 1.0) if max_score > 0 else 0.0
+        contributions[test_name] = norm * wpct
 
     return (
         contributions
@@ -101,7 +103,8 @@ def _compute_contributions(record: dict) -> dict[str, float]:
 
 def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
     xs = [r["chron"] for r in records]
-    final_scores = [float(r.get("final_score", r.get("score", 0.0))) for r in records]
+    contributions = [_compute_contributions(r) for r in records]
+    final_scores = [sum(c.values()) for c in contributions]
     failed_mask = [bool(r.get("failed", False)) for r in records]
     is_complete = [bool(r.get("is_complete", True)) for r in records]
     contributions = [_compute_contributions(r) for r in records]
@@ -112,7 +115,7 @@ def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
         lo = max(0, i - CENTERED_AVG_HALF_WINDOW)
         hi = min(len(records) - 1, i + CENTERED_AVG_HALF_WINDOW)
         window = records[lo : hi + 1]
-        scores = [float(w.get("final_score", w.get("score", 0.0))) for w in window]
+        scores = [sum(_compute_contributions(w).values()) for w in window]
         avg_x.append(r["chron"])
         avg_y.append(sum(scores) / len(scores))
 
@@ -259,7 +262,7 @@ def _build_legend(ax, all_test_names: list[str]) -> None:
     handles = []
     for name in all_test_names:
         color = _test_color(name, all_test_names)
-        handles.append(mpatches.Patch(facecolor=color, alpha=0.85, label=f"{name} (+)"))
+        handles.append(mpatches.Patch(facecolor=color, alpha=0.85, label=f"{name}"))
     # Final score tick symbol
     handles.append(
         plt.Line2D([0], [0], color=C_FINAL, linewidth=2, label="Final score")

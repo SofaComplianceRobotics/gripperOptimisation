@@ -65,6 +65,8 @@ class ScoreWriter:
             pass
 
     def _update_trial_state_run(self, payload: dict[str, Any]) -> bool:
+        if self.trial_state_path is None:
+            return False
         path = Path(self.trial_state_path)
         lock_path = path.with_suffix(path.suffix + ".lock")
         if not self._acquire_lock(lock_path):

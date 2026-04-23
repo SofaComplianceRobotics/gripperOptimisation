@@ -27,7 +27,6 @@ LAB_ROOT = APP_ROOT.parent
 
 BASE_PARAMS = ModelParams()
 ASSETS_ROOT = str(LAB_ROOT.parent.parent)
-SCENE_FILE = str(LAB_ROOT / "lab_shapeOPT.py")
 GENERATE_SCRIPT = str(APP_ROOT / "src" / "generation" / "generate_gripper.py")
 
 SELECTED_TEST_NAMES = parse_test_names(os.environ.get("LAB_SHAPEOPT_TESTS"))
