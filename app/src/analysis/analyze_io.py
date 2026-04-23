@@ -16,6 +16,49 @@ from analyze_config import (
 )
 
 
+def _normalized_weighted_score(test_scores: dict) -> float:
+    """
+    Recompute the final score out of 100 from per-test breakdown data.
+
+    Formula: Σ  min(aggregate_score_i / max_score_i, 1.0)  *  weight_pct_i
+
+    Falls back gracefully when max_score or weight_pct is missing so that
+    older trial_state.json files (written before this change) still load.
+
+    Inputs:
+        test_scores (dict): The ``test_scores`` dict from trial_state.json,
+            keyed by test name.  Each value is a dict with at least
+            ``aggregate_score``, ``weight_pct``, and optionally ``max_score``.
+
+    Returns:
+        float: Weighted normalized score in [0, 100].
+    """
+    total = 0.0
+    total_weight = 0.0
+    for info in test_scores.values():
+        if not isinstance(info, dict):
+            continue
+        raw_score = info.get("aggregate_score", 0.0) or 0.0
+        max_score = float(info.get("max_score") or 0.0)
+        weight_pct = float(info.get("weight_pct", 0.0) or 0.0)
+
+        if max_score > 0:
+            normalized = min(float(raw_score) / max_score, 1.0)
+        else:
+            # Legacy fallback: treat score as already normalized (old data).
+            normalized = float(raw_score)
+
+        total += normalized * weight_pct
+        total_weight += weight_pct
+
+    # If weights don't sum to ~100 (e.g. old data without weight_pct), fall back
+    # to a plain weighted mean scaled to 100.
+    if total_weight > 0 and abs(total_weight - 100.0) > 1.0:
+        total = (total / total_weight) * 100.0
+
+    return total
+
+
 def load_all_trials() -> list[dict]:
     records = []
     chron = 0
@@ -72,7 +115,7 @@ def load_all_trials() -> list[dict]:
 
             valid = run_scores  # all numeric scores, including 0.0 and negatives
 
-            # Prefer top-level aggregate_score, fall back to mean of run scores
+            # Prefer top-level aggregate_score, fall back to mean of run scores.
             if trial_state.get("aggregate_score") is not None:
                 score = float(trial_state["aggregate_score"])
             elif valid:
@@ -91,12 +134,16 @@ def load_all_trials() -> list[dict]:
                 final_score = score
 
             # --- Per-test breakdown ---
-            # Use top-level test_scores if present and complete
+            # Use top-level test_scores if present and complete.
             test_scores = trial_state.get("test_scores") or None
 
-            # If not present, reconstruct from runs using test_weights
-            if not test_scores and runs:
+            # If not present, reconstruct from runs using test_weights.
+            # Skip reconstruction for failed trials: they have no max_score context,
+            # so any reconstruction would treat raw scores as normalized fractions
+            # and produce wildly inflated contributions.
+            if not test_scores and runs and not failed:
                 test_weights: dict = trial_state.get("test_weights") or {}
+                test_max_scores: dict = trial_state.get("test_max_scores") or {}
                 test_run_scores: dict[str, list[float]] = {}
                 for run in runs:
                     if not isinstance(run, dict):
@@ -122,6 +169,7 @@ def load_all_trials() -> list[dict]:
                             if total_weight
                             else 0.0
                         )
+                        max_s = float(test_max_scores.get(tname) or 0.0)
                         test_scores[tname] = {
                             "run_count": len(tscores),
                             "run_scores": tscores,
@@ -129,14 +177,14 @@ def load_all_trials() -> list[dict]:
                             "median_score": statistics.median(tscores),
                             "run_total": len(tscores),
                             "weight_pct": wpct,
+                            "max_score": max_s,
                         }
+
+            # Recompute final_score using the normalized weighted formula.
+            # This ensures the displayed score is always out of 100 regardless
+            # of whether the trial_state was written by old or new code.
             if test_scores:
-                final_score = sum(
-                    float(info.get("aggregate_score", 0.0) or 0.0)
-                    * (float(info.get("weight_pct", 0.0) or 0.0) / 100.0)
-                    for info in test_scores.values()
-                    if isinstance(info, dict)
-                )
+                final_score = _normalized_weighted_score(test_scores)
                 score = final_score
 
             records.append(

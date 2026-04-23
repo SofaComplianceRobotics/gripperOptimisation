@@ -189,13 +189,13 @@ def write_jsonc(path: Path, data: dict) -> None:
 
 def write_gen_summary(gen_dir: Path, gen_index: int, scores: list[float]) -> None:
     """
-    Compute and write a summary.json for the generation with avg, best, and worst scores
-    (including consistency-penalized final scores).
+    Compute and write a summary.json for the generation with avg, best, and worst scores.
+    All scores are already normalized to [0, 100].
 
     Inputs:
         gen_dir (Path): The generation directory where summary.json will be written.
         gen_index (int): Current generation number.
-        scores (list[float]): All trial final_scores for this generation (already consistency-penalized).
+        scores (list[float]): All trial final_scores for this generation (out of 100).
 
     Returns:
         None
@@ -221,8 +221,8 @@ def write_gen_summary(gen_dir: Path, gen_index: int, scores: list[float]) -> Non
     )
     print(
         f"[summary] Gen {gen_index:04d} — "
-        f"avg: {avg_str}  best: {best_str}  "
-        f"({len(valid_scores)}/{len(scores)} trials) [consistency-adjusted]"
+        f"avg: {avg_str}/100  best: {best_str}/100  "
+        f"({len(valid_scores)}/{len(scores)} trials)"
     )
 
 
@@ -291,33 +291,60 @@ def cleanup_generation_status_files(gen_dir: Path) -> None:
     return
 
 
+def normalize_test_score(score: float, max_score: float) -> float:
+    """
+    Normalize a raw test score to [0.0, 1.0] by dividing by its declared maximum.
+
+    Scores above the maximum are clamped to 1.0 rather than penalized.
+
+    Inputs:
+        score (float): Raw score from the simulation.
+        max_score (float): The declared maximum possible score for this test.
+
+    Returns:
+        float: Normalized score in [0.0, 1.0].
+    """
+    if max_score <= 0:
+        return 0.0
+    return min(score / max_score, 1.0)
+
+
 def aggregate_trial_scores(
     valid_scores: list[float],
     weights: dict[str, float] | None = None,
     names: list[str] | None = None,
+    max_scores: dict[str, float] | None = None,
 ) -> tuple[float, float, float, float]:
     """
     Aggregate multiple scores using the configured method.
 
-    When ``weights`` and ``names`` are both provided (and their lengths match
-    ``valid_scores``), the aggregate is a weighted sum instead of a plain
-    mean/median.  This is used when combining one score per test into a single
-    trial score.  When aggregating repeated runs of the *same* test, weights
-    are not meaningful and should be omitted.
+    When ``weights``, ``names``, and ``max_scores`` are all provided, this
+    function computes the final score out of 100 using the formula:
+
+        final = Σ  min(score_i / max_score_i, 1.0)  *  weight_pct_i
+
+    where ``weight_pct_i`` is the integer percentage weight (e.g. 20 for 20%),
+    so the result is naturally on a 0–100 scale.
+
+    When aggregating repeated runs of the *same* test, weights and max_scores
+    are not meaningful and should be omitted — plain mean/median is used instead.
 
     Inputs:
         valid_scores (list[float]): Valid scores to aggregate.
-        weights (dict[str, float] | None): Per-test weight fractions (sum to 1.0).
-            Keys must match ``names`` if provided; ignored otherwise.
+        weights (dict[str, float] | None): Per-test weight fractions (values sum
+            to 1.0).  Keys must match ``names`` if provided.
         names (list[str] | None): Test names corresponding to each score in
             ``valid_scores``.  Required when ``weights`` is given.
+        max_scores (dict[str, float] | None): Per-test maximum possible raw score.
+            Required for normalization when ``weights`` is given.
 
     Returns:
         tuple[float, float, float, float]:
-            - aggregate_score: Weighted or unweighted mean/median.
+            - aggregate_score: Weighted normalized score out of 100, or plain
+              mean/median when weights are not applicable.
             - consistency_penalty: Always 0.0 (penalty removed).
-            - final_score: aggregate_score.
-            - median_score: Median of valid_scores.
+            - final_score: Same as aggregate_score.
+            - median_score: Median of valid_scores (raw, un-normalized).
     """
     if not valid_scores:
         return 0.0, 0.0, 0.0, 0.0
@@ -331,15 +358,20 @@ def aggregate_trial_scores(
         final_score = aggregate_score
         return aggregate_score, consistency_penalty, final_score, median_score
 
-    # Weighted aggregation — only applies when combining per-test scores.
+    # Weighted + normalized aggregation — only when combining per-test scores.
     if (
         weights is not None
         and names is not None
+        and max_scores is not None
         and len(names) == len(valid_scores)
         and all(name in weights for name in names)
+        and all(name in max_scores for name in names)
     ):
+        # Each term: normalize score to [0,1] then multiply by weight percentage.
+        # Summing these gives a final score out of 100.
         aggregate_score = sum(
-            score * weights[name] for score, name in zip(valid_scores, names)
+            normalize_test_score(score, max_scores[name]) * (weights[name] * 100)
+            for score, name in zip(valid_scores, names)
         )
     elif SCORE_AGGREGATION == "median":
         aggregate_score = median_score

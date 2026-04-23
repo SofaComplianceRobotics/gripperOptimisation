@@ -1,3 +1,14 @@
+"""Scoring helpers for the tilt benchmark."""
+
+from __future__ import annotations
+
+SCORE_KEY = "score"
+TEST_NAME = "tilt"
+TEST_LABEL = "Tilt"
+TEST_DESCRIPTION = "Tilt alignment benchmark"
+MAX_SCORE = 40.0
+
+
 def compute_tilt_score(max_y_spreads):
     """
     Compute the tilt test score.
