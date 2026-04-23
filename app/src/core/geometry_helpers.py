@@ -5,7 +5,6 @@ Provides low-level geometric primitives and transformations used throughout
 the gripper design and assembly pipeline.
 """
 
-import logging
 import math
 import sys
 from pathlib import Path
@@ -17,8 +16,6 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from core.params import EPS_LEN, EPS_NORMAL
-
-logger = logging.getLogger(__name__)
 
 
 def annular_sector(

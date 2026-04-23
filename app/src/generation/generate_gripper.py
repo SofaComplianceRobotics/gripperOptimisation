@@ -31,11 +31,6 @@ LAB_REQUIREMENTS = APP_ROOT / "requirements.txt"
 _START_TS = time.perf_counter()
 
 
-def _perf(label: str) -> None:
-    # Keep call sites for optional local profiling without noisy default output.
-    return
-
-
 def load_jsonc(path: Path) -> dict:
     """
     Load JSONC file, stripping // comments.
@@ -93,7 +88,6 @@ def _install_lab_dependencies_here() -> bool:
         return False
 
     LAB_SITE_PACKAGES.mkdir(parents=True, exist_ok=True)
-    _perf("install_deps start")
     result = subprocess.run(
         [
             sys.executable,
@@ -113,7 +107,6 @@ def _install_lab_dependencies_here() -> bool:
 
     importlib.invalidate_caches()
     _bootstrap_lab_site_packages()
-    _perf("install_deps done")
     return True
 
 
@@ -128,13 +121,10 @@ def _ensure_cadquery_runtime() -> None:
     Raises:
         RuntimeError: If CadQuery cannot be used after auto-install attempt.
     """
-    _perf("cadquery_check start")
     if _has_required_runtime_packages():
-        _perf("cadquery_check already_available")
         return
 
     if _install_lab_dependencies_here() and _has_required_runtime_packages():
-        _perf("cadquery_check installed")
         return
 
     raise RuntimeError(
@@ -144,7 +134,6 @@ def _ensure_cadquery_runtime() -> None:
 
 
 _ensure_cadquery_runtime()
-_perf("imports_ready")
 
 from core.export_pipeline import run_export
 from core.params import ModelParams, PincerSplinePoint
@@ -169,11 +158,9 @@ def main() -> None:
         help="Path to config JSONC file. Defaults to config/lab_config.jsonc in the lab root.",
     )
     args = parser.parse_args()
-    _perf("args_parsed")
 
     config_path = Path(args.config)
     cfg = load_jsonc(config_path)
-    _perf("config_loaded")
     base = ModelParams()
     # p0 handle-out: relative to p0 = (0, 0), so absolute = polar from origin
     p0_hout_dist = float(cfg["p0_hout_dist"])
@@ -233,7 +220,6 @@ def main() -> None:
 
     # Run the export pipeline with parameters
     stl_path = run_export(params, secondary_dir=secondary_dir)
-    _perf("run_export_done")
     if stl_path is None:
         raise RuntimeError("Mesh export did not produce an STL path.")
 
