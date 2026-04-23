@@ -138,7 +138,10 @@ def load_all_trials() -> list[dict]:
             test_scores = trial_state.get("test_scores") or None
 
             # If not present, reconstruct from runs using test_weights.
-            if not test_scores and runs:
+            # Skip reconstruction for failed trials: they have no max_score context,
+            # so any reconstruction would treat raw scores as normalized fractions
+            # and produce wildly inflated contributions.
+            if not test_scores and runs and not failed:
                 test_weights: dict = trial_state.get("test_weights") or {}
                 test_max_scores: dict = trial_state.get("test_max_scores") or {}
                 test_run_scores: dict[str, list[float]] = {}

@@ -84,8 +84,10 @@ def _compute_contributions(record: dict) -> dict[str, float]:
         if not isinstance(test_info, dict):
             continue
         agg = float(test_info.get("aggregate_score", 0.0) or 0.0)
+        max_score = float(test_info.get("max_score", 1.0) or 1.0)
         wpct = float(test_info.get("weight_pct", 0.0) or 0.0)
-        contributions[test_name] = agg * (wpct / 100.0)
+        norm = min(agg / max_score, 1.0) if max_score > 0 else 0.0
+        contributions[test_name] = norm * wpct
 
     return (
         contributions
@@ -260,7 +262,7 @@ def _build_legend(ax, all_test_names: list[str]) -> None:
     handles = []
     for name in all_test_names:
         color = _test_color(name, all_test_names)
-        handles.append(mpatches.Patch(facecolor=color, alpha=0.85, label=f"{name} (+)"))
+        handles.append(mpatches.Patch(facecolor=color, alpha=0.85, label=f"{name}"))
     # Final score tick symbol
     handles.append(
         plt.Line2D([0], [0], color=C_FINAL, linewidth=2, label="Final score")

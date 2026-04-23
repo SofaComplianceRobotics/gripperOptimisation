@@ -35,7 +35,6 @@ LAB_CONFIG = LAB_ROOT / "lab_config.jsonc"
 REQUIREMENTS = APP_ROOT / "requirements.txt"
 REQ_HASH_FILE = RUNTIME_DIR / "modules" / ".requirements.sha256"
 ASSETS_ROOT = str(LAB_ROOT.parent.parent)
-SCENE_FILE = str(LAB_ROOT / "lab_shapeOPT.py")
 
 # SOFA executable path (search common locations like optimize.py does)
 SOFA_ROOT = os.environ.get(
@@ -56,6 +55,9 @@ if not RUNSOFA_EXE:
 # Add src to path for imports
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+
+from labtests.registry import get_test_spec
+from labtests.ui import prompt_for_tests
 
 
 # ─────────────────────────────────────────────
@@ -207,6 +209,7 @@ def _launch_sofa_batch(
     concurrency: int,
     trial_dir: Path,
     env: dict,
+    scene_file: Path,
     num_runs: int = 3,
 ) -> tuple[float, int]:
     """
@@ -254,7 +257,7 @@ def _launch_sofa_batch(
 
             try:
                 proc = subprocess.Popen(
-                    [RUNSOFA_EXE, "-l", "SofaPython3", "-g", "batch", SCENE_FILE],
+                    [RUNSOFA_EXE, "-l", "SofaPython3", "-g", "batch", str(scene_file)],
                     env=proc_env,
                     cwd=ASSETS_ROOT,
                     creationflags=creation_flags,
@@ -317,6 +320,7 @@ def _launch_sofa_batch(
 def _benchmark_concurrency_level(
     gripper_mesh: Path,
     concurrency: int,
+    scene_file: Path,
     num_runs: int = 3,
 ) -> BenchmarkResult:
     """
@@ -348,6 +352,7 @@ def _benchmark_concurrency_level(
             concurrency=concurrency,
             trial_dir=trial_dir,
             env=env,
+            scene_file=scene_file,
             num_runs=num_runs,
         )
 
@@ -447,6 +452,12 @@ def main() -> None:
         sys.exit(1)
     print(f"    SOFA: {Path(RUNSOFA_EXE).name}")
 
+    # Select test
+    selected = prompt_for_tests("Select test to benchmark", multi_select=False)
+    test_spec = get_test_spec(selected[0])
+    scene_file = test_spec.scene_file
+    print(f"    Test: {selected[0]}")
+
     # Get gripper mesh
     print("[*] Locating gripper mesh...")
     try:
@@ -467,6 +478,7 @@ def main() -> None:
             result = _benchmark_concurrency_level(
                 gripper_mesh=gripper_mesh,
                 concurrency=concurrency_level,
+                scene_file=scene_file,
                 num_runs=3,
             )
             results.append(result)
