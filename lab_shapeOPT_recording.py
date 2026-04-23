@@ -20,8 +20,6 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../")
 
-import os.path
-
 import Sofa.Core
 
 LAB_ROOT = Path(__file__).resolve().parent

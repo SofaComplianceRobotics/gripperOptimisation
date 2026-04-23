@@ -5,7 +5,6 @@ Handles serialization of CadQuery models to standard mesh and configuration
 formats for simulation and visualization.
 """
 
-import logging
 import os
 import tempfile
 import json
@@ -21,8 +20,6 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from core.params import ModelParams
-
-logger = logging.getLogger(__name__)
 
 RETURN_GMSH_WARNING = 1  # 0=silent, 1=errors only, 5=full
 CORE_ROOT = Path(__file__).resolve().parent
@@ -237,7 +234,6 @@ def make_versioned_export_path(p: ModelParams, extension: str) -> Path:
 
     ext = extension.lstrip(".")
     return out_dir / f"new_gripper.{ext}"
-    # return out_dir / f"whitepart.{ext}"
 
 
 def run_invariants(model: cq.Workplane) -> None:
