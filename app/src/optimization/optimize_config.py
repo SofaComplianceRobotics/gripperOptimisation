@@ -124,22 +124,6 @@ if not RUNSOFA_EXE:
         (p for p in runsofa_candidates if os.path.isfile(p)), runsofa_candidates[0]
     )
 
-# ─────────────────────────────────────────────
-# Fixed Model Parameters (not being optimized)
-# ─────────────────────────────────────────────
-MESH_FIXED = {
-    "mesh_size_max": 9,
-    "mesh_size_min": 6,
-    "mesh_collision_size": 90.0,
-    "mesh_angle_smooth": 20.0,
-    "mesh_size_from_curvature": 12,
-}
-
-RING_FIXED = {
-    "cylinder_radius": 26.5,
-    "cylinder_height": 4.0,
-    "cylinder_hole_thickness": 3.0,
-}
 
 # ─────────────────────────────────────────────
 # CMA-ES Optimizer Settings
@@ -180,6 +164,54 @@ PINCER_ROUND_ENDS = os.environ.get(
     "yes",
     "on",
 )
+
+# ─────────────────────────────────────────────
+# Tunable Parameter Specifications
+#
+# Fixed / frozen convention: set min = 0 AND max = 0.  The optimizer will
+# never suggest the parameter; its 'default' value is used verbatim.  To
+# unfreeze a parameter, give it a real [min, max] range.
+#
+# Note — ModelParams fields that are NOT listed here (e.g. leg_hole_length,
+# leg_attachment_height, slit_width, …) are not passed through the config
+# dict at all; generate_gripper.py just inherits their ModelParams defaults.
+# To make any of those optimisable you would need to:
+#   1. Add an entry to PARAM_SPECS below.
+#   2. Add the matching cfg.get(..., base.<field>) read inside
+#      generate_gripper.py's replace(base, ...) call.
+# ─────────────────────────────────────────────
+PARAM_SPECS: list[dict] = [
+    # fmt: off
+    # ── Ring geometry (fixed) ──────────────────────────────
+    {"name": "cylinder_radius",           "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.cylinder_radius}, 
+    {"name": "cylinder_height",           "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.cylinder_height},
+    {"name": "cylinder_hole_thickness",   "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.cylinder_hole_thickness},
+    # ── Pincer profile ─────────────────────────────────────
+    {"name": "pincer_profile_width",      "type": "float", "min": 2.0,   "max": 8.0,   "default": BASE_PARAMS.pincer_profile_width},
+    {"name": "pincer_profile_height",     "type": "float", "min": 6.0,   "max": 16.0,  "default": BASE_PARAMS.pincer_profile_height},
+    # ── Pincer path / orientation (fixed) ──────────────────
+    {"name": "pincer_path_scale",         "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.pincer_path_scale},
+    {"name": "pincer_tilt_y_deg",         "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.pincer_tilt_y_deg},
+    {"name": "pincer_round_ends",         "type": "bool",  "min": 0,     "max": 0,     "default": PINCER_ROUND_ENDS},
+    # ── Spline first handle (anchor fixed at 0, 0) ─────────
+    {"name": "p0_hout_dist",              "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
+    {"name": "p0_hout_angle_deg",         "type": "float", "min": -90.0, "max": 90.0,  "default": 0.0},
+    # ── Spline endpoint ────────────────────────────────────
+    {"name": "p1_dist",                   "type": "float", "min": 70.0,  "max": 90.0,  "default": 80.0},
+    {"name": "p1_angle_deg",              "type": "float", "min": -90.0, "max": 45.0,  "default": -40.0},
+    # ── Spline last handle ─────────────────────────────────
+    {"name": "p1_hin_dist",               "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
+    {"name": "p1_hin_angle_deg",          "type": "float", "min": -10.0, "max": 260.0, "default": 0.0},
+    # ── Leg tilt ───────────────────────────────────────────
+    {"name": "leg_attachement_tilt_angle","type": "float", "min": -30.0, "max": 30.0,  "default": BASE_PARAMS.leg_attachement_tilt_angle},
+    # ── Mesh resolution (fixed) ────────────────────────────
+    {"name": "mesh_size_max",             "type": "int",   "min": 0,     "max": 0,     "default": 9},
+    {"name": "mesh_size_min",             "type": "int",   "min": 0,     "max": 0,     "default": 6},
+    {"name": "mesh_collision_size",       "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.mesh_collision_size},
+    {"name": "mesh_angle_smooth",         "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.mesh_angle_smooth},
+    {"name": "mesh_size_from_curvature",  "type": "int",   "min": 0,     "max": 0,     "default": BASE_PARAMS.mesh_size_from_curvature},
+    # fmt: on
+]
 
 # ─────────────────────────────────────────────
 # Simulation Scoring & Early Stop Parameters

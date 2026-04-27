@@ -19,9 +19,8 @@ from optimize_config import (
     GENERATE_SCRIPT,
     GEOMETRY_EXPORT_TIMEOUT,
     HARD_FAIL_SCORE,
-    MESH_FIXED,
+    PARAM_SPECS,
     PREVIEWS_DIR,
-    RING_FIXED,
 )
 
 
@@ -69,39 +68,32 @@ def write_jsonc(path: Path, data: dict) -> None:
 
 
 def params_from_trial(trial) -> dict:
-    """Sample one set of gripper shape parameters from an Optuna trial.
+    """Build a complete config dict from an Optuna trial using PARAM_SPECS.
+
+    Parameters with min == max == 0 are fixed and always use their default.
+    All other parameters are sampled from the trial. The returned dict is the
+    full config passed to generate_gripper.py (ring + shape + mesh).
 
     Args:
         trial: Active Optuna trial to sample from.
 
     Returns:
-        Sampled shape parameter values.
+        Complete parameter dict ready to write as lab_config.jsonc.
     """
-    from optimize_config import PINCER_ROUND_ENDS
-
-    return {
-        # Pincer profile
-        "pincer_profile_width": trial.suggest_float("pincer_profile_width", 2.0, 8.0),
-        "pincer_profile_height": trial.suggest_float(
-            "pincer_profile_height", 6.0, 16.0
-        ),
-        "pincer_path_scale": 0.4,
-        "pincer_tilt_y_deg": 90.0,
-        "pincer_round_ends": PINCER_ROUND_ENDS,
-        # Spline first handle (anchor is fixed at 0,0)
-        "p0_hout_dist": trial.suggest_float("p0_hout_dist", 0.0, 80.0),
-        "p0_hout_angle_deg": trial.suggest_float("p0_hout_angle_deg", -90, 90),
-        # Spline endpoint
-        "p1_dist": trial.suggest_float("p1_dist", 70.0, 90.0),
-        "p1_angle_deg": trial.suggest_float("p1_angle_deg", -90.0, 45.0),
-        # Spline last handle
-        "p1_hin_dist": trial.suggest_float("p1_hin_dist", 0.0, 80.0),
-        "p1_hin_angle_deg": trial.suggest_float("p1_hin_angle_deg", -10.0, 260.0),
-        # Leg tilt
-        "leg_attachement_tilt_angle": trial.suggest_float(
-            "leg_attachement_tilt_angle", -30.0, 30.0
-        ),
-    }
+    result = {}
+    for spec in PARAM_SPECS:
+        name = spec["name"]
+        if spec["min"] == 0 and spec["max"] == 0:
+            result[name] = spec["default"]
+        elif spec["type"] == "float":
+            result[name] = trial.suggest_float(name, spec["min"], spec["max"])
+        elif spec["type"] == "int":
+            result[name] = trial.suggest_int(name, int(spec["min"]), int(spec["max"]))
+        elif spec["type"] == "bool":
+            result[name] = trial.suggest_categorical(name, [False, True])
+        else:
+            result[name] = spec["default"]
+    return result
 
 
 def generate_stl_for_trial(trial_dir: Path, config: dict) -> tuple[Path, Path]:

@@ -39,6 +39,7 @@ from optimize_config import (
     HARD_FAIL_SCORE,
     LAB_ROOT,
     MAX_ACTIVE_SOFA_PROCS,
+    PARAM_SPECS,
     SELECTED_TEST_NAMES,
     SELECTED_TEST_WEIGHTS,
     RUN_PLAN,
@@ -294,10 +295,7 @@ def run_generation(
 
         wait_for_geometry_slot(processes, MAX_ACTIVE_SOFA_PROCS, gen_index, trial_index)
 
-        shape_params = params_from_trial(trial)
-        from optimize_config import RING_FIXED, MESH_FIXED
-
-        full_config = {**RING_FIXED, **shape_params, **MESH_FIXED}
+        full_config = params_from_trial(trial)
 
         try:
             collision_stl, visual_stl_copy = generate_stl_for_trial(
@@ -611,16 +609,9 @@ def main() -> None:
         "n_startup_trials": CMAES_STARTUP_TRIALS,
         "consider_pruned_trials": True,
         "x0": {
-            "pincer_profile_width": 5.0,
-            "pincer_profile_height": 10.0,
-            "pincer_path_scale": 0.4,
-            "p0_hout_dist": 0.0,
-            "p0_hout_angle_deg": 0.0,
-            "p1_dist": 80.0,
-            "p1_angle_deg": -40.0,
-            "p1_hin_dist": 0.0,
-            "p1_hin_angle_deg": 0.0,
-            "leg_attachement_tilt_angle": -15.0,
+            spec["name"]: spec["default"]
+            for spec in PARAM_SPECS
+            if not (spec["min"] == 0 and spec["max"] == 0)
         },
     }
     sampler = optuna.samplers.CmaEsSampler(**sampler_kwargs)

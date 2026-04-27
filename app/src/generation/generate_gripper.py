@@ -144,42 +144,38 @@ def main() -> None:
     cfg = load_jsonc(config_path)
     base = ModelParams()
     # p0 handle-out: relative to p0 = (0, 0), so absolute = polar from origin
-    p0_hout_dist = float(cfg["p0_hout_dist"])
-    p0_hout_angle = math.radians(float(cfg["p0_hout_angle_deg"]))
+    p0_hout_dist = float(cfg.get("p0_hout_dist", 0.0))
+    p0_hout_angle = math.radians(float(cfg.get("p0_hout_angle_deg", 0.0)))
     p0_hout_x = p0_hout_dist * math.cos(p0_hout_angle)
     p0_hout_y = p0_hout_dist * math.sin(p0_hout_angle)
 
     # p1 anchor: polar from origin
-    p1_dist = float(cfg["p1_dist"])
-    p1_angle = math.radians(float(cfg["p1_angle_deg"]))
+    p1_dist = float(cfg.get("p1_dist", 80.0))
+    p1_angle = math.radians(float(cfg.get("p1_angle_deg", -40.0)))
     p1_x = p1_dist * math.cos(p1_angle)
     p1_y = p1_dist * math.sin(p1_angle)
 
     # p1 handle-in: polar offset *from p1*
-    p1_hin_dist = float(cfg["p1_hin_dist"])
-    p1_hin_angle = math.radians(float(cfg["p1_hin_angle_deg"]))
+    p1_hin_dist = float(cfg.get("p1_hin_dist", 0.0))
+    p1_hin_angle = math.radians(float(cfg.get("p1_hin_angle_deg", 0.0)))
     p1_hin_x = p1_x + p1_hin_dist * math.cos(p1_hin_angle)  # absolute
     p1_hin_y = p1_y + p1_hin_dist * math.sin(p1_hin_angle)
     params = replace(
         base,
-        cylinder_radius=float(cfg["cylinder_radius"]),
-        cylinder_height=float(cfg["cylinder_height"]),
-        cylinder_hole_thickness=float(cfg["cylinder_hole_thickness"]),
-        leg_attachement_tilt_angle=float(cfg["leg_attachement_tilt_angle"]),
-        pincer_profile_width=float(cfg["pincer_profile_width"]),
-        pincer_profile_height=float(cfg["pincer_profile_height"]),
+        cylinder_radius=float(cfg.get("cylinder_radius", base.cylinder_radius)),
+        cylinder_height=float(cfg.get("cylinder_height", base.cylinder_height)),
+        cylinder_hole_thickness=float(cfg.get("cylinder_hole_thickness", base.cylinder_hole_thickness)),
+        leg_attachement_tilt_angle=float(cfg.get("leg_attachement_tilt_angle", base.leg_attachement_tilt_angle)),
+        pincer_profile_width=float(cfg.get("pincer_profile_width", base.pincer_profile_width)),
+        pincer_profile_height=float(cfg.get("pincer_profile_height", base.pincer_profile_height)),
         pincer_profile_samples=int(
             round(float(cfg.get("pincer_profile_samples", base.pincer_profile_samples)))
         ),
         pincer_round_cap_segments=int(
-            round(
-                float(
-                    cfg.get("pincer_round_cap_segments", base.pincer_round_cap_segments)
-                )
-            )
+            round(float(cfg.get("pincer_round_cap_segments", base.pincer_round_cap_segments)))
         ),
-        pincer_path_scale=float(cfg["pincer_path_scale"]),
-        pincer_tilt_y_deg=float(cfg["pincer_tilt_y_deg"]),
+        pincer_path_scale=float(cfg.get("pincer_path_scale", base.pincer_path_scale)),
+        pincer_tilt_y_deg=float(cfg.get("pincer_tilt_y_deg", base.pincer_tilt_y_deg)),
         pincer_round_ends=bool(cfg.get("pincer_round_ends", base.pincer_round_ends)),
         pincer_points=(
             PincerSplinePoint(

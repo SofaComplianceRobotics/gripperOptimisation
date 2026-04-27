@@ -56,7 +56,7 @@ class ModelParams:
 
     # Assembly
     leg_attachement_inward_offset: float = 3.0
-    leg_attachement_tilt_angle: float = -5.0
+    leg_attachement_tilt_angle: float = -15.0
     leg_attachement_lift: float = 2.5
     leg_attachement_drop_overlap: float = 0.15
 
@@ -65,7 +65,7 @@ class ModelParams:
     pincer_profile_height: float = 10.0
     pincer_profile_samples: int = 4
     pincer_round_cap_segments: int = 3
-    pincer_path_scale: float = 0.20
+    pincer_path_scale: float = 0.4
     pincer_tilt_y_deg: float = 90.0
     pincer_round_ends: bool = True
     pincer_points: tuple[PincerSplinePoint, ...] = (
