@@ -225,15 +225,10 @@ SOFA_JOB_HANDLE = None
 
 
 def build_env() -> dict:
-    """
-    Build a copy of the current environment with SOFA, Python, and early-stop
-    parameters injected as environment variables.
-
-    Inputs:
-        None
+    """Build environment dict with SOFA, Python, and optimization parameters.
 
     Returns:
-        dict: Environment variables dict ready to pass to subprocess calls.
+        Environment variables dict ready to pass to subprocess calls.
     """
     env = os.environ.copy()
 
