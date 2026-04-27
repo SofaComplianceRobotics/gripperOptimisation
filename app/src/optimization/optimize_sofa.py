@@ -61,15 +61,7 @@ class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
 
 
 def ensure_windows_sofa_job() -> None:
-    """
-    Create one Windows Job Object configured to kill all assigned children when
-    this optimizer process exits or its console is closed.
-
-    Inputs:
-        None
-
-    Returns:
-        None
+    """Create one Windows Job Object that kills assigned children when this process exits.
 
     Raises:
         OSError: If job object creation fails.
@@ -112,16 +104,12 @@ def ensure_windows_sofa_job() -> None:
 
 
 def attach_process_to_sofa_job(proc: subprocess.Popen) -> None:
-    """
-    Attach one child process to the global SOFA job object.
+    """Attach one child process to the global SOFA job object.
 
     Only works on Windows; silently returns on other platforms.
 
-    Inputs:
-        proc (subprocess.Popen): Child process to attach.
-
-    Returns:
-        None
+    Args:
+        proc: Child process to attach.
     """
     if os.name != "nt":
         return
@@ -158,25 +146,25 @@ def launch_sofa(
     run_index: int,
     env: dict,
 ) -> subprocess.Popen:
-    """
-    Launch one SOFA simulation instance for a given collision STL and score output path.
+    """Launch one SOFA simulation instance for a given collision STL.
+
     The process runs fully in the background with no console window.
 
-    Inputs:
-        scene_file (Path): Scene file to run in SOFA.
-        test_name (str): Selected test name for the run.
-        test_run_index (int): 1-based run index within the selected test.
-        test_run_total (int): Total runs planned for the selected test.
-        collision_stl (Path): Path to the collision STL, passed via OPTUNA_STL_PATH env var.
-        trial_state_path (Path): Path to trial_state.json shared by this trial.
-        run_slot (int): 1-based run slot index within trial_state.json.
-        gen_index (int): Generation index.
-        trial_index (int): Trial index inside generation.
-        run_index (int): Repeat index inside trial.
-        env (dict): Base environment dict to extend for this run.
+    Args:
+        scene_file: Scene file to run in SOFA.
+        test_name: Selected test name for the run.
+        test_run_index: 1-based run index within the selected test.
+        test_run_total: Total runs planned for the selected test.
+        collision_stl: Path to the collision STL, passed via OPTUNA_STL_PATH env var.
+        trial_state_path: Path to trial_state.json shared by this trial.
+        run_slot: 1-based run slot index within trial_state.json.
+        gen_index: Generation index.
+        trial_index: Trial index inside generation.
+        run_index: Repeat index inside trial.
+        env: Base environment dict to extend for this run.
 
     Returns:
-        subprocess.Popen: The launched SOFA process.
+        The launched SOFA process.
     """
     trial_env = env.copy()
     trial_env["OPTUNA_STL_PATH"] = str(collision_stl)
@@ -215,14 +203,13 @@ def launch_sofa(
 
 
 def active_sofa_process_count(processes: list[tuple]) -> int:
-    """
-    Count currently running SOFA child processes.
+    """Count currently running SOFA child processes.
 
-    Inputs:
-        processes (list[tuple]): List of (trial_index, trial, [(Popen, score_path, status_path), ...]).
+    Args:
+        processes: List of (trial_index, trial, [(Popen, score_path, status_path), ...]).
 
     Returns:
-        int: Number of active SOFA processes.
+        Number of active SOFA processes.
     """
     active = 0
     for _, _, runs in processes:
@@ -238,17 +225,13 @@ def wait_for_geometry_slot(
     gen_index: int,
     trial_index: int,
 ) -> None:
-    """
-    Pause geometry launch until running SOFA process count is below limit.
+    """Pause geometry launch until running SOFA process count is below limit.
 
-    Inputs:
-        processes (list[tuple]): Running SOFA process list.
-        limit (int): Maximum allowed concurrent SOFA processes (<=0 means no throttle).
-        gen_index (int): Current generation number.
-        trial_index (int): Current trial index.
-
-    Returns:
-        None
+    Args:
+        processes: Running SOFA process list.
+        limit: Maximum allowed concurrent SOFA processes (<=0 means no throttle).
+        gen_index: Current generation number.
+        trial_index: Current trial index.
     """
     if limit <= 0:
         return

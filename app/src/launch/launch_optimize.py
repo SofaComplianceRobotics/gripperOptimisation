@@ -35,14 +35,13 @@ REQ_HASH_FILE = LAB_ROOT / "runtime" / "modules" / ".requirements.sha256"
 
 
 def _requirements_hash(path: Path) -> str:
-    """
-    Compute SHA-256 hash of requirements.txt.
+    """Compute SHA-256 hash of requirements.txt.
 
-    Inputs:
-        path (Path): Requirements file path.
+    Args:
+        path: Requirements file path.
 
     Returns:
-        str: SHA-256 hex digest.
+        SHA-256 hex digest.
     """
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -53,15 +52,7 @@ def _requirements_hash(path: Path) -> str:
 
 
 def main() -> None:
-    """
-    Install/refresh dependencies in modules/site-packages and launch optimize.py.
-
-    Inputs:
-        None
-
-    Returns:
-        None
-    """
+    """Install/refresh dependencies in modules/site-packages and launch optimize.py."""
     env = os.environ.copy()
     env["PYTHONPATH"] = str(SITE_PACKAGES) + os.pathsep + env.get("PYTHONPATH", "")
 

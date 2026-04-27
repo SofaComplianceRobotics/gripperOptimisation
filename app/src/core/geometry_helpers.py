@@ -25,18 +25,17 @@ def annular_sector(
     sweep_deg: float,
     height: float,
 ) -> cq.Workplane:
-    """
-    Create an annular sector (ring slice) extruded along +Z.
+    """Create an annular sector (ring slice) extruded along +Z.
 
-    Inputs:
-        mid_r (float): Mid-radius of the annulus.
-        thickness (float): Radial thickness of the annulus.
-        start_deg (float): Start angle in degrees.
-        sweep_deg (float): Sweep angle in degrees.
-        height (float): Extrusion height.
+    Args:
+        mid_r: Mid-radius of the annulus.
+        thickness: Radial thickness of the annulus.
+        start_deg: Start angle in degrees.
+        sweep_deg: Sweep angle in degrees.
+        height: Extrusion height.
 
     Returns:
-        cadquery.Workplane: Annular sector solid.
+        Annular sector solid.
 
     Raises:
         ValueError: If dimensions are invalid.
@@ -77,24 +76,22 @@ def make_vertical_drop_from_low_face(
     expected_normal: tuple[float, float, float],
     min_final_z: float | None = None,
 ) -> cq.Workplane:
-    """
-    Create a vertical (-Z) drop solid from a downward-facing planar face.
+    """Create a vertical (-Z) drop solid from a downward-facing planar face.
 
-    Inputs:
-        solid_wp (cadquery.Workplane): Solid to analyze.
-        target_z (float): Z level to reach.
-        overlap (float): Extra penetration below target_z.
-        expected_normal (tuple[float, float, float]): Expected world-space
-            normal of the source bottom face.
-        min_final_z (float | None): Optional clamp plane for the final drop.
-            If provided, the extruded drop will not extend below this global Z.
+    Args:
+        solid_wp: Solid to analyze.
+        target_z: Z level to reach.
+        overlap: Extra penetration below target_z.
+        expected_normal: Expected world-space normal of the source bottom face.
+        min_final_z: Optional clamp plane; the extruded drop will not extend
+            below this global Z.
 
     Returns:
-        cadquery.Workplane: Vertical drop solid.
+        Vertical drop solid.
 
     Raises:
-        RuntimeError: If the source solid does not expose a planar face aligned
-            with the expected normal, or if extrusion fails unexpectedly.
+        RuntimeError: If the source solid has no planar face aligned with
+            the expected normal, or if extrusion fails unexpectedly.
     """
     shape = solid_wp.val()
     faces = shape.Faces()

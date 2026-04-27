@@ -38,14 +38,13 @@ class GeometryExportFailureError(RuntimeError):
 
 
 def resolve_failed_preview_image(candidates: tuple[Path, ...]) -> Path:
-    """
-    Resolve the placeholder image used for failed or empty generations.
+    """Resolve the placeholder image used for failed or empty generations.
 
-    Inputs:
-        candidates (tuple[Path, ...]): Candidate placeholder image paths.
+    Args:
+        candidates: Candidate placeholder image paths.
 
     Returns:
-        Path: Existing placeholder PNG path.
+        Existing placeholder PNG path.
 
     Raises:
         FileNotFoundError: If no placeholder image exists.
@@ -60,28 +59,23 @@ def resolve_failed_preview_image(candidates: tuple[Path, ...]) -> Path:
 
 
 def write_jsonc(path: Path, data: dict) -> None:
-    """
-    Write a dict as plain JSON to a .jsonc file.
+    """Write a dict as plain JSON to a .jsonc file.
 
-    Inputs:
-        path (Path): Destination file path.
-        data (dict): Data to serialize.
-
-    Returns:
-        None
+    Args:
+        path: Destination file path.
+        data: Data to serialize.
     """
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def params_from_trial(trial) -> dict:
-    """
-    Sample one set of gripper shape parameters from an Optuna trial.
+    """Sample one set of gripper shape parameters from an Optuna trial.
 
-    Inputs:
-        trial (optuna.Trial): Active Optuna trial to sample from.
+    Args:
+        trial: Active Optuna trial to sample from.
 
     Returns:
-        dict: Sampled shape parameter values.
+        Sampled shape parameter values.
     """
     from optimize_config import PINCER_ROUND_ENDS
 
@@ -111,21 +105,18 @@ def params_from_trial(trial) -> dict:
 
 
 def generate_stl_for_trial(trial_dir: Path, config: dict) -> tuple[Path, Path]:
-    """
-    Write lab_config.jsonc into trial_dir, call generate_gripper.py, rename the
-    collision STL to a trial-specific name, and copy the visual STL into trial_dir.
+    """Write lab_config.jsonc, run generate_gripper.py, and return the output STL paths.
 
-    The visual STL (new_gripper.stl) is left in place in CENTERPARTS_DIR so SOFA
-    can find it by its hardcoded name. It is also copied into trial_dir as visual.stl
-    for the preview render. The collision STL is renamed to a trial-specific name to
-    avoid conflicts across parallel SOFA instances.
+    new_gripper.stl stays in CENTERPARTS_DIR so SOFA can find it by its hardcoded
+    name; a copy goes into trial_dir for the preview render. The collision STL is
+    renamed to a trial-specific name to avoid conflicts across parallel SOFA instances.
 
-    Inputs:
-        trial_dir (Path): Directory for this trial's files.
-        config (dict): Full config to write as lab_config.jsonc.
+    Args:
+        trial_dir: Directory for this trial's files.
+        config: Full config to write as lab_config.jsonc.
 
     Returns:
-        tuple[Path, Path]: Paths to (collision STL in CENTERPARTS_DIR, visual STL copy in trial_dir).
+        Tuple of (collision STL in CENTERPARTS_DIR, visual STL copy in trial_dir).
 
     Raises:
         GeometryExportTimeoutError: If generate_gripper.py times out.
@@ -167,14 +158,12 @@ def generate_stl_for_trial(trial_dir: Path, config: dict) -> tuple[Path, Path]:
 
     trial_id = f"{trial_dir.parent.name}_{trial_dir.name}"
 
-    # Rename collision STL to a trial-specific name so parallel SOFA instances don't collide
     collision_src = CENTERPARTS_DIR / "new_gripper_collision.stl"
     if not collision_src.exists():
         raise RuntimeError("Collision STL not found after generation.")
     collision_stl = CENTERPARTS_DIR / f"gripper_{trial_id}_collision.stl"
     collision_src.replace(collision_stl)
 
-    # Copy visual STL into trial_dir for the preview — new_gripper.stl stays in place for SOFA
     visual_src = CENTERPARTS_DIR / "new_gripper.stl"
     if not visual_src.exists():
         raise RuntimeError("Visual STL not found after generation.")
@@ -191,19 +180,16 @@ def render_stl_preview(
     trial_index: int,
     failed_preview: Path | None = None,
 ) -> None:
-    """
-    Render an offscreen PNG preview from the visual STL, save it to the trial
-    directory and the flat previews folder, then delete the STL.
+    """Render an offscreen PNG preview from the visual STL and delete the STL.
 
-    Inputs:
-        visual_stl (Path): Path to the full-resolution visual STL to render.
-        trial_dir (Path): Trial directory where preview.png will be saved.
-        gen_index (int): Generation number, used to name the flat preview file.
-        trial_index (int): Trial number within the generation, used to name the flat preview file.
-        failed_preview (Path | None): Fallback preview image if render fails.
+    Saves the screenshot to the trial directory and the flat previews folder.
 
-    Returns:
-        None
+    Args:
+        visual_stl: Path to the full-resolution visual STL to render.
+        trial_dir: Trial directory where preview.png will be saved.
+        gen_index: Generation number, used to name the flat preview file.
+        trial_index: Trial number within the generation.
+        failed_preview: Fallback preview image if render fails.
     """
     plotter = None
     try:
@@ -226,7 +212,6 @@ def render_stl_preview(
         local_path = trial_dir / "preview.png"
         plotter.screenshot(str(local_path))
 
-        # Visual STL no longer needed now that the preview is saved
         visual_stl.unlink()
 
         flat_name = f"gen_{gen_index:04d}_trial_{trial_index:02d}.png"

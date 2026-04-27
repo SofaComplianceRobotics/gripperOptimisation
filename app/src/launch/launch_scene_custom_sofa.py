@@ -30,15 +30,7 @@ SOFA_SITE_PACKAGES = r"C:\dev\sofa\build\lib\python3\site-packages"
 
 
 def main() -> None:
-    """
-    Launch the scene with the custom SOFA GUI stack.
-
-    Inputs:
-        None
-
-    Returns:
-        None
-    """
+    """Launch the scene with the custom SOFA GUI stack."""
     env = os.environ.copy()
 
     # Prevent inherited EmioLabs Python settings from polluting SofaPython3 init.

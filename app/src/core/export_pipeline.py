@@ -30,66 +30,43 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
 
 def run_export(params: ModelParams, secondary_dir: Path | None = None) -> Path:
-    """
-    Run the export pipeline with given parameters.
+    """Run the full export pipeline for a gripper design.
 
-    Inputs:
-        params (ModelParams): Model configuration object.
-        secondary_dir (Path | None): Optional directory to copy exported files to.
-                                      If None, files are only saved to the exports/ directory.
+    Args:
+        params: Model configuration object.
+        secondary_dir: Optional directory to copy exported files to. If None,
+            files are only saved to the exports/ directory.
 
     Returns:
-        Path: Path to the generated STL file.
+        Path to the generated STL file.
 
     Raises:
         RuntimeError: If validation or assembly fails.
     """
 
-    # ─────────────────────────────────────────────
-    # Export Pipeline
-    # ─────────────────────────────────────────────
-
-    t_step = 0.0
     validate_params(params)
-
-    t_step = 0.0
     result = assemble_model(params)
-
-    t_step = 0.0
     run_invariants(result)
 
     stl_path = None
     if params.mesh_enabled:
-        t_step = 0.0
         mesh_model = rotate_model_to_export_frame(result)
 
         stl_path = make_versioned_export_path(params, "stl")
         json_path = stl_path.with_suffix(".json")
         vtk_path = stl_path.with_suffix(".vtk")
 
-        t_step = 0.0
         model_to_stl(mesh_model, params, stl_path)
-
-        t_step = 0.0
         export_leg_attachment_json(params, json_path)
-
-        t_step = 0.0
         model_to_vtk(mesh_model, params, vtk_path)
 
-        # Export coarse collision STL (fingers only)
-        collision_stl_path = stl_path.parent / "new_gripper_collision.stl"
-        t_step = 0.0
+        # Collision STL uses only the distal finger fraction for a coarser mesh.
+        collision_stl_path = stl_path.parent / f"{params.export_stem}_collision.stl"
         pincers = make_pincer_pair_world_collision(params)
-
-        t_step = 0.0
         pincers_export = rotate_model_to_export_frame(pincers)
-
-        t_step = 0.0
         model_to_stl_collision(pincers_export, params, collision_stl_path)
 
-        # Copy to secondary directory if provided
         if secondary_dir:
-            t_step = 0.0
             secondary_dir.mkdir(parents=True, exist_ok=True)
             files_to_copy = [stl_path, json_path, collision_stl_path]
             if vtk_path.exists():
@@ -110,7 +87,7 @@ def run_export(params: ModelParams, secondary_dir: Path | None = None) -> Path:
 
 
 def main() -> None:
-    """CLI entry point that creates params and runs export."""
+    """Run the export pipeline with default ModelParams."""
     params = ModelParams()
     run_export(params)
 

@@ -109,6 +109,8 @@ _ROLE_NAME = Qt.ItemDataRole.UserRole
 # List-row delegate
 # ---------------------------------------------------------------------------
 class _ToggleRowDelegate(QStyledItemDelegate):
+    """List-row delegate that renders selected and hovered rows with custom colors."""
+
     SEL_BG = QColor(C_BANNER)
     SEL_FG = QColor(C_SEL_TEXT)
     UNSEL_BG = QColor(C_SECTION)
@@ -116,6 +118,7 @@ class _ToggleRowDelegate(QStyledItemDelegate):
     HOVER_BG = QColor("#eef0f5")
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
+        """Render a single row with selection and hover highlighting."""
         sel = index.data(_ROLE_SEL) or False
         hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
         bg = self.SEL_BG if sel else (self.HOVER_BG if hover else self.UNSEL_BG)
@@ -145,6 +148,7 @@ class _PieChart(QWidget):
     HIT_R = 14  # hit-zone radius px (larger than visual for easier grab)
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize pie with empty data and configure mouse-tracking widget."""
         super().__init__(parent)
         self._names: list[str] = []
         self._weights: list[int] = []
@@ -157,24 +161,29 @@ class _PieChart(QWidget):
 
     # ── public ────────────────────────────────────────────────────────────
     def set_data(self, names: list[str], weights: list[int]) -> None:
+        """Update displayed names and weights and trigger a repaint."""
         self._names = list(names)
         self._weights = list(weights)
         self.update()
 
     def get_weights(self) -> list[int]:
+        """Return a copy of the current weight list."""
         return list(self._weights)
 
     # ── geometry ──────────────────────────────────────────────────────────
     def _pie_rect(self) -> QRectF:
+        """Return the bounding rect of the drawable pie area with handle padding."""
         pad = self.HANDLE_R + 4
         s = min(self.width(), self.height()) - 2 * pad
         return QRectF((self.width() - s) / 2, (self.height() - s) / 2, s, s)
 
     def _center(self) -> QPointF:
+        """Return the center point of the pie circle."""
         r = self._pie_rect()
         return QPointF(r.x() + r.width() / 2, r.y() + r.height() / 2)
 
     def _radius(self) -> float:
+        """Return the radius of the pie circle in pixels."""
         return self._pie_rect().width() / 2
 
     def _cumulative_angle_deg(self, up_to_idx: int) -> float:
@@ -224,6 +233,7 @@ class _PieChart(QWidget):
 
     # ── mouse events ──────────────────────────────────────────────────────
     def mousePressEvent(self, event) -> None:
+        """Start dragging a slice boundary when a handle is hit."""
         if event.button() == Qt.MouseButton.LeftButton and len(self._weights) > 1:
             hit = self._hit_boundary(event.position())
             if hit is not None:
@@ -234,6 +244,7 @@ class _PieChart(QWidget):
                 self.setCursor(QCursor(Qt.CursorShape.CrossCursor))
 
     def mouseMoveEvent(self, event) -> None:
+        """Update slice weights while dragging, or change cursor on hover."""
         pos = event.position()
         if self._dragging is None:
             hit = self._hit_boundary(pos)
@@ -260,7 +271,6 @@ class _PieChart(QWidget):
         # Clamp new boundary within [prev+0, next-0]  (allow 0% slices)
         new_angle = max(prev_angle, min(cur_angle, next_angle))
 
-        # Convert angles back to weights
         new_boundary_pct = round(new_angle / 3.6)
         prev_pct = sum(w[:idx])
         next_pct = sum(w[: idx + 2]) if idx + 2 <= len(w) else 100
@@ -277,12 +287,14 @@ class _PieChart(QWidget):
         self.weightsChanged.emit(self._weights)
 
     def mouseReleaseEvent(self, event) -> None:
+        """End the current boundary drag."""
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = None
             self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
 
     # ── painting ──────────────────────────────────────────────────────────
     def paintEvent(self, _event) -> None:
+        """Paint all pie slices, separators, percentage labels, and boundary handles."""
         if not self._weights:
             return
 
@@ -345,6 +357,8 @@ class _PieChart(QWidget):
 # _ResultTuple
 # ---------------------------------------------------------------------------
 class _ResultTuple(tuple):
+    """Tuple of selected test names that also carries a weights dict attribute."""
+
     weights: dict[str, int]
 
 
@@ -352,6 +366,7 @@ class _ResultTuple(tuple):
 # Dialog
 # ---------------------------------------------------------------------------
 class _TestPickerDialog(QDialog):
+    """Modal dialog for selecting one or more lab tests with per-test weight assignment."""
 
     def __init__(
         self,
@@ -360,6 +375,7 @@ class _TestPickerDialog(QDialog):
         prompt: str | None,
         parent: QWidget | None = None,
     ) -> None:
+        """Configure dialog geometry, style, and initial state."""
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(700, 640)
@@ -386,6 +402,7 @@ class _TestPickerDialog(QDialog):
 
     # ── build UI ──────────────────────────────────────────────────────────
     def _build_ui(self, prompt: str | None) -> None:
+        """Construct and lay out all dialog widgets."""
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -505,9 +522,11 @@ class _TestPickerDialog(QDialog):
 
     # ── selection ─────────────────────────────────────────────────────────
     def _visual_select(self, item: QListWidgetItem, selected: bool) -> None:
+        """Mark or unmark a list item as selected."""
         item.setData(_ROLE_SEL, selected)
 
     def _on_item_clicked(self, item: QListWidgetItem) -> None:
+        """Toggle selection for a clicked row, enforcing single-select mode if needed."""
         if not self._multi_select:
             for i in range(self._list.count()):
                 self._visual_select(self._list.item(i), False)
@@ -515,16 +534,19 @@ class _TestPickerDialog(QDialog):
         self._rebuild_weights()
 
     def _select_all(self) -> None:
+        """Select all tests in the list."""
         for i in range(self._list.count()):
             self._visual_select(self._list.item(i), True)
         self._rebuild_weights()
 
     def _deselect_all(self) -> None:
+        """Deselect all tests in the list."""
         for i in range(self._list.count()):
             self._visual_select(self._list.item(i), False)
         self._rebuild_weights()
 
     def _init_selection(self) -> None:
+        """Pre-select the default tests and rebuild the weight panel."""
         default_names = set(self._defaults)
         for i in range(self._list.count()):
             item = self._list.item(i)
@@ -532,6 +554,7 @@ class _TestPickerDialog(QDialog):
         self._rebuild_weights()
 
     def _selected_catalog_items(self):
+        """Return catalog items for all currently selected list rows."""
         result = []
         for i in range(self._list.count()):
             item = self._list.item(i)
@@ -543,6 +566,7 @@ class _TestPickerDialog(QDialog):
 
     # ── rebuild weight panel ───────────────────────────────────────────────
     def _rebuild_weights(self) -> None:
+        """Rebuild the spinbox panel and pie chart from the current selection."""
         old: dict[str, int] = {n: sb.value() for n, sb in self._spinboxes.items()}
 
         while self._spin_layout.count():
@@ -575,7 +599,6 @@ class _TestPickerDialog(QDialog):
         if diff != 0:
             weights[0] = max(0, min(100, weights[0] + diff))
 
-        # Build spinbox rows
         for i, it in enumerate(selected):
             color_hex = SLICE_COLORS[i % len(SLICE_COLORS)]
             row = QWidget()
@@ -671,6 +694,7 @@ class _TestPickerDialog(QDialog):
         self._update_sum_label()
 
     def _on_pie_changed(self, weights: list[int]) -> None:
+        """Propagate pie drag updates back to the spinboxes."""
         if self._spin_lock:
             return
         self._spin_lock = True
@@ -681,6 +705,7 @@ class _TestPickerDialog(QDialog):
         self._update_sum_label()
 
     def _update_sum_label(self) -> None:
+        """Refresh the sum label and enable or disable the OK button."""
         total = sum(sb.value() for sb in self._spinboxes.values())
         ok = total == 100
         self._sum_label.setText(
@@ -711,6 +736,7 @@ class _TestPickerDialog(QDialog):
 
     # ── accept / cancel ───────────────────────────────────────────────────
     def _on_accept(self) -> None:
+        """Validate the selection and confirm the dialog."""
         selected = self._selected_catalog_items()
         if not selected:
             QMessageBox.warning(
@@ -732,15 +758,18 @@ class _TestPickerDialog(QDialog):
         self.accept()
 
     def _on_cancel(self) -> None:
+        """Cancel the dialog and fall back to the default test selection."""
         self._result_names = list(self._defaults)
         n = len(self._defaults)
         self._result_weights = {name: 100 // n for name in self._defaults} if n else {}
         self.reject()
 
     def result_names(self) -> list[str]:
+        """Return the selected test names after the dialog closes."""
         return getattr(self, "_result_names", list(self._defaults))
 
     def result_weights(self) -> dict[str, int]:
+        """Return the weight dict for selected tests after the dialog closes."""
         return getattr(self, "_result_weights", {})
 
 
@@ -752,6 +781,16 @@ def prompt_for_tests(
     multi_select: bool = False,
     prompt: str | None = None,
 ) -> _ResultTuple:
+    """Open the test picker dialog and return the selected tests with weights.
+
+    Args:
+        title: Dialog window title.
+        multi_select: Allow selecting more than one test.
+        prompt: Optional banner message overriding the default prompt text.
+
+    Returns:
+        Tuple of selected test names with a .weights dict of {name: int} values.
+    """
     defaults = get_default_test_names()
     app = QApplication.instance() or QApplication(sys.argv)
 

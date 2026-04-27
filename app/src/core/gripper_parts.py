@@ -25,14 +25,13 @@ from core.params import (
 
 
 def make_circle(p: ModelParams) -> cq.Workplane:
-    """
-    Build the main ring and four thickened sectors.
+    """Build the main ring and four thickened sectors.
 
-    Inputs:
-        p (ModelParams): Model parameters.
+    Args:
+        p: Model parameters.
 
     Returns:
-        cadquery.Workplane: Ring solid with 4 thickened sectors.
+        Ring solid with 4 thickened sectors.
 
     Raises:
         ValueError: If geometric constraints cannot be satisfied.
@@ -74,14 +73,13 @@ def make_circle(p: ModelParams) -> cq.Workplane:
 
 
 def make_leg_attachment(p: ModelParams) -> cq.Workplane:
-    """
-    Build the leg attachment body with slit and trapezoid roof cut.
+    """Build the leg attachment body with slit and trapezoid roof cut.
 
-    Inputs:
-        p (ModelParams): Model parameters.
+    Args:
+        p: Model parameters.
 
     Returns:
-        cadquery.Workplane: Leg attachment solid.
+        Leg attachment solid.
     """
     outer_length = p.leg_hole_length + (2.0 * p.leg_wall_thickness)
     outer_width = p.leg_hole_width + (2.0 * p.leg_wall_thickness)
@@ -130,22 +128,17 @@ def make_leg_attachment(p: ModelParams) -> cq.Workplane:
 
 
 def make_pincer_local(p: ModelParams, trailing_fraction: float = 1.0) -> cq.Workplane:
-    """
-    Build one pincer in local coordinates.
+    """Build one pincer in local coordinates.
 
-    Local axes:
-        +X: radial direction after placement
-        +Y: downward direction after placement
-        +Z: tangential thickness after placement
+    Local axes: +X radial, +Y downward, +Z tangential (after placement).
 
-    Inputs:
-        p (ModelParams): Model parameters.
-        trailing_fraction (float): Keep only this trailing fraction of the
-            sampled spline centerline before profile extrusion. 1.0 keeps the
-            full pincer.
+    Args:
+        p: Model parameters.
+        trailing_fraction: Keep only this trailing fraction of the sampled
+            spline centerline before profile extrusion. 1.0 keeps the full pincer.
 
     Returns:
-        cadquery.Workplane: One local pincer solid.
+        One local pincer solid.
     """
     s = p.pincer_path_scale
     scaled_points = tuple(
@@ -330,16 +323,15 @@ def make_pincer_local(p: ModelParams, trailing_fraction: float = 1.0) -> cq.Work
 def make_pincer_pair_world(
     p: ModelParams, trailing_fraction: float = 1.0
 ) -> cq.Workplane:
-    """
-    Build and place the two pincers in world space.
+    """Build and place the two pincers in world space.
 
-    Inputs:
-        p (ModelParams): Model parameters.
-        trailing_fraction (float): Keep only this trailing fraction of each
-            pincer path before profile extrusion. 1.0 keeps the full pincer.
+    Args:
+        p: Model parameters.
+        trailing_fraction: Keep only this trailing fraction of each pincer
+            path before profile extrusion. 1.0 keeps the full pincer.
 
     Returns:
-        cadquery.Workplane: Union of both pincers placed in world space.
+        Union of both pincers placed in world space.
     """
     pincer_placement_radius = p.cylinder_radius
     pincer = make_pincer_local(p, trailing_fraction=trailing_fraction).rotate(
@@ -377,13 +369,12 @@ def make_pincer_pair_world(
 
 
 def make_pincer_pair_world_collision(p: ModelParams) -> cq.Workplane:
-    """
-    Build collision pincers using only the distal path fraction.
+    """Build collision pincers using only the distal path fraction.
 
-    Inputs:
-        p (ModelParams): Model parameters.
+    Args:
+        p: Model parameters.
 
     Returns:
-        cadquery.Workplane: Union of both collision pincers in world space.
+        Union of both collision pincers in world space.
     """
     return make_pincer_pair_world(p, trailing_fraction=p.mesh_collision_tail_fraction)

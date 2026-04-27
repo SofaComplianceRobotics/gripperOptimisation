@@ -77,11 +77,10 @@ class BenchmarkResult:
 # Environment Setup (like optimize.py)
 # ─────────────────────────────────────────────
 def build_env() -> dict:
-    """
-    Build environment for SOFA subprocess, similar to optimize.py.
+    """Build environment for SOFA subprocess, mirroring optimize.py.
 
     Returns:
-        dict: Environment variables dict ready to pass to subprocess calls.
+        Environment variables dict ready to pass to subprocess calls.
     """
     env = os.environ.copy()
 
@@ -180,15 +179,18 @@ def _ensure_dependencies() -> None:
 # Gripper Mesh Resolution
 # ─────────────────────────────────────────────
 def _get_current_gripper_mesh() -> Path:
-    """
-    Get path to current gripper mesh.
-    Prefers exported mesh if available, otherwise uses default collision mesh.
+    """Return the path to the current gripper mesh, preferring the exported STL.
+
+    Returns:
+        Path to the collision STL.
+
+    Raises:
+        FileNotFoundError: If no mesh is found at either expected location.
     """
     exported_mesh = EXPORTS_DIR / "new_gripper_collision.stl"
     if exported_mesh.exists():
         return exported_mesh
 
-    # Fallback: assume mesh was exported to default location
     fallback_mesh = (
         LAB_ROOT / "data" / "meshes" / "centerparts" / "new_gripper_collision.stl"
     )
@@ -212,18 +214,18 @@ def _launch_sofa_batch(
     scene_file: Path,
     num_runs: int = 3,
 ) -> tuple[float, int]:
-    """
-    Launch N concurrent SOFA simulations, wait for all to complete, measure wall-clock time.
+    """Launch N concurrent SOFA simulations, wait for all to complete, measure wall-clock time.
 
-    Inputs:
-        gripper_mesh (Path): Path to STL file
-        concurrency (int): Number of concurrent instances to launch
-        trial_dir (Path): Temporary directory for run files
-        env (dict): Base environment dict
-        num_runs (int): How many batches to repeat (then average)
+    Args:
+        gripper_mesh: Path to STL file.
+        concurrency: Number of concurrent instances to launch.
+        trial_dir: Temporary directory for run files.
+        env: Base environment dict.
+        scene_file: SOFA scene Python file to run.
+        num_runs: How many batches to repeat (then average).
 
     Returns:
-        tuple[float, int]: (Total elapsed time for all runs, number of successful completions)
+        Tuple of (average elapsed time per batch, total successful completions).
     """
     total_elapsed = 0.0
     total_successful = 0
@@ -233,7 +235,6 @@ def _launch_sofa_batch(
             f"\n  Batch {batch_idx + 1}/{num_runs}: Launching {concurrency} concurrent instances..."
         )
 
-        # Launch N concurrent processes
         processes: List[subprocess.Popen] = []
         score_paths = []
 
@@ -273,7 +274,6 @@ def _launch_sofa_batch(
                 )
                 continue
 
-        # Wait for all to complete and measure time
         batch_start = time.perf_counter()
 
         active = len(processes)
@@ -284,10 +284,8 @@ def _launch_sofa_batch(
             now = time.perf_counter()
             elapsed = now - batch_start
 
-            # Check for completed processes
             completed = sum(1 for p in processes if p.poll() is not None)
 
-            # Print progress every 2 seconds
             if now - last_update >= 2.0:
                 pct = (100.0 * completed) / active if active > 0 else 0.0
                 print(
@@ -302,7 +300,6 @@ def _launch_sofa_batch(
         batch_elapsed = time.perf_counter() - batch_start
         total_elapsed += batch_elapsed
 
-        # Count successful completions (score file exists)
         successful = sum(1 for sp in score_paths if sp.exists())
         total_successful += successful
 
@@ -323,19 +320,19 @@ def _benchmark_concurrency_level(
     scene_file: Path,
     num_runs: int = 3,
 ) -> BenchmarkResult:
-    """
-    Run simulations at a specific concurrency level.
+    """Run simulations at a specific concurrency level and return throughput metrics.
 
     Launches N concurrent processes, waits for all to finish, repeats num_runs times,
     and calculates average throughput.
 
-    Inputs:
-        gripper_mesh (Path): Path to gripper STL
-        concurrency (int): Number of concurrent instances
-        num_runs (int): Number of times to repeat this batch
+    Args:
+        gripper_mesh: Path to gripper STL.
+        concurrency: Number of concurrent instances.
+        scene_file: SOFA scene Python file to run.
+        num_runs: Number of times to repeat this batch.
 
     Returns:
-        BenchmarkResult: Timing and throughput metrics
+        Timing and throughput metrics for this concurrency level.
     """
     print(f"\n{'─' * 60}")
     print(f"Testing concurrency level: {concurrency}")
@@ -356,13 +353,9 @@ def _benchmark_concurrency_level(
             num_runs=num_runs,
         )
 
-    # Calculate throughput
-    # Each batch runs `concurrency` simulations
-    # So in time avg_elapsed, we ran `concurrency` simulations
-    # Sims per hour = (3600 / avg_elapsed) * concurrency
+    # sims_per_hour = (3600 / avg_elapsed) * concurrency
     sims_per_hour = (3600.0 * concurrency / avg_elapsed) if avg_elapsed > 0 else 0.0
-
-    # Efficiency: throughput per concurrent slot
+    # Efficiency: throughput per concurrent slot — drops as hardware saturates.
     efficiency_ratio = sims_per_hour / concurrency if concurrency > 0 else 0.0
 
     result = BenchmarkResult(
@@ -428,7 +421,6 @@ def main() -> None:
     print("SOFA Concurrency Benchmark")
     print("═" * 60)
 
-    # Ensure dependencies
     print("\n[*] Checking dependencies...")
     try:
         _ensure_dependencies()
@@ -436,7 +428,6 @@ def main() -> None:
         print(f"✗ Dependency installation failed: {e}", file=sys.stderr, flush=True)
         sys.exit(1)
 
-    # Check SOFA installation
     print("[*] Checking SOFA installation...")
     if not os.path.isfile(RUNSOFA_EXE):
         print(
@@ -452,13 +443,11 @@ def main() -> None:
         sys.exit(1)
     print(f"    SOFA: {Path(RUNSOFA_EXE).name}")
 
-    # Select test
     selected = prompt_for_tests("Select test to benchmark", multi_select=False)
     test_spec = get_test_spec(selected[0])
     scene_file = test_spec.scene_file
     print(f"    Test: {selected[0]}")
 
-    # Get gripper mesh
     print("[*] Locating gripper mesh...")
     try:
         gripper_mesh = _get_current_gripper_mesh()
@@ -467,7 +456,6 @@ def main() -> None:
         print(f"✗ {e}", file=sys.stderr, flush=True)
         sys.exit(1)
 
-    # Run benchmarks
     print("\n[*] Starting benchmarks...")
     print("    Testing concurrency levels 1-10 (3 runs each)")
 
@@ -493,11 +481,9 @@ def main() -> None:
             )
             sys.exit(1)
 
-    # Print results
     report = _format_results_table(results)
     print(report)
 
-    # Optional: Save results to JSON
     output_file = RUNTIME_DIR / "benchmark_results.json"
     try:
         results_json = {

@@ -25,8 +25,15 @@ def _rotate_vector_axis_angle(
     axis: tuple[float, float, float],
     angle_deg: float,
 ) -> tuple[float, float, float]:
-    """
-    Rotate vector v around axis by angle_deg using Rodrigues' formula.
+    """Rotate vector v around axis by angle_deg using Rodrigues' formula.
+
+    Args:
+        v: Vector to rotate.
+        axis: Rotation axis (need not be normalised).
+        angle_deg: Rotation angle in degrees.
+
+    Returns:
+        Rotated vector.
     """
     vx, vy, vz = v
     ax, ay, az = axis
@@ -54,14 +61,13 @@ def _rotate_vector_axis_angle(
 
 
 def assemble_model(p: ModelParams) -> cq.Workplane:
-    """
-    Assemble ring, four leg attachments, and two opposite underside pincers.
+    """Assemble ring, four leg attachments, and two opposite underside pincers.
 
-    Inputs:
-        p (ModelParams): Model parameters.
+    Args:
+        p: Model parameters.
 
     Returns:
-        cadquery.Workplane: Final combined solid.
+        Final combined solid.
     """
     base = make_circle(p)
     leg = make_leg_attachment(p)

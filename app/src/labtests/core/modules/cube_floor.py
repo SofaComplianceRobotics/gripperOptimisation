@@ -1,13 +1,9 @@
 """
-Module: cube_floor
+cube_floor — Add a graspable cube and static floor to the simulation node.
 
-Adds the graspable cube and the static floor to the simulation node.
-Used by all direct-mode tests. Not compatible with inverse mode.
-
-Usage:
-    from labtests.core.modules.cube_floor import setup, CubeFloorHandles
-    handles = setup(simulation, gripper_collision, config)
-    # handles.cube, handles.floor, handles.cube_spawn_y available afterwards
+Used by all direct-mode tests. Not compatible with inverse mode. The playback
+controller is responsible for teleporting the cube to cube_spawn_y at the right
+simulation time.
 """
 
 from __future__ import annotations
@@ -33,24 +29,22 @@ def setup(
     floor_center_y: float = -230.0,
     cube_spawn_clearance: float = 10.0,
 ) -> CubeFloorHandles:
-    """
-    Add cube and floor rigid bodies to the simulation node.
+    """Add cube and floor rigid bodies to the simulation node.
 
-    The cube is initially placed far above the scene (pre-spawn offset).
-    The playback controller is responsible for teleporting it to cube_spawn_y
-    at the right simulation time.
+    The cube is placed above the scene before spawn; the playback controller
+    teleports it to cube_spawn_y at the configured simulation time.
 
-    Inputs:
-        simulation:         SOFA simulation node from base_scene.
-        gripper_collision:  Node returned by collision_stl.setup() —
-                            needed to wire the ContactListener.
-        cube_scale:         [x, y, z] scale for the cube mesh. Default [5,5,5].
-        cube_mass:          Initial uniform mass for the cube (kg).
-        floor_center_y:     Y position of the floor centre.
+    Args:
+        simulation: SOFA simulation node from base_scene.
+        gripper_collision: Node returned by collision_stl.setup(), needed to
+            wire the ContactListener.
+        cube_scale: [x, y, z] scale for the cube mesh. Default [5, 5, 5].
+        cube_mass: Initial uniform mass for the cube (kg).
+        floor_center_y: Y position of the floor centre.
         cube_spawn_clearance: Extra gap between floor top and cube bottom at spawn.
 
     Returns:
-        CubeFloorHandles with (cube, floor, collision, cube_spawn_y)
+        CubeFloorHandles with (cube, floor, collision, cube_spawn_y).
     """
     if cube_scale is None:
         cube_scale = [5.0, 5.0, 5.0]
