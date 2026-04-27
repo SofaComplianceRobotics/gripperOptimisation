@@ -22,21 +22,20 @@ class SceneNodes(NamedTuple):
 
 
 def build_base_scene(rootnode, *, inverse: bool, friction: float = 0.6) -> SceneNodes:
-    """
-    Configure rootnode and build the Emio robot.
+    """Configure rootnode and build the Emio robot.
 
     This is the only code that runs for every single test.
     Modules and hooks are layered on top by each test's scene.py.
 
-    Inputs:
-        rootnode:  SOFA root node passed in by createScene()
-        inverse:   True  → inverse solver header (tilt, manual control)
-                   False → direct/forward dynamics header (grasp, scoring)
-        friction:  Contact friction coefficient (direct mode only; ignored
-                   for inverse scenes which have no collision pipeline)
+    Args:
+        rootnode: SOFA root node passed in by createScene().
+        inverse: True → inverse solver header (tilt, manual control).
+                 False → direct/forward dynamics header (grasp, scoring).
+        friction: Contact friction coefficient (direct mode only; ignored for
+            inverse scenes which have no collision pipeline).
 
     Returns:
-        SceneNodes with (rootnode, settings, modelling, simulation, emio)
+        SceneNodes with (rootnode, settings, modelling, simulation, emio).
     """
     from utils.header import addHeader, addSolvers  # type: ignore
     from parts.gripper import Gripper  # type: ignore

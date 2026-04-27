@@ -16,18 +16,16 @@ LAB_ROOT = APP_ROOT.parent
 
 
 def _load_max_score(scoring_file: Path) -> float:
-    """
-    Import a test's scoring.py and return its MAX_SCORE constant.
+    """Import a test's scoring.py and return its MAX_SCORE constant.
 
-    Falls back to 1.0 (i.e. no normalization effect) if the attribute is
-    missing or the file cannot be imported, so existing tests without
-    MAX_SCORE keep working unchanged.
+    Falls back to 1.0 (no normalization effect) if the attribute is missing or
+    the file cannot be imported, so existing tests without MAX_SCORE keep working.
 
-    Inputs:
-        scoring_file (Path): Absolute path to the test's scoring.py.
+    Args:
+        scoring_file: Absolute path to the test's scoring.py.
 
     Returns:
-        float: The declared maximum score for the test.
+        The declared maximum score for the test.
     """
     try:
         spec = importlib.util.spec_from_file_location("_scoring_tmp", scoring_file)
@@ -58,6 +56,7 @@ class TestSpec:
 
     @property
     def display_label(self) -> str:
+        """Return a human-readable label combining label and description."""
         return f"{self.label} — {self.description}"
 
 

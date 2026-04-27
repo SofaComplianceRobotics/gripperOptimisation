@@ -20,7 +20,7 @@ from core.params import ModelParams
 from labtests.registry import get_default_test_names, get_test_spec, parse_test_names
 
 # ─────────────────────────────────────────────
-# Paths (continued from setup above)
+# Paths
 # ─────────────────────────────────────────────
 APP_ROOT = SRC_ROOT.parent
 LAB_ROOT = APP_ROOT.parent
@@ -45,20 +45,19 @@ RUN_PLAN: tuple[tuple[str, int, int], ...] = tuple(
 # Per-test weights
 # ─────────────────────────────────────────────
 def _parse_test_weights(raw: str | None, test_names: list[str]) -> dict[str, float]:
-    """
-    Parse LAB_SHAPEOPT_TEST_WEIGHTS into a normalised {test_name: fraction} dict.
+    """Parse LAB_SHAPEOPT_TEST_WEIGHTS into a normalized {test_name: fraction} dict.
 
     The env var is expected to be a JSON object whose values are integer
-    percentages that sum to 100 (as produced by the UI).  If the variable is
+    percentages that sum to 100 (as produced by the UI). If the variable is
     absent, malformed, or the keys don't match the selected tests, equal
     weights are used as fallback.
 
-    Inputs:
-        raw (str | None): Raw value of LAB_SHAPEOPT_TEST_WEIGHTS.
-        test_names (list[str]): Canonical list of selected test names.
+    Args:
+        raw: Raw value of LAB_SHAPEOPT_TEST_WEIGHTS.
+        test_names: Canonical list of selected test names.
 
     Returns:
-        dict[str, float]: Mapping of test_name → weight fraction (sums to 1.0).
+        Mapping of test_name to weight fraction (sums to 1.0).
     """
     n = len(test_names)
     equal = {name: 1.0 / n for name in test_names} if n else {}

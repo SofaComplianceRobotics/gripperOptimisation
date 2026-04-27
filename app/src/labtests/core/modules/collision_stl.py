@@ -1,30 +1,24 @@
 """
-Module: collision_stl
+collision_stl — Attach a collision mesh (STL file) to the gripper center part.
 
-Attaches a collision mesh (STL file) to the gripper center part.
-Used by all direct-mode tests. Not compatible with inverse mode.
-
-Usage:
-    from labtests.core.modules.collision_stl import setup
-    gripper_collision = setup(emio, stl_path)
-    # gripper_collision is the SOFA node — pass it to other modules that need it
-    # (e.g. cube_floor needs it for the ContactListener)
+Used by all direct-mode tests. Not compatible with inverse mode. The returned
+node must be passed to other modules that require it (e.g. cube_floor for
+ContactListener wiring).
 """
 
 from __future__ import annotations
 
 
 def setup(emio, stl_path: str):
-    """
-    Add a collision model child node to emio.centerpart.
+    """Add a collision model child node to emio.centerpart.
 
-    Inputs:
-        emio:     The assembled Emio object from base_scene.
+    Args:
+        emio: The assembled Emio object from base_scene.
         stl_path: Absolute path to the gripper collision STL file.
 
     Returns:
-        gripper_collision: The SOFA child node carrying the collision geometry.
-                           Store this — other modules reference it.
+        The SOFA child node carrying the collision geometry. Store this — other
+        modules (e.g. cube_floor) reference it for contact detection.
     """
     gripper_collision = emio.centerpart.addChild("CollisionModel")
     gripper_collision.addObject("MeshSTLLoader", name="loader", filename=stl_path)

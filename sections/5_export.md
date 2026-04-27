@@ -4,6 +4,8 @@
 After generation, use these buttons to open exported files:
 <br>
 
+**Simulation mesh** (`new_gripper`)
+
 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: center;">
 
 <div>
@@ -32,6 +34,36 @@ JSON
 <br>
 </div>
 
+**Fine mesh for printing** (`new_gripper_print`)
+
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: center;">
+
+<div>
+STL
+
+#icon("play")
+
+#open-button("assets/data/meshes/centerparts/new_gripper_print.stl")
+</div>
+
+<div>
+VTK
+
+#icon("cubes")
+
+#open-button("assets/data/meshes/centerparts/new_gripper_print.vtk")
+</div>
+
+<div>
+JSON
+
+#icon("align-left")
+
+#open-button("assets/data/meshes/centerparts/new_gripper_print.json")
+</div>
+<br>
+</div>
+
 
 
 <p align="center">Use the sections below to launch the default SOFA workflow, switch to the custom build, or inspect the optimization results.</p>
@@ -43,9 +75,13 @@ JSON
 <div style="border: 1px solid #d8dde3; border-radius: 12px; padding: 14px 16px; background: #fafbfc; display: flex; flex-direction: column; height: 100%; min-height: 250px;">
 <p align="center"><strong>Custom SOFA build</strong></p>
 
-<p align="center">Recording scene</p>
+<p align="center">Inverse scene (no recording)</p>
 
 <div style="margin-top: auto; display: grid; gap: 10px;">
+
+#runsofa-button("assets/labs/lab_shapeOPT/lab_shapeOPT_inverse.py")
+
+<p align="center">Recording scene</p>
 
 #runsofa-button("assets/labs/lab_shapeOPT/lab_shapeOPT_recording.py")
 

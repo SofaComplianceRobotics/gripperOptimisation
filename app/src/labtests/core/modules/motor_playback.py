@@ -1,17 +1,8 @@
 """
-Module: motor_playback
+motor_playback — Load a recorded motor trajectory and wire up JointConstraints.
 
-Loads a recorded motor trajectory and wires up JointConstraints on each
-motor so a controller can replay the positions frame-by-frame.
-
-Used by all direct-mode tests (grasp_hold, random_cube_pick, etc.).
-
-Usage:
-    from labtests.core.modules.motor_playback import setup, PlaybackHandles
-    handles = setup(emio, record_file)
-    # handles.motor_positions  — list of per-frame motor position lists
-    # handles.joint_constraints — list of JointConstraint objects, one per motor
-    # handles.num_motors        — int
+Used by all direct-mode tests (grasp_hold, random_cube_pick, etc.) so a
+controller can replay motor positions frame-by-frame via PlaybackHandles.
 """
 
 from __future__ import annotations
@@ -31,22 +22,21 @@ class PlaybackHandles(NamedTuple):
 
 
 def setup(emio, record_file: str | Path) -> PlaybackHandles:
-    """
-    Load a motor recording and attach JointConstraints to all motors.
+    """Load a motor recording and attach JointConstraints to all motors.
 
-    The recording file must be a JSON object with a "motor_positions" key
-    whose value is a list of frames, each frame being a list of motor angles.
+    The recording file must be a JSON object with a "motor_positions" key whose
+    value is a list of frames, each frame being a list of motor angles.
 
-    Inputs:
-        emio:        The assembled Emio object from base_scene.
+    Args:
+        emio: The assembled Emio object from base_scene.
         record_file: Path to the motor_recording.json file for this test.
 
     Returns:
-        PlaybackHandles with (motor_positions, joint_constraints, num_motors)
+        PlaybackHandles with (motor_positions, joint_constraints, num_motors).
 
     Raises:
         FileNotFoundError: If record_file does not exist.
-        ValueError:        If the recording contains no frames.
+        ValueError: If the recording contains no frames.
     """
     record_file = Path(record_file)
     if not record_file.exists():

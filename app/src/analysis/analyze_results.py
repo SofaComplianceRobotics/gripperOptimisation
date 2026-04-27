@@ -10,15 +10,7 @@ from analyze_plotting import plot_combined
 
 
 def main() -> None:
-    """
-    Load trial results and display leaderboard and visualization plots.
-
-    Inputs:
-        None
-
-    Returns:
-        None
-    """
+    """Load trial results and display the leaderboard and visualization plots."""
     print("[load] Loading trial data...")
     records = load_all_trials()
     summaries = load_gen_summaries()
@@ -29,10 +21,8 @@ def main() -> None:
 
     print(f"[load] Loaded {len(records)} trials from {len(summaries)} generations")
 
-    # Display leaderboard
     print_leaderboard(records)
 
-    # Display plots
     try:
         print("[plot] Opening visualization... (close window to exit)")
         plot_combined(records, summaries)

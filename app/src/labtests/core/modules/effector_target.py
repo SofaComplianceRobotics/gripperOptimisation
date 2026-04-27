@@ -1,18 +1,9 @@
 """
-Module: effector_target
+effector_target — Add the inverse-mode effector and wire up ImGui controls.
 
-Adds the inverse-mode effector MechanicalObject, a controllable target,
-and wires up the ImGui GUI controls (move window, program window, IO window).
-
-Used by all inverse-mode tests (gripper_tilt, future manual-control tests).
-Not compatible with direct mode.
-
-Usage:
-    from labtests.core.modules.effector_target import setup, EffectorHandles
-    handles = setup(nodes, emio, config)
-    # handles.effector_mo    — effector MechanicalObject
-    # handles.target_mo      — target MechanicalObject (set position to move gripper)
-    # handles.effector_target_node  — the SOFA Target node itself
+Adds the effector MechanicalObject, a controllable target, and ImGui GUI
+controls (move window, program window, IO window). Used by all inverse-mode
+tests (gripper_tilt, etc.). Not compatible with direct mode.
 """
 
 from __future__ import annotations
@@ -39,22 +30,20 @@ def setup(
     program_file: str | None = None,
     io_gripper_path: str = "/Gripper",
 ) -> EffectorHandles:
-    """
-    Add effector MO, effector target, inverse components, and ImGui controls.
+    """Add effector MO, effector target, inverse components, and ImGui controls.
 
-    Inputs:
-        nodes:               SceneNodes from base_scene (provides modelling node).
-        emio:                The assembled Emio object.
-        initial_target_pos:  7-element Rigid3 position for the target at t=0.
-                             Default: [0, -150, 0, 0, 0, 0, 1]
+    Args:
+        nodes: SceneNodes from base_scene (provides modelling node).
+        emio: The assembled Emio object.
+        initial_target_pos: 7-element Rigid3 position for the target at t=0.
+            Default: [0, -150, 0, 0, 0, 0, 1].
         gripper_opening_min: Lower bound for opening slider (mm).
         gripper_opening_max: Upper bound for opening slider (mm).
-        program_file:        Absolute path to a .crprog program file to pre-load,
-                             or None to skip.
-        io_gripper_path:     IOWindow subscription path for the gripper opening.
+        program_file: Absolute path to a .crprog file to pre-load, or None.
+        io_gripper_path: IOWindow subscription path for the gripper opening.
 
     Returns:
-        EffectorHandles with (effector_mo, target_mo, effector_target_node)
+        EffectorHandles with (effector_mo, target_mo, effector_target_node).
     """
     import Sofa.ImGui as MyGui  # type: ignore
 

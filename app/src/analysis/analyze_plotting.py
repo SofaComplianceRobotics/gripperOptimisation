@@ -46,7 +46,7 @@ C_BEST = "#e74c3c"  # best-so-far line
 
 
 def _collect_all_test_names(records: list[dict]) -> list[str]:
-    """Stable ordered list of all unique test names across all records."""
+    """Return a stable ordered list of every unique test name seen across all records."""
     seen: list[str] = []
     for r in records:
         for name in (r.get("test_scores") or {}).keys():
@@ -56,6 +56,7 @@ def _collect_all_test_names(records: list[dict]) -> list[str]:
 
 
 def _test_color(test_name: str, name_order: list[str]) -> str:
+    """Return the hex color assigned to a test, consistent across the whole plot."""
     try:
         idx = name_order.index(test_name)
     except ValueError:
@@ -64,11 +65,10 @@ def _test_color(test_name: str, name_order: list[str]) -> str:
 
 
 def _compute_contributions(record: dict) -> dict[str, float]:
-    """
-    Per-test weighted contribution:
-        contribution_i = aggregate_score_i x (weight_pct_i / 100)
+    """Compute per-test weighted contribution for one trial record.
 
-    Sum of contributions = final_score.
+    contribution_i = normalize(aggregate_score_i) * weight_pct_i
+
     Falls back gracefully when test_scores is absent (legacy records).
     """
     test_scores: dict = record.get("test_scores") or {}
@@ -101,6 +101,16 @@ def _compute_contributions(record: dict) -> dict[str, float]:
 
 
 def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
+    """Pre-compute all series needed for a full plot redraw.
+
+    Args:
+        records: Trial records from analyze_io.load_all_trials().
+        all_test_names: Ordered unique test names (from _collect_all_test_names).
+
+    Returns:
+        dict with keys: xs, final_scores, failed_mask, is_complete, contributions,
+        avg_x, avg_y, best_x, best_y, gen_tick_positions, gen_tick_labels.
+    """
     xs = [r["chron"] for r in records]
     contributions = [_compute_contributions(r) for r in records]
     final_scores = [sum(c.values()) for c in contributions]
@@ -166,15 +176,10 @@ def _draw_bars(
     bar_width: float,
     show_failed: bool = True,
 ) -> None:
-    """
-    Diverging stacked contribution bars.
+    """Draw diverging stacked contribution bars on ax.
 
-    • All positive contributions stack upward from 0.
-    • All negative contributions stack downward from 0.
-    • Each test has a consistent color regardless of contribution sign.
-    • A red horizontal tick marks the net contribution score.
-    • Failed trials are rendered at reduced opacity.
-    • Incomplete (still running) trials are rendered with lower opacity.
+    Positive contributions stack upward, negatives stack downward. Failed
+    trials render at reduced opacity; incomplete trials at lower opacity.
     """
     xs = plot_data["xs"]
     contributions = plot_data["contributions"]
@@ -248,6 +253,7 @@ def _draw_bars(
 
 
 def _build_legend(ax, all_test_names: list[str]) -> None:
+    """Attach a legend to ax covering per-test colors and overlay lines."""
     handles = []
     for name in all_test_names:
         color = _test_color(name, all_test_names)
@@ -288,6 +294,7 @@ def _build_legend(ax, all_test_names: list[str]) -> None:
 
 
 def _set_gen_ticks(ax, positions: list, labels: list, max_ticks: int = 12) -> None:
+    """Set X-axis ticks to generation boundaries, thinning when there are many generations."""
     n = len(positions)
     if n == 0:
         return
@@ -306,12 +313,11 @@ def _set_gen_ticks(ax, positions: list, labels: list, max_ticks: int = 12) -> No
 
 
 def plot_combined(records: list[dict], summaries: list[dict]) -> None:
-    """
-    Plot per-test contribution bars, rolling average, and best-so-far.
+    """Plot per-test contribution bars, rolling average, and best-so-far.
 
-    Inputs:
-        records   (list[dict]): Trial records (from analyze_io.load_all_trials).
-        summaries (list[dict]): Generation summary records (unused directly).
+    Args:
+        records: Trial records from analyze_io.load_all_trials.
+        summaries: Generation summary records (unused; kept for API symmetry).
     """
     if not records:
         print("[warn] No trial data to plot.")

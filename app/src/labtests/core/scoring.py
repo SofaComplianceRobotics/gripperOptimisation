@@ -22,12 +22,10 @@ from typing import Any
 
 
 class ScoreWriter:
-    """
-    Handles all JSON output for one simulation run.
+    """Handles all JSON output for one simulation run.
 
-    Inputs at construction:
-        rootnode:   SOFA root node (used for rootnode.time in status payloads)
-        run_info:   Dict with keys gen, trial, run — injected into every payload
+    Writes status updates and final scores to trial_state.json so the optimizer
+    and monitor can track run progress and collect results.
     """
 
     def __init__(
@@ -45,6 +43,7 @@ class ScoreWriter:
         self._last_status: dict[str, Any] = {}
 
     def _acquire_lock(self, lock_path: Path, timeout_s: float = 5.0) -> bool:
+        """Acquire a simple cross-process file lock using exclusive create."""
         deadline = time.time() + timeout_s
         while time.time() < deadline:
             try:
@@ -58,6 +57,7 @@ class ScoreWriter:
         return False
 
     def _release_lock(self, lock_path: Path) -> None:
+        """Delete the file lock, silently ignoring errors."""
         try:
             if lock_path.exists():
                 lock_path.unlink()
@@ -65,6 +65,7 @@ class ScoreWriter:
             pass
 
     def _update_trial_state_run(self, payload: dict[str, Any]) -> bool:
+        """Atomically merge payload into this run's slot in trial_state.json."""
         if self.trial_state_path is None:
             return False
         path = Path(self.trial_state_path)
@@ -103,20 +104,14 @@ class ScoreWriter:
         finally:
             self._release_lock(lock_path)
 
-    # ── Public API ─────────────────────────────────────────────────────────────
-
     def write_status(self, payload: dict[str, Any]) -> None:
-        """
-        Atomically write a live-status payload.
+        """Atomically write a live-status payload.
 
         Status writes are best-effort: any I/O error is silently swallowed
         so a status failure never kills the simulation.
 
-        Inputs:
+        Args:
             payload: Arbitrary dict merged with run_info before writing.
-
-        Returns:
-            None
         """
         full = {**self.run_info, **payload, "updated_at": self.rootnode.time.value}
         self._last_status = dict(full)
@@ -124,17 +119,13 @@ class ScoreWriter:
         self._update_trial_state_run(full)
 
     def write_score_and_stop(self, score: float, reason: str) -> None:
-        """
-        Update the trial_state run slot to 'done', then stop the simulation.
+        """Update the trial_state run slot to 'done', then stop the simulation.
 
         Safe to call multiple times — only the first call has any effect.
 
-        Inputs:
-            score:  Final numeric score for this run.
+        Args:
+            score: Final numeric score for this run.
             reason: Human-readable explanation string (logged + stored in status).
-
-        Returns:
-            None
         """
         if self._finished:
             return
@@ -148,19 +139,14 @@ class ScoreWriter:
         os.kill(os.getpid(), 9)
 
     def write_pruned_and_stop(self, reason: str) -> None:
-        """
-        Mark this run as pruned in trial_state.json and stop the simulation.
+        """Mark this run as pruned in trial_state.json and stop the simulation.
 
-        Used when the simulation reaches an undefined state that should not
-        count as a scored trial (e.g. cube glitched through the floor after
-        a successful pickup, or the test horizon completed normally in a mode
-        where that is not a scoring event).
+        Used when the simulation reaches an undefined state that should not count
+        as a scored trial (e.g. cube glitched through the floor after pickup, or
+        the test horizon completed in a mode where that is not a scoring event).
 
-        Inputs:
+        Args:
             reason: Human-readable explanation string.
-
-        Returns:
-            None
         """
         if self._finished:
             return

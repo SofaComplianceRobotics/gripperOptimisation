@@ -13,15 +13,7 @@ from optimize_config import TRIALS_DIR, PREVIEWS_DIR, PRINT_CLEANUP_LOGS
 
 
 def reset_trials_dir() -> None:
-    """
-    Wipe the entire trials directory and recreate it fresh, including the previews folder.
-
-    Inputs:
-        None
-
-    Returns:
-        None
-    """
+    """Wipe the entire trials directory and recreate it fresh, including the previews folder."""
     if TRIALS_DIR.exists():
         shutil.rmtree(TRIALS_DIR)
         print(f"[reset] Cleared {TRIALS_DIR}")
@@ -30,15 +22,11 @@ def reset_trials_dir() -> None:
 
 
 def delete_after_delay(path: Path, delay: float) -> None:
-    """
-    Delete a file after a delay in a background daemon thread.
+    """Delete a file after a delay in a background daemon thread.
 
-    Inputs:
-        path (Path): File to delete.
-        delay (float): Seconds to wait before deleting.
-
-    Returns:
-        None
+    Args:
+        path: File to delete.
+        delay: Seconds to wait before deleting.
     """
 
     def _delete():
@@ -54,14 +42,10 @@ def delete_after_delay(path: Path, delay: float) -> None:
 
 
 def cleanup_collision_stls(collision_stls_by_trial: dict[int, Path]) -> None:
-    """
-    Delete all collision STL files in a generation's stash.
+    """Delete all collision STL files in a generation's stash.
 
-    Inputs:
-        collision_stls_by_trial (dict[int, Path]): Mapping of trial index to collision STL path.
-
-    Returns:
-        None
+    Args:
+        collision_stls_by_trial: Mapping of trial index to collision STL path.
     """
     for collision_stl in collision_stls_by_trial.values():
         try:

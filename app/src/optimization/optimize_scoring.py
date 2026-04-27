@@ -27,16 +27,13 @@ from optimize_config import (
 
 
 def write_run_status(path: Path, data: dict) -> None:
-    """
-    Write one run status JSON file for the live monitor window.
+    """Write one run status JSON file for the live monitor window.
+
     Uses atomic file operations to prevent partially written/empty files.
 
-    Inputs:
-        path (Path): Status file path.
-        data (dict): Status payload.
-
-    Returns:
-        None
+    Args:
+        path: Status file path.
+        data: Status payload.
     """
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -59,6 +56,7 @@ def _acquire_lock(lock_path: Path, timeout_s: float = 5.0) -> bool:
 
 
 def _release_lock(lock_path: Path) -> None:
+    """Delete the file lock, silently ignoring errors."""
     try:
         if lock_path.exists():
             lock_path.unlink()
@@ -67,6 +65,7 @@ def _release_lock(lock_path: Path) -> None:
 
 
 def _read_json_safe(path: Path) -> dict:
+    """Read a JSON file and return a dict, returning {} on any error."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
@@ -178,31 +177,24 @@ def update_trial_summary(path: Path, patch: dict) -> None:
 
 
 def write_jsonc(path: Path, data: dict) -> None:
-    """
-    Write a dict as plain JSON to a .jsonc file.
+    """Write a dict as plain JSON to a .jsonc file.
 
-    Inputs:
-        path (Path): Destination file path.
-        data (dict): Data to serialize.
-
-    Returns:
-        None
+    Args:
+        path: Destination file path.
+        data: Data to serialize.
     """
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def write_gen_summary(gen_dir: Path, gen_index: int, scores: list[float]) -> None:
-    """
-    Compute and write a summary.json for the generation with avg, best, and worst scores.
+    """Compute and write a summary.json for the generation with avg, best, and worst scores.
+
     All scores are already normalized to [0, 100].
 
-    Inputs:
-        gen_dir (Path): The generation directory where summary.json will be written.
-        gen_index (int): Current generation number.
-        scores (list[float]): All trial final_scores for this generation (out of 100).
-
-    Returns:
-        None
+    Args:
+        gen_dir: The generation directory where summary.json will be written.
+        gen_index: Current generation number.
+        scores: All trial final_scores for this generation (out of 100).
     """
     valid_scores = [s for s in scores if s not in (float("-inf"), None)]
 
@@ -233,16 +225,12 @@ def write_gen_summary(gen_dir: Path, gen_index: int, scores: list[float]) -> Non
 def write_progress(
     gen_index: int, trials_done_in_gen: float, all_scores: list[float]
 ) -> None:
-    """
-    Write current optimization progress to progress.json for the UI progress bar to poll.
+    """Write current optimization progress to progress.json for the UI monitor to poll.
 
-    Inputs:
-        gen_index (int): Current generation number (1-based).
-        trials_done_in_gen (float): How many trial-equivalents have progressed in the current generation.
-        all_scores (list[float]): Every score collected so far across all generations.
-
-    Returns:
-        None
+    Args:
+        gen_index: Current generation number (1-based).
+        trials_done_in_gen: How many trial-equivalents have completed in the current generation.
+        all_scores: Every score collected so far across all generations.
     """
     trials_done_in_gen = max(0.0, min(float(N_PARALLEL), float(trials_done_in_gen)))
     total_done = (gen_index - 1) * N_PARALLEL + trials_done_in_gen
@@ -282,31 +270,21 @@ def write_progress(
 
 
 def cleanup_generation_status_files(gen_dir: Path) -> None:
-    """
-    Retain per-run status files so the live monitor can be reopened later and
-    still show finished runs.
-
-    Inputs:
-        gen_dir (Path): Generation directory.
-
-    Returns:
-        None
-    """
+    """Retain per-run status files so the live monitor shows finished runs on reopen."""
     return
 
 
 def normalize_test_score(score: float, max_score: float) -> float:
-    """
-    Normalize a raw test score to [0.0, 1.0] by dividing by its declared maximum.
+    """Normalize a raw test score to [0.0, 1.0] by dividing by its declared maximum.
 
     Scores above the maximum are clamped to 1.0 rather than penalized.
 
-    Inputs:
-        score (float): Raw score from the simulation.
-        max_score (float): The declared maximum possible score for this test.
+    Args:
+        score: Raw score from the simulation.
+        max_score: The declared maximum possible score for this test.
 
     Returns:
-        float: Normalized score in [0.0, 1.0].
+        Normalized score in [0.0, 1.0].
     """
     if max_score <= 0:
         return 0.0
@@ -319,36 +297,30 @@ def aggregate_trial_scores(
     names: list[str] | None = None,
     max_scores: dict[str, float] | None = None,
 ) -> tuple[float, float, float, float]:
-    """
-    Aggregate multiple scores using the configured method.
+    """Aggregate multiple scores using the configured method.
 
-    When ``weights``, ``names``, and ``max_scores`` are all provided, this
-    function computes the final score out of 100 using the formula:
+    When ``weights``, ``names``, and ``max_scores`` are all provided, computes
+    the final score out of 100 using:
 
         final = Σ  min(score_i / max_score_i, 1.0)  *  weight_pct_i
 
     where ``weight_pct_i`` is the integer percentage weight (e.g. 20 for 20%),
-    so the result is naturally on a 0–100 scale.
+    so the result is on a 0–100 scale. When aggregating repeated runs of the
+    same test, omit weights and max_scores — plain mean/median is used instead.
 
-    When aggregating repeated runs of the *same* test, weights and max_scores
-    are not meaningful and should be omitted — plain mean/median is used instead.
-
-    Inputs:
-        valid_scores (list[float]): Valid scores to aggregate.
-        weights (dict[str, float] | None): Per-test weight fractions (values sum
-            to 1.0).  Keys must match ``names`` if provided.
-        names (list[str] | None): Test names corresponding to each score in
-            ``valid_scores``.  Required when ``weights`` is given.
-        max_scores (dict[str, float] | None): Per-test maximum possible raw score.
-            Required for normalization when ``weights`` is given.
+    Args:
+        valid_scores: Valid scores to aggregate.
+        weights: Per-test weight fractions (values sum to 1.0). Keys must match
+            ``names`` if provided.
+        names: Test names corresponding to each score in ``valid_scores``.
+            Required when ``weights`` is given.
+        max_scores: Per-test maximum possible raw score. Required for
+            normalization when ``weights`` is given.
 
     Returns:
-        tuple[float, float, float, float]:
-            - aggregate_score: Weighted normalized score out of 100, or plain
-              mean/median when weights are not applicable.
-            - consistency_penalty: Always 0.0 (penalty removed).
-            - final_score: Same as aggregate_score.
-            - median_score: Median of valid_scores (raw, un-normalized).
+        Tuple of (aggregate_score, consistency_penalty, final_score, median_score).
+        ``consistency_penalty`` is always 0.0 (removed). ``final_score`` equals
+        ``aggregate_score``. ``median_score`` is the raw un-normalized median.
     """
     if not valid_scores:
         return 0.0, 0.0, 0.0, 0.0
@@ -371,8 +343,7 @@ def aggregate_trial_scores(
         and all(name in weights for name in names)
         and all(name in max_scores for name in names)
     ):
-        # Each term: normalize score to [0,1] then multiply by weight percentage.
-        # Summing these gives a final score out of 100.
+        # Each term: normalize score to [0,1] then multiply by weight percentage (sums to 100).
         aggregate_score = sum(
             normalize_test_score(score, max_scores[name]) * (weights[name] * 100)
             for score, name in zip(valid_scores, names)

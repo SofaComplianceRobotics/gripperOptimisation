@@ -11,15 +11,7 @@ from launch_optimize import main as launch_default_optimize
 
 
 def main() -> None:
-    """
-    Set custom SOFA environment variables and launch optimize.py.
-
-    Inputs:
-        None
-
-    Returns:
-        None
-    """
+    """Set custom SOFA environment variables and launch optimize.py."""
     # Prevent inherited EmioLabs Python settings from leaking into SofaPython3.
     for key in (
         "PYTHONHOME",

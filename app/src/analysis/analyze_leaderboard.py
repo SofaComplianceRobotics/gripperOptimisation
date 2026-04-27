@@ -8,14 +8,10 @@ from analyze_config import TOP_X
 
 
 def print_leaderboard(records: list[dict]) -> None:
-    """
-    Print top valid trials ranked by final_score (consistency-adjusted) and per-generation failure statistics.
+    """Print top valid trials ranked by final_score and per-generation failure statistics.
 
-    Inputs:
-        records (list[dict]): Trial records.
-
-    Returns:
-        None
+    Args:
+        records: Trial records from load_all_trials().
     """
     valid_records = [r for r in records if not r["failed"]]
     sorted_records = sorted(valid_records, key=lambda r: r["final_score"], reverse=True)

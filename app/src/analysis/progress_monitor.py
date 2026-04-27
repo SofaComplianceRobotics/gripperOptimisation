@@ -34,14 +34,13 @@ RUN_BAR_WIDTH = 270
 
 
 def _read_json(path: Path) -> dict | None:
-    """
-    Read a JSON file if present.
+    """Read a JSON file if present.
 
-    Inputs:
-        path (Path): JSON file path.
+    Args:
+        path: JSON file path.
 
     Returns:
-        dict | None: Parsed data or None if unavailable.
+        Parsed data or None if unavailable.
     """
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -50,11 +49,7 @@ def _read_json(path: Path) -> dict | None:
 
 
 def _iter_trial_state_files() -> list[Path]:
-    """
-    List one trial_state JSON file per trial under trials.
-
-    Inputs:
-        None
+    """List one trial_state JSON file per trial under trials.
 
     Returns:
         list[Path]: trial_state file paths.
@@ -63,7 +58,7 @@ def _iter_trial_state_files() -> list[Path]:
 
 
 def _collect_run_statuses() -> list[dict]:
-    """Expand trial_state.json files into flat per-run status payloads."""
+    """Read every trial_state.json and flatten each run slot into a status dict."""
     statuses: list[dict] = []
     for path in _iter_trial_state_files():
         data = _read_json(path)
@@ -90,20 +85,19 @@ def _weighted_trial_score(
     test_names_in_order: list[str],
     weights: dict[str, int],
 ) -> float:
-    """
-    Compute the weighted trial score from per-test aggregate scores.
+    """Compute the weighted trial score from per-test aggregate scores.
 
     Uses integer percentage weights from progress.json (summing to 100).
     Falls back to a plain mean if weights are absent or don't sum to a
     positive value.
 
-    Inputs:
-        aggregated_test_scores (list[float]): One aggregate score per test.
-        test_names_in_order (list[str]): Test names matching each score.
-        weights (dict[str, int]): Per-test weight percentages from progress.json.
+    Args:
+        aggregated_test_scores: One aggregate score per test.
+        test_names_in_order: Test names matching each score.
+        weights: Per-test weight percentages from progress.json.
 
     Returns:
-        float: Weighted score.
+        Weighted score.
     """
     if not aggregated_test_scores:
         return 0.0
@@ -132,6 +126,11 @@ class MonitorApp:
     """
 
     def __init__(self, root: tk.Tk):
+        """Initialize the monitor: build all widgets and schedule the first poll tick.
+
+        Args:
+            root: Tkinter root window.
+        """
         self.root = root
         self.root.title("ShapeOPT Live Monitor")
         self.root.geometry("1040x760")
@@ -252,15 +251,7 @@ class MonitorApp:
         self._tick()
 
     def _build_trial_sections(self) -> None:
-        """
-        Build a fixed compartment for every trial and run slot in the generation.
-
-        Inputs:
-            None
-
-        Returns:
-            None
-        """
+        """Build a fixed compartment for every trial and run slot in the generation."""
         for child in self.runs_inner.winfo_children():
             child.destroy()
 
@@ -317,12 +308,15 @@ class MonitorApp:
                 }
 
     def _on_inner_configure(self, event) -> None:
+        """Update the canvas scroll region when the inner frame resizes."""
         self.runs_canvas.configure(scrollregion=self.runs_canvas.bbox("all"))
 
     def _on_canvas_configure(self, event) -> None:
+        """Stretch the inner frame to fill the canvas width on resize."""
         self.runs_canvas.itemconfigure(self.runs_inner_id, width=event.width)
 
     def _bind_runs_mousewheel(self, event=None) -> None:
+        """Activate mousewheel scrolling on the runs canvas."""
         if self._runs_wheel_bound:
             return
         self._runs_wheel_bound = True
@@ -331,6 +325,7 @@ class MonitorApp:
         self.root.bind_all("<Button-5>", self._on_runs_mousewheel, add="+")
 
     def _unbind_runs_mousewheel(self, event=None) -> None:
+        """Deactivate mousewheel scrolling when the cursor leaves the runs area."""
         if not self._runs_wheel_bound:
             return
         self._runs_wheel_bound = False
@@ -339,6 +334,7 @@ class MonitorApp:
         self.root.unbind_all("<Button-5>")
 
     def _on_runs_mousewheel(self, event) -> str:
+        """Translate a mousewheel event into a canvas scroll step."""
         if event.num == 4:
             delta = -1
         elif event.num == 5:
@@ -349,6 +345,7 @@ class MonitorApp:
         return "break"
 
     def _sync_layout(self, progress: dict | None) -> None:
+        """Rebuild the trial grid if trials-per-gen or runs-per-trial changed."""
         trials_per_gen = self.trials_per_gen
         runs_per_trial = self.runs_per_trial
 
@@ -368,6 +365,7 @@ class MonitorApp:
             self._build_trial_sections()
 
     def _update_top(self, progress: dict | None, statuses: list[dict]) -> None:
+        """Refresh the header, progress bars, and timing labels from current progress."""
         if not progress:
             self.header.configure(text="Waiting for optimizer...")
             self.global_info.configure(text="Global: --")
@@ -401,7 +399,6 @@ class MonitorApp:
         best_str = f"{best:.2f}" if isinstance(best, (int, float)) else "--"
         avg_str = f"{avg:.2f}" if isinstance(avg, (int, float)) else "--"
 
-        # Show test names with their weights when available.
         test_weights: dict[str, int] = progress.get("test_weights") or {}
         run_plan = progress.get("run_plan", [])
         if isinstance(run_plan, list) and run_plan:
@@ -469,6 +466,7 @@ class MonitorApp:
         self.gen_bar["value"] = gen_pct
 
     def _update_runs(self, progress: dict | None, statuses: list[dict]) -> None:
+        """Refresh every run row and trial summary for the current generation."""
         if isinstance(progress, dict):
             current_gen = int(progress.get("gen_current", self.last_gen_current) or 0)
             if current_gen > 0:
@@ -478,7 +476,6 @@ class MonitorApp:
 
         self._sync_layout(progress)
 
-        # Extract weights from progress.json for use in the trial score display.
         test_weights: dict[str, int] = {}
         if isinstance(progress, dict):
             raw_weights = progress.get("test_weights")
@@ -656,6 +653,16 @@ class MonitorApp:
             self.header.configure(text="Waiting for optimizer...")
 
     def _read_run_score(self, gen: int, trial: int, run: int) -> float | None:
+        """Read the score for a specific run slot directly from trial_state.json.
+
+        Args:
+            gen: Generation index.
+            trial: Trial index (1-based).
+            run: Run slot index (1-based).
+
+        Returns:
+            The run score as a float, or None if unavailable.
+        """
         trial_state_path = (
             TRIALS_DIR / f"gen_{gen:04d}" / f"trial_{trial:02d}" / "trial_state.json"
         )
@@ -677,12 +684,24 @@ class MonitorApp:
     def _score_from_status_or_file(
         self, status: dict, gen: int, trial: int, run: int
     ) -> float | None:
+        """Return the run score from the status dict, falling back to the trial_state file.
+
+        Args:
+            status: Run status payload.
+            gen: Generation index.
+            trial: Trial index.
+            run: Run slot index.
+
+        Returns:
+            Score as a float, or None if unavailable.
+        """
         raw_status_score = status.get("score")
         if isinstance(raw_status_score, (int, float)):
             return float(raw_status_score)
         return self._read_run_score(gen, trial, run)
 
     def _jump_to_earliest_incomplete(self) -> None:
+        """Scroll to the earliest incomplete trial regardless of auto-focus state."""
         self._auto_focus_earliest_incomplete(self.last_gen_current, None, force=True)
 
     def _auto_focus_earliest_incomplete(
@@ -691,6 +710,14 @@ class MonitorApp:
         trial_slot_states: dict[int, list[str]] | None,
         force: bool = False,
     ) -> None:
+        """Scroll the runs canvas to the earliest trial that still has active runs.
+
+        Args:
+            gen: Current generation index.
+            trial_slot_states: Per-trial list of run state strings, or None to infer
+                from the slot cache.
+            force: If True, scroll even if the target hasn't changed.
+        """
         terminal_states = {"done", "failed", "skipped", "error", "cancelled"}
 
         target_trial = None
@@ -741,6 +768,7 @@ class MonitorApp:
             return
 
     def _tick(self) -> None:
+        """Poll progress.json and trial states, refresh the UI, then reschedule."""
         progress = _read_json(PROGRESS_FILE)
         statuses = _collect_run_statuses()
 
@@ -750,14 +778,13 @@ class MonitorApp:
 
     @staticmethod
     def _fmt_duration(seconds: float) -> str:
-        """
-        Format seconds as HH:MM:SS.
+        """Format seconds as HH:MM:SS.
 
-        Inputs:
-            seconds (float): Duration in seconds.
+        Args:
+            seconds: Duration in seconds.
 
         Returns:
-            str: HH:MM:SS formatted duration.
+            HH:MM:SS formatted duration.
         """
         s = int(max(0, seconds))
         h = s // 3600
@@ -767,14 +794,13 @@ class MonitorApp:
 
     @staticmethod
     def _color_for_run_state(status: dict) -> str:
-        """
-        Pick a fill color by run state/outcome.
+        """Pick a fill color by run state/outcome.
 
-        Inputs:
-            status (dict): One run status payload.
+        Args:
+            status: One run status payload.
 
         Returns:
-            str: Hex color for the run fill.
+            Hex color for the run fill.
         """
         state = str(status.get("state", "")).lower()
         reason = str(status.get("reason", "")).lower()
@@ -793,17 +819,13 @@ class MonitorApp:
     def _set_canvas_progress(
         canvas: tk.Canvas, fill_id: int, pct: float, color: str
     ) -> None:
-        """
-        Update a canvas-based progress bar.
+        """Update a canvas-based progress bar.
 
-        Inputs:
-            canvas (tk.Canvas): Canvas holding the fill rectangle.
-            fill_id (int): Rectangle item id.
-            pct (float): Progress percentage from 0 to 100.
-            color (str): Fill color.
-
-        Returns:
-            None
+        Args:
+            canvas: Canvas holding the fill rectangle.
+            fill_id: Rectangle item id.
+            pct: Progress percentage from 0 to 100.
+            color: Fill color.
         """
         width = max(1, int(canvas.winfo_width() or int(canvas.cget("width"))))
         height = max(1, int(canvas.winfo_height() or int(canvas.cget("height"))))
@@ -813,15 +835,7 @@ class MonitorApp:
 
 
 def main() -> None:
-    """
-    Launch the Tkinter live monitor window.
-
-    Inputs:
-        None
-
-    Returns:
-        None
-    """
+    """Launch the Tkinter live monitor window."""
     root = tk.Tk()
     style = ttk.Style(root)
     if "vista" in style.theme_names():

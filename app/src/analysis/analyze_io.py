@@ -17,21 +17,20 @@ from analyze_config import (
 
 
 def _normalized_weighted_score(test_scores: dict) -> float:
-    """
-    Recompute the final score out of 100 from per-test breakdown data.
+    """Recompute the final score out of 100 from per-test breakdown data.
 
-    Formula: Σ  min(aggregate_score_i / max_score_i, 1.0)  *  weight_pct_i
+    Formula: Σ min(aggregate_score_i / max_score_i, 1.0) * weight_pct_i
 
     Falls back gracefully when max_score or weight_pct is missing so that
     older trial_state.json files (written before this change) still load.
 
-    Inputs:
-        test_scores (dict): The ``test_scores`` dict from trial_state.json,
-            keyed by test name.  Each value is a dict with at least
-            ``aggregate_score``, ``weight_pct``, and optionally ``max_score``.
+    Args:
+        test_scores: The test_scores dict from trial_state.json, keyed by test
+            name. Each value is a dict with aggregate_score, weight_pct, and
+            optionally max_score.
 
     Returns:
-        float: Weighted normalized score in [0, 100].
+        Weighted normalized score in [0, 100].
     """
     total = 0.0
     total_weight = 0.0
@@ -60,6 +59,13 @@ def _normalized_weighted_score(test_scores: dict) -> float:
 
 
 def load_all_trials() -> list[dict]:
+    """Load every trial_state.json from the trials directory into flat dicts.
+
+    Returns:
+        list[dict]: One record per trial, sorted by generation then trial index.
+            Each record includes score, fail status, per-test breakdown, and a
+            chronological ``chron`` counter used as the X-axis in plots.
+    """
     records = []
     chron = 0
 
@@ -88,7 +94,6 @@ def load_all_trials() -> list[dict]:
                 "cancelled",
             }
 
-            # --- Completion / failed from top-level state field ---
             trial_level_state = str(trial_state.get("state", "")).lower()
             is_complete = trial_level_state in terminal_states
             failed = trial_level_state in {
@@ -100,7 +105,6 @@ def load_all_trials() -> list[dict]:
             }
             fail_reason = str(trial_state.get("outcome", "") or "").lower()
 
-            # --- Scores ---
             runs = trial_state.get("runs", [])
             if not isinstance(runs, list):
                 runs = []
@@ -133,7 +137,6 @@ def load_all_trials() -> list[dict]:
             else:
                 final_score = score
 
-            # --- Per-test breakdown ---
             # Use top-level test_scores if present and complete.
             test_scores = trial_state.get("test_scores") or None
 

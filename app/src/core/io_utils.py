@@ -30,9 +30,7 @@ LAB_ROOT = APP_ROOT.parent
 def _axis_angle_to_quat(
     axis: tuple[float, float, float], angle_deg: float
 ) -> tuple[float, float, float, float]:
-    """
-    Build a normalized quaternion (x, y, z, w) from axis-angle.
-    """
+    """Build a normalized quaternion (x, y, z, w) from an axis-angle rotation."""
     ax, ay, az = axis
     norm = math.sqrt((ax * ax) + (ay * ay) + (az * az))
     if norm <= 0.0:
@@ -52,9 +50,7 @@ def _quat_mul(
     a: tuple[float, float, float, float],
     b: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
-    """
-    Hamilton product of quaternions in (x, y, z, w) format.
-    """
+    """Hamilton product of quaternions in (x, y, z, w) format."""
     ax, ay, az, aw = a
     bx, by, bz, bw = b
     return (
@@ -68,9 +64,7 @@ def _quat_mul(
 def _normalize_quat(
     q: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
-    """
-    Normalize quaternion to unit length.
-    """
+    """Normalize quaternion to unit length."""
     x, y, z, w = q
     norm = math.sqrt((x * x) + (y * y) + (z * z) + (w * w))
     if norm <= 0.0:
@@ -81,9 +75,7 @@ def _normalize_quat(
 def _quat_conjugate(
     q: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
-    """
-    Return the quaternion conjugate.
-    """
+    """Return the quaternion conjugate."""
     x, y, z, w = q
     return (-x, -y, -z, w)
 
@@ -92,9 +84,7 @@ def _quat_rotate_vector(
     q: tuple[float, float, float, float],
     v: tuple[float, float, float],
 ) -> tuple[float, float, float]:
-    """
-    Rotate a 3D vector by a unit quaternion.
-    """
+    """Rotate a 3D vector by a unit quaternion."""
     vx, vy, vz = v
     v_quat = (vx, vy, vz, 0.0)
     rotated = _quat_mul(_quat_mul(q, v_quat), _quat_conjugate(q))
@@ -102,9 +92,7 @@ def _quat_rotate_vector(
 
 
 def _export_frame_quat() -> tuple[float, float, float, float]:
-    """
-    Return the mesh export frame rotation from CadQuery Z-up to SOFA frame.
-    """
+    """Return the mesh export frame rotation from CadQuery Z-up to SOFA frame."""
     qx = _axis_angle_to_quat((1.0, 0.0, 0.0), -90.0)
     qy = _axis_angle_to_quat((0.0, 1.0, 0.0), 90.0)
     return _normalize_quat(_quat_mul(qy, qx))
@@ -119,13 +107,13 @@ def _leg_attachment_pose(
     Position is the base-center of the leg attachment after placement.
     Orientation matches the leg attachment frame after Z rotation and tilt.
 
-    Inputs:
-        p (ModelParams): Model parameters.
-        angle_deg (float): Placement angle in degrees.
-        leg_index (int): Leg index (0-3); applies q2 rotation leg_index times.
+    Args:
+        p: Model parameters.
+        angle_deg: Placement angle in degrees.
+        leg_index: Leg index (0-3); applies q2 rotation leg_index times.
 
     Returns:
-        list[float]: [x, y, z, qx, qy, qz, qw] pose for one attachment.
+        [x, y, z, qx, qy, qz, qw] pose for one attachment.
     """
     placement_radius = p.cylinder_radius - p.leg_attachement_inward_offset
     a = math.radians(angle_deg)
@@ -139,35 +127,28 @@ def _leg_attachment_pose(
     q_export = _export_frame_quat()
     x, y, z = _quat_rotate_vector(q_export, (x, y, z))
 
-    # Set orientation: 90-degree rotation around Z axis
     q1 = _axis_angle_to_quat((0.0, 0.0, 1.0), -90.0)
     q3 = _axis_angle_to_quat((1.0, 0.0, 0.0), 90.0)
     q2 = _axis_angle_to_quat((0.0, 1.0, 0.0), 90.0)
 
-    # Apply q2 rotation leg_index times
     q = _normalize_quat(_quat_mul(q1, q3))
     for _ in range(leg_index):
         q = _normalize_quat(_quat_mul(q2, q))
 
-    # Apply tilt angle rotation (before per-leg tweaks)
     a = math.radians(angle_deg)
 
-    # Legs 0 and 2 use tangent axis, legs 1 and 3 use radial axis
+    # Legs 1 and 3 tilt around the radial axis; 0 and 2 around the tangent axis.
     if leg_index in (1, 3):
-        # Radial axis for side legs
         tilt_axis_x = math.cos(a)
         tilt_axis_y = math.sin(a)
-        # Leg 1 negative, leg 3 positive
         tilt_angle = (
             -p.leg_attachement_tilt_angle
             if leg_index == 1
             else p.leg_attachement_tilt_angle
         )
     else:
-        # Tangent axis for front/back legs
         tilt_axis_x = -math.sin(a)
         tilt_axis_y = math.cos(a)
-        # Legs 0 and 2 have opposite directions
         tilt_angle = (
             p.leg_attachement_tilt_angle
             if leg_index == 0
@@ -178,8 +159,8 @@ def _leg_attachment_pose(
     q_tilt = _axis_angle_to_quat((tilt_axis_x, tilt_axis_y, tilt_axis_z), tilt_angle)
     q = _normalize_quat(_quat_mul(q, q_tilt))
 
-    # Apply leg-specific Y-axis rotation (after tilt)
     y_rotations = {0: -90.0, 1: 90.0, 2: -90.0, 3: 90.0}
+    # Per-leg Y-axis correction to align the attachment frame with the SOFA leg orientation.
     q4 = _axis_angle_to_quat((0.0, 1.0, 0.0), y_rotations[leg_index])
     q = _normalize_quat(_quat_mul(q4, q))
 
@@ -187,9 +168,7 @@ def _leg_attachment_pose(
 
 
 def rotate_model_to_export_frame(model: cq.Workplane) -> cq.Workplane:
-    """
-    Rotate model from CadQuery Z-up into the mesh export frame.
-    """
+    """Rotate model from CadQuery Z-up into the mesh export frame."""
     return model.rotate((0, 0, 0), (1, 0, 0), -90).rotate((0, 0, 0), (0, 1, 0), 90)
 
 
@@ -197,12 +176,9 @@ def export_leg_attachment_json(p: ModelParams, output_path: Path) -> None:
     """
     Export leg attachment anchors and orientations in JSON format.
 
-    Inputs:
-        p (ModelParams): Model parameters.
-        output_path (Path): Destination JSON path.
-
-    Returns:
-        None
+    Args:
+        p: Model parameters.
+        output_path: Destination JSON path.
     """
     payload = {
         "initialPosition": [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]],
@@ -222,29 +198,26 @@ def make_versioned_export_path(p: ModelParams, extension: str) -> Path:
     """
     Build a fixed export path inside the configured export directory.
 
-    Inputs:
-        p (ModelParams): Model parameters.
-        extension (str): File extension, with or without leading dot.
+    Args:
+        p: Model parameters.
+        extension: File extension, with or without leading dot.
 
     Returns:
-        Path: Full output path using the base filename new_gripper.
+        Full output path using the base filename new_gripper.
     """
     out_dir = LAB_ROOT / p.export_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     ext = extension.lstrip(".")
-    return out_dir / f"new_gripper.{ext}"
+    return out_dir / f"{p.export_stem}.{ext}"
 
 
 def run_invariants(model: cq.Workplane) -> None:
     """
     Run basic geometry sanity checks.
 
-    Inputs:
-        model (cadquery.Workplane): Built model.
-
-    Returns:
-        None
+    Args:
+        model: Built model.
 
     Raises:
         ValueError: If model is invalid.
@@ -313,13 +286,10 @@ def _export_with_gmsh(
             gmsh.model.mesh.field.setString(uniform_tag, "F", str(mesh_size_max))
             gmsh.model.mesh.field.setAsBackgroundMesh(uniform_tag)
 
-        # Stable global default for surface mesh generation.
         gmsh.option.setNumber("Mesh.Algorithm", 6)
-        # 2D mesh algorithm (1: MeshAdapt, 2: Automatic, 3: Initial mesh only, 5: Delaunay, 6: Frontal-Delaunay, 7: BAMG, 8: Frontal-Delaunay for Quads, 9: Packing of Parallelograms, 11: Quasi-structured Quad)
 
         if export_3d:
             gmsh.option.setNumber("Mesh.Algorithm3D", 10)  # HXT tetrahedra.
-            # 3D mesh algorithm (1: Delaunay, 3: Initial mesh only, 4: Frontal, 7: MMG3D, 9: R-tree, 10: HXT)
             gmsh.option.setNumber("Mesh.RecombineAll", 0)
             gmsh.option.setNumber("Mesh.Binary", 0)  # ASCII VTK for compatibility.
             gmsh.model.mesh.generate(2)
@@ -344,31 +314,23 @@ def _export_with_gmsh(
 
 
 def model_to_stl(model: cq.Workplane, p: ModelParams, output_path: Path) -> None:
-    """
-    Convert a CadQuery workplane to STL using Gmsh.
+    """Convert a CadQuery workplane to STL using Gmsh.
 
-    Inputs:
-        model (cadquery.Workplane): Model to mesh.
-        p (ModelParams): Meshing parameters.
-        output_path (Path): Destination STL path.
-
-    Returns:
-        None
+    Args:
+        model: Model to mesh.
+        p: Meshing parameters.
+        output_path: Destination STL path.
     """
     _export_with_gmsh(model, p, output_path, export_3d=False)
 
 
 def model_to_vtk(model: cq.Workplane, p: ModelParams, output_path: Path) -> None:
-    """
-    Convert a CadQuery workplane to VTK using Gmsh.
+    """Convert a CadQuery workplane to VTK using Gmsh.
 
-    Inputs:
-        model (cadquery.Workplane): Model to mesh.
-        p (ModelParams): Meshing parameters.
-        output_path (Path): Destination VTK path.
-
-    Returns:
-        None
+    Args:
+        model: Model to mesh.
+        p: Meshing parameters.
+        output_path: Destination VTK path.
     """
     _export_with_gmsh(model, p, output_path, export_3d=True)
 
@@ -383,14 +345,11 @@ def model_to_stl_collision(
     ignoring curvature-driven sources so the resulting mesh remains coarse
     and predictable.
 
-    Inputs:
-        model (cadquery.Workplane): Model to mesh (typically fingers only).
-        p (ModelParams): Meshing parameters. mesh_collision_size controls
-            the target element size for this collision export.
-        output_path (Path): Destination STL path.
-
-    Returns:
-        None
+    Args:
+        model: Model to mesh (typically fingers only).
+        p: Meshing parameters. mesh_collision_size controls the target element
+            size for this collision export.
+        output_path: Destination STL path.
     """
     import gmsh
 
@@ -430,7 +389,6 @@ def model_to_stl_collision(
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", p.mesh_collision_size)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", p.mesh_collision_size)
 
-        # Disable all curvature-based refinement
         gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 0)
         gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
         gmsh.option.setNumber("Mesh.MeshSizeFromParametricPoints", 0)

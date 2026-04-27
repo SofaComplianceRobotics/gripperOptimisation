@@ -1,7 +1,9 @@
 """
-Lab Gripper Optimisation - UI Generation Entrypoint.
+Lab Gripper Optimisation - Fine Mesh Generation Entrypoint.
 
-Reads parameters from lab_config.jsonc and exports STL/VTK/JSON.
+Same as generate_gripper.py but uses a much finer mesh suitable for real-life
+3D printing. Output is saved as new_gripper_print.stl (separate from the
+coarser simulation mesh new_gripper.stl).
 """
 
 from __future__ import annotations
@@ -30,12 +32,17 @@ LAB_SITE_PACKAGES = LAB_ROOT / "runtime" / "modules" / "site-packages"
 LAB_REQUIREMENTS = APP_ROOT / "requirements.txt"
 _START_TS = time.perf_counter()
 
+# Fine-mesh settings (mm). Lower = more triangles = better print quality.
+_FINE_MESH_SIZE_MAX = 2.0
+_FINE_MESH_SIZE_MIN = 0.8
+_FINE_EXPORT_STEM = "new_gripper_print"
+
 
 def load_jsonc(path: Path) -> dict:
-    """Load a JSONC file, stripping // line comments.
+    """Load JSONC file, stripping // comments.
 
     Args:
-        path: Path to the JSONC file.
+        path: Path to JSONC file.
 
     Returns:
         Parsed JSON content.
@@ -48,7 +55,7 @@ def load_jsonc(path: Path) -> dict:
 
 
 def _bootstrap_lab_site_packages() -> None:
-    """Prepend the lab-local site-packages directory to sys.path if it exists."""
+    """Prepend the lab-local site-packages directory if it exists."""
     if LAB_SITE_PACKAGES.exists():
         sys.path.insert(0, str(LAB_SITE_PACKAGES))
 
@@ -57,7 +64,7 @@ _bootstrap_lab_site_packages()
 
 
 def _has_required_runtime_packages() -> bool:
-    """Return True when CadQuery can be imported in the current runtime."""
+    """Return True when CadQuery is importable in the current runtime."""
     try:
         import cadquery  # noqa: F401
 
@@ -99,10 +106,10 @@ def _install_lab_dependencies_here() -> bool:
 
 
 def _ensure_cadquery_runtime() -> None:
-    """Ensure CadQuery is importable, auto-installing into lab-local site-packages if needed.
+    """Ensure CadQuery is available, auto-installing if necessary.
 
     Raises:
-        RuntimeError: If CadQuery cannot be used after auto-install attempt.
+        RuntimeError: If CadQuery cannot be used after an auto-install attempt.
     """
     if _has_required_runtime_packages():
         return
@@ -128,9 +135,11 @@ from core.params import ModelParams, PincerSplinePoint
 
 
 def main() -> None:
-    """Read parameters from lab_config.jsonc and run the mesh export pipeline."""
+    """
+    Read parameters from lab_config.jsonc and run a fine-mesh export for printing.
+    """
     parser = argparse.ArgumentParser(
-        description="Generate gripper meshes from a JSONC config."
+        description="Generate fine gripper meshes for 3D printing from a JSONC config."
     )
     parser.add_argument(
         "--config",
@@ -143,23 +152,22 @@ def main() -> None:
     config_path = Path(args.config)
     cfg = load_jsonc(config_path)
     base = ModelParams()
-    # p0 handle-out: relative to p0 = (0, 0), so absolute = polar from origin
+
     p0_hout_dist = float(cfg["p0_hout_dist"])
     p0_hout_angle = math.radians(float(cfg["p0_hout_angle_deg"]))
     p0_hout_x = p0_hout_dist * math.cos(p0_hout_angle)
     p0_hout_y = p0_hout_dist * math.sin(p0_hout_angle)
 
-    # p1 anchor: polar from origin
     p1_dist = float(cfg["p1_dist"])
     p1_angle = math.radians(float(cfg["p1_angle_deg"]))
     p1_x = p1_dist * math.cos(p1_angle)
     p1_y = p1_dist * math.sin(p1_angle)
 
-    # p1 handle-in: polar offset *from p1*
     p1_hin_dist = float(cfg["p1_hin_dist"])
     p1_hin_angle = math.radians(float(cfg["p1_hin_angle_deg"]))
-    p1_hin_x = p1_x + p1_hin_dist * math.cos(p1_hin_angle)  # absolute
+    p1_hin_x = p1_x + p1_hin_dist * math.cos(p1_hin_angle)
     p1_hin_y = p1_y + p1_hin_dist * math.sin(p1_hin_angle)
+
     params = replace(
         base,
         cylinder_radius=float(cfg["cylinder_radius"]),
@@ -193,8 +201,12 @@ def main() -> None:
                 h_out=None,
             ),
         ),
+        # Fine mesh overrides for 3D printing
+        mesh_size_max_stl=_FINE_MESH_SIZE_MAX,
+        mesh_size_min_stl=_FINE_MESH_SIZE_MIN,
         mesh_enabled=True,
         mesh_show_viewer=False,
+        export_stem=_FINE_EXPORT_STEM,
     )
 
     secondary_dir = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
@@ -207,7 +219,7 @@ def main() -> None:
     vtk_path = stl_path.with_suffix(".vtk")
 
     if stl_path.exists():
-        print(f"Exported STL: {stl_path}")
+        print(f"Exported fine STL: {stl_path}")
     if json_path.exists():
         print(f"Exported JSON: {json_path}")
     if vtk_path.exists():
@@ -215,6 +227,10 @@ def main() -> None:
 
     elapsed = time.perf_counter() - _START_TS
     print(f"Total export time: {elapsed:.3f}s")
+    print(
+        f"Mesh settings: max={_FINE_MESH_SIZE_MAX}mm, min={_FINE_MESH_SIZE_MIN}mm "
+        f"(finer than simulation mesh — may take longer)"
+    )
 
 
 if __name__ == "__main__":

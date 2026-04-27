@@ -17,16 +17,12 @@ PROFILE_EXTRUDE_MARGIN = 2.0
 
 @dataclass(frozen=True)
 class PincerSplinePoint:
-    """
-    One spline anchor point with optional incoming and outgoing handles.
+    """One cubic-bezier anchor point with optional incoming and outgoing handles.
 
-    Inputs:
-        p (tuple[float, float]): Anchor point in XY.
-        h_in (tuple[float, float] | None): Incoming handle.
-        h_out (tuple[float, float] | None): Outgoing handle.
-
-    Returns:
-        PincerSplinePoint: Immutable spline point definition.
+    Attributes:
+        p: Anchor point in XY (mm).
+        h_in: Incoming Bezier handle, absolute XY. None for the first point.
+        h_out: Outgoing Bezier handle, absolute XY. None for the last point.
     """
 
     p: tuple[float, float]
@@ -36,8 +32,11 @@ class PincerSplinePoint:
 
 @dataclass(frozen=True)
 class ModelParams:
-    """
-    Model configuration values.
+    """Immutable configuration for one gripper design.
+
+    Groups all tunable shape, mesh, and export parameters in one place so
+    every stage of the pipeline (assembly, export, optimization) pulls from
+    the same source of truth.
     """
 
     # Ring
@@ -82,7 +81,6 @@ class ModelParams:
         ),
     )
 
-    # Visualization
     # Mesh
     mesh_enabled: bool = True
     mesh_size_max_stl: float = 35
@@ -97,17 +95,14 @@ class ModelParams:
 
     # Export
     export_dir: str = "runtime/exports"
+    export_stem: str = "new_gripper"
 
 
 def validate_params(p: ModelParams) -> None:
-    """
-    Validate all model inputs before build.
+    """Validate all model parameters before build.
 
-    Inputs:
-        p (ModelParams): Parameter set to validate.
-
-    Returns:
-        None
+    Args:
+        p: Parameter set to validate.
 
     Raises:
         ValueError: If any parameter is invalid or geometrically infeasible.
