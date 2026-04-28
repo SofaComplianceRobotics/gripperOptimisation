@@ -18,7 +18,6 @@ from optimize_config import (
     N_GENERATIONS,
     N_REPEATS,
     GEN_PROGRESS_POLL_INTERVAL,
-    SCORE_AGGREGATION,
     SELECTED_TEST_NAMES,
     SELECTED_TEST_WEIGHTS,
     RUN_PLAN,
@@ -296,6 +295,7 @@ def aggregate_trial_scores(
     weights: dict[str, float] | None = None,
     names: list[str] | None = None,
     max_scores: dict[str, float] | None = None,
+    aggregation: str = "mean",
 ) -> tuple[float, float, float, float]:
     """Aggregate multiple scores using the configured method.
 
@@ -328,7 +328,7 @@ def aggregate_trial_scores(
     avg_score = sum(valid_scores) / len(valid_scores)
     median_score = statistics.median(valid_scores)
 
-    if SCORE_AGGREGATION == "sum":
+    if aggregation == "sum":
         aggregate_score = sum(valid_scores)
         consistency_penalty = 0.0
         final_score = aggregate_score
@@ -348,7 +348,7 @@ def aggregate_trial_scores(
             normalize_test_score(score, max_scores[name]) * (weights[name] * 100)
             for score, name in zip(valid_scores, names)
         )
-    elif SCORE_AGGREGATION == "median":
+    elif aggregation == "median":
         aggregate_score = median_score
     else:
         # Default: mean (rewards occasional strong outcomes)

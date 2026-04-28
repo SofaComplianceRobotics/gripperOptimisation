@@ -2,5 +2,6 @@
   "label": "Random Cube Pick: 3 runs",
   "description": "Maximizes adaptability by picking up cubes of different sizes and weights",
   "default_selected": false,
-  "run_count": 3
+  "run_count": 3,
+  "score_aggregation": "sum"
 }

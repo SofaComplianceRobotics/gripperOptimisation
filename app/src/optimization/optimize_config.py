@@ -5,6 +5,7 @@ Centralizes all hardcoded defaults, paths, and tuning parameters to minimize
 configuration scatter across the codebase.
 """
 
+import dataclasses
 import json
 import os
 import sys
@@ -124,22 +125,6 @@ if not RUNSOFA_EXE:
         (p for p in runsofa_candidates if os.path.isfile(p)), runsofa_candidates[0]
     )
 
-# ─────────────────────────────────────────────
-# Fixed Model Parameters (not being optimized)
-# ─────────────────────────────────────────────
-MESH_FIXED = {
-    "mesh_size_max": 9,
-    "mesh_size_min": 6,
-    "mesh_collision_size": 90.0,
-    "mesh_angle_smooth": 20.0,
-    "mesh_size_from_curvature": 12,
-}
-
-RING_FIXED = {
-    "cylinder_radius": 26.5,
-    "cylinder_height": 4.0,
-    "cylinder_hole_thickness": 3.0,
-}
 
 # ─────────────────────────────────────────────
 # CMA-ES Optimizer Settings
@@ -172,14 +157,58 @@ CMAES_SIGMA0 = float(
 HARD_FAIL_SCORE = float(
     os.environ.get("HARD_FAIL_SCORE", "-3.0")
 )  # generation-failure score
-PINCER_ROUND_ENDS = os.environ.get(
-    "PINCER_ROUND_ENDS", "1" if BASE_PARAMS.pincer_round_ends else "0"
-).strip().lower() in (
-    "1",
-    "true",
-    "yes",
-    "on",
-)
+# ─────────────────────────────────────────────
+# Tunable Parameter Specifications
+#
+# Direct ModelParams fields carry their optimization range as field metadata
+# in core/params.py.  The helper below reads that metadata automatically.
+# To add or change a directly-mapped optimisable parameter, only edit
+# ModelParams in core/params.py:
+#   • set  metadata={"opt": {"type": "float", "min": X, "max": Y}}  to enable
+#   • set  metadata={"opt": {"type": "float", "min": 0, "max": 0}}   to freeze
+#
+# Synthetic parameters (polar Bézier handles) have no corresponding
+# ModelParams field and are listed explicitly below.
+#
+# Fixed / frozen convention: min = 0 AND max = 0 means the optimizer never
+# suggests a new value; the field default is used verbatim every trial.
+# ─────────────────────────────────────────────
+
+
+def _param_specs_from_metadata(base: ModelParams) -> list[dict]:
+    """Build param spec entries for all ModelParams fields annotated with opt metadata."""
+    specs = []
+    for f in dataclasses.fields(base):
+        opt = f.metadata.get("opt")
+        if opt is None:
+            continue
+        specs.append(
+            {
+                "name": f.name,
+                "type": opt["type"],
+                "min": opt["min"],
+                "max": opt["max"],
+                "default": getattr(base, f.name),
+            }
+        )
+    return specs
+
+
+PARAM_SPECS: list[dict] = [
+    # fmt: off
+    # ── Fields annotated in ModelParams (auto-generated from metadata) ──────────
+    *_param_specs_from_metadata(BASE_PARAMS),
+    # ── Spline first handle (anchor fixed at 0, 0) ──────────────────────────────
+    {"name": "p0_hout_dist",              "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
+    {"name": "p0_hout_angle_deg",         "type": "float", "min": -90.0, "max": 90.0,  "default": 0.0},
+    # ── Spline endpoint ──────────────────────────────────────────────────────────
+    {"name": "p1_dist",                   "type": "float", "min": 70.0,  "max": 90.0,  "default": 80.0},
+    {"name": "p1_angle_deg",              "type": "float", "min": -90.0, "max": 45.0,  "default": -40.0},
+    # ── Spline last handle ───────────────────────────────────────────────────────
+    {"name": "p1_hin_dist",               "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
+    {"name": "p1_hin_angle_deg",          "type": "float", "min": -10.0, "max": 260.0, "default": 0.0},
+    # fmt: on
+]
 
 # ─────────────────────────────────────────────
 # Simulation Scoring & Early Stop Parameters
@@ -208,15 +237,6 @@ SHAPEOPT_FRICTION_COEF = float(
 EARLY_CONTACT_PENALTY = float(os.environ.get("EARLY_CONTACT_PENALTY", "-1.0"))
 NO_PICKUP_PENALTY = float(os.environ.get("NO_PICKUP_PENALTY", "0.0"))
 UNDERCUBE_PENALTY = float(os.environ.get("UNDERCUBE_PENALTY", "-0.2"))
-_score_aggregation_raw = os.environ.get("SCORE_AGGREGATION", "auto").strip().lower()
-if _score_aggregation_raw == "auto":
-    if len(SELECTED_TEST_NAMES) == 1 and SELECTED_TEST_NAMES[0] == "random_cube_pick":
-        SCORE_AGGREGATION = "sum"
-    else:
-        SCORE_AGGREGATION = "mean"
-else:
-    SCORE_AGGREGATION = _score_aggregation_raw
-
 # ─────────────────────────────────────────────
 # Global State
 # ─────────────────────────────────────────────

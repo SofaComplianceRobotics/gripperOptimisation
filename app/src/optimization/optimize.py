@@ -39,6 +39,7 @@ from optimize_config import (
     HARD_FAIL_SCORE,
     LAB_ROOT,
     MAX_ACTIVE_SOFA_PROCS,
+    PARAM_SPECS,
     SELECTED_TEST_NAMES,
     SELECTED_TEST_WEIGHTS,
     RUN_PLAN,
@@ -79,15 +80,18 @@ from optimize_utils import (
 
 TRAINING_STARTED_AT = 0.0
 
-# Build a max_scores lookup from the test registry once at import time.
-# Each test's scoring.py declares MAX_SCORE; the registry reads it via importlib.
-# Falls back to 1.0 for any test not found so older tests keep working.
+# Build per-test lookups from the registry once at import time.
+# Falls back to safe defaults for any test not found so older tests keep working.
 _SELECTED_TEST_MAX_SCORES: dict[str, float] = {}
+_SELECTED_TEST_AGGREGATIONS: dict[str, str] = {}
 for _test_name in SELECTED_TEST_NAMES:
     try:
-        _SELECTED_TEST_MAX_SCORES[_test_name] = get_test_spec(_test_name).max_score
+        _spec = get_test_spec(_test_name)
+        _SELECTED_TEST_MAX_SCORES[_test_name] = _spec.max_score
+        _SELECTED_TEST_AGGREGATIONS[_test_name] = _spec.score_aggregation
     except Exception:
         _SELECTED_TEST_MAX_SCORES[_test_name] = 1.0
+        _SELECTED_TEST_AGGREGATIONS[_test_name] = "mean"
 
 
 def wait_for_sofa_runs(
@@ -294,10 +298,7 @@ def run_generation(
 
         wait_for_geometry_slot(processes, MAX_ACTIVE_SOFA_PROCS, gen_index, trial_index)
 
-        shape_params = params_from_trial(trial)
-        from optimize_config import RING_FIXED, MESH_FIXED
-
-        full_config = {**RING_FIXED, **shape_params, **MESH_FIXED}
+        full_config = params_from_trial(trial)
 
         try:
             collision_stl, visual_stl_copy = generate_stl_for_trial(
@@ -504,7 +505,8 @@ def run_generation(
                 # Aggregate repeated runs for a single test — no weighting or
                 # normalization here; that only applies when combining across tests.
                 test_aggregate, _, _, test_median = aggregate_trial_scores(
-                    valid_for_test
+                    valid_for_test,
+                    aggregation=_SELECTED_TEST_AGGREGATIONS.get(test_name, "mean"),
                 )
                 max_score = _SELECTED_TEST_MAX_SCORES.get(test_name, 1.0)
                 per_test_scores.append(test_aggregate)
@@ -611,16 +613,9 @@ def main() -> None:
         "n_startup_trials": CMAES_STARTUP_TRIALS,
         "consider_pruned_trials": True,
         "x0": {
-            "pincer_profile_width": 5.0,
-            "pincer_profile_height": 10.0,
-            "pincer_path_scale": 0.4,
-            "p0_hout_dist": 0.0,
-            "p0_hout_angle_deg": 0.0,
-            "p1_dist": 80.0,
-            "p1_angle_deg": -40.0,
-            "p1_hin_dist": 0.0,
-            "p1_hin_angle_deg": 0.0,
-            "leg_attachement_tilt_angle": -15.0,
+            spec["name"]: spec["default"]
+            for spec in PARAM_SPECS
+            if not (spec["min"] == 0 and spec["max"] == 0)
         },
     }
     sampler = optuna.samplers.CmaEsSampler(**sampler_kwargs)

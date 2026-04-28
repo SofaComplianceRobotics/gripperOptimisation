@@ -128,23 +128,12 @@ from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
-# Path bootstrap — finds the repo roots and adds them to sys.path.
-# Copy this block verbatim into every scene.py.
+# Path bootstrap — copy these three lines verbatim into every scene.py.
 # ---------------------------------------------------------------------------
-def _ensure_scene_paths():
-    script_dir = Path(__file__).resolve().parent
-    src_root = next(
-        (c for c in (script_dir, *script_dir.parents) if (c / "labtests").is_dir()),
-        script_dir.parents[1],
-    )
-    app_root = src_root.parent
-    lab_root = app_root.parent
-    for candidate in (str(lab_root), str(app_root), str(src_root)):
-        if candidate not in sys.path:
-            sys.path.insert(0, candidate)
-    return script_dir, src_root, app_root, lab_root
+sys.path.insert(0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir())))
+from labtests.core.scene_paths import ensure_scene_paths
 
-SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = _ensure_scene_paths()
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
 
 
 # ---------------------------------------------------------------------------
@@ -319,21 +308,10 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir())))
+from labtests.core.scene_paths import ensure_scene_paths
 
-def _ensure_scene_paths():
-    script_dir = Path(__file__).resolve().parent
-    src_root = next(
-        (c for c in (script_dir, *script_dir.parents) if (c / "labtests").is_dir()),
-        script_dir.parents[1],
-    )
-    app_root = src_root.parent
-    lab_root = app_root.parent
-    for candidate in (str(lab_root), str(app_root), str(src_root)):
-        if candidate not in sys.path:
-            sys.path.insert(0, candidate)
-    return script_dir, src_root, app_root, lab_root
-
-SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = _ensure_scene_paths()
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
 
 
 from labtests.core.scene_config import OptunaMeta
@@ -518,6 +496,6 @@ during development unless you're running a scene directly.
 - [ ] `test.json` has `label`, `description`, `default_selected`, `run_count`
 - [ ] `scoring.py` has `SCORE_KEY`, `TEST_NAME`, `TEST_LABEL`, `TEST_DESCRIPTION`, `MAX_SCORE`
 - [ ] `scene.py` defines `createScene(rootnode)` and returns `rootnode`
-- [ ] Path bootstrap (`_ensure_scene_paths`) is at the top of `scene.py`
+- [ ] Path bootstrap (3-line `ensure_scene_paths` block) is at the top of `scene.py`
 - [ ] `writer.write_score_and_stop(score, reason)` is called exactly once per run
 - [ ] `MAX_SCORE` in `scoring.py` matches the highest realistic score your test can produce
