@@ -5,6 +5,7 @@ Centralizes all hardcoded defaults, paths, and tuning parameters to minimize
 configuration scatter across the codebase.
 """
 
+import dataclasses
 import json
 import os
 import sys
@@ -156,60 +157,56 @@ CMAES_SIGMA0 = float(
 HARD_FAIL_SCORE = float(
     os.environ.get("HARD_FAIL_SCORE", "-3.0")
 )  # generation-failure score
-PINCER_ROUND_ENDS = os.environ.get(
-    "PINCER_ROUND_ENDS", "1" if BASE_PARAMS.pincer_round_ends else "0"
-).strip().lower() in (
-    "1",
-    "true",
-    "yes",
-    "on",
-)
-
 # ─────────────────────────────────────────────
 # Tunable Parameter Specifications
 #
-# Fixed / frozen convention: set min = 0 AND max = 0.  The optimizer will
-# never suggest the parameter; its 'default' value is used verbatim.  To
-# unfreeze a parameter, give it a real [min, max] range.
+# Direct ModelParams fields carry their optimization range as field metadata
+# in core/params.py.  The helper below reads that metadata automatically.
+# To add or change a directly-mapped optimisable parameter, only edit
+# ModelParams in core/params.py:
+#   • set  metadata={"opt": {"type": "float", "min": X, "max": Y}}  to enable
+#   • set  metadata={"opt": {"type": "float", "min": 0, "max": 0}}   to freeze
 #
-# Note — ModelParams fields that are NOT listed here (e.g. leg_hole_length,
-# leg_attachment_height, slit_width, …) are not passed through the config
-# dict at all; generate_gripper.py just inherits their ModelParams defaults.
-# To make any of those optimisable you would need to:
-#   1. Add an entry to PARAM_SPECS below.
-#   2. Add the matching cfg.get(..., base.<field>) read inside
-#      generate_gripper.py's replace(base, ...) call.
+# Synthetic parameters (polar Bézier handles) have no corresponding
+# ModelParams field and are listed explicitly below.
+#
+# Fixed / frozen convention: min = 0 AND max = 0 means the optimizer never
+# suggests a new value; the field default is used verbatim every trial.
 # ─────────────────────────────────────────────
+
+
+def _param_specs_from_metadata(base: ModelParams) -> list[dict]:
+    """Build param spec entries for all ModelParams fields annotated with opt metadata."""
+    specs = []
+    for f in dataclasses.fields(base):
+        opt = f.metadata.get("opt")
+        if opt is None:
+            continue
+        specs.append(
+            {
+                "name": f.name,
+                "type": opt["type"],
+                "min": opt["min"],
+                "max": opt["max"],
+                "default": getattr(base, f.name),
+            }
+        )
+    return specs
+
+
 PARAM_SPECS: list[dict] = [
     # fmt: off
-    # ── Ring geometry (fixed) ──────────────────────────────
-    {"name": "cylinder_radius",           "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.cylinder_radius}, 
-    {"name": "cylinder_height",           "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.cylinder_height},
-    {"name": "cylinder_hole_thickness",   "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.cylinder_hole_thickness},
-    # ── Pincer profile ─────────────────────────────────────
-    {"name": "pincer_profile_width",      "type": "float", "min": 2.0,   "max": 8.0,   "default": BASE_PARAMS.pincer_profile_width},
-    {"name": "pincer_profile_height",     "type": "float", "min": 6.0,   "max": 16.0,  "default": BASE_PARAMS.pincer_profile_height},
-    # ── Pincer path / orientation (fixed) ──────────────────
-    {"name": "pincer_path_scale",         "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.pincer_path_scale},
-    {"name": "pincer_tilt_y_deg",         "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.pincer_tilt_y_deg},
-    {"name": "pincer_round_ends",         "type": "bool",  "min": 0,     "max": 0,     "default": PINCER_ROUND_ENDS},
-    # ── Spline first handle (anchor fixed at 0, 0) ─────────
+    # ── Fields annotated in ModelParams (auto-generated from metadata) ──────────
+    *_param_specs_from_metadata(BASE_PARAMS),
+    # ── Spline first handle (anchor fixed at 0, 0) ──────────────────────────────
     {"name": "p0_hout_dist",              "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
     {"name": "p0_hout_angle_deg",         "type": "float", "min": -90.0, "max": 90.0,  "default": 0.0},
-    # ── Spline endpoint ────────────────────────────────────
+    # ── Spline endpoint ──────────────────────────────────────────────────────────
     {"name": "p1_dist",                   "type": "float", "min": 70.0,  "max": 90.0,  "default": 80.0},
     {"name": "p1_angle_deg",              "type": "float", "min": -90.0, "max": 45.0,  "default": -40.0},
-    # ── Spline last handle ─────────────────────────────────
+    # ── Spline last handle ───────────────────────────────────────────────────────
     {"name": "p1_hin_dist",               "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
     {"name": "p1_hin_angle_deg",          "type": "float", "min": -10.0, "max": 260.0, "default": 0.0},
-    # ── Leg tilt ───────────────────────────────────────────
-    {"name": "leg_attachement_tilt_angle","type": "float", "min": -30.0, "max": 30.0,  "default": BASE_PARAMS.leg_attachement_tilt_angle},
-    # ── Mesh resolution (fixed) ────────────────────────────
-    {"name": "mesh_size_max",             "type": "int",   "min": 0,     "max": 0,     "default": 9},
-    {"name": "mesh_size_min",             "type": "int",   "min": 0,     "max": 0,     "default": 6},
-    {"name": "mesh_collision_size",       "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.mesh_collision_size},
-    {"name": "mesh_angle_smooth",         "type": "float", "min": 0,     "max": 0,     "default": BASE_PARAMS.mesh_angle_smooth},
-    {"name": "mesh_size_from_curvature",  "type": "int",   "min": 0,     "max": 0,     "default": BASE_PARAMS.mesh_size_from_curvature},
     # fmt: on
 ]
 
@@ -240,15 +237,6 @@ SHAPEOPT_FRICTION_COEF = float(
 EARLY_CONTACT_PENALTY = float(os.environ.get("EARLY_CONTACT_PENALTY", "-1.0"))
 NO_PICKUP_PENALTY = float(os.environ.get("NO_PICKUP_PENALTY", "0.0"))
 UNDERCUBE_PENALTY = float(os.environ.get("UNDERCUBE_PENALTY", "-0.2"))
-_score_aggregation_raw = os.environ.get("SCORE_AGGREGATION", "auto").strip().lower()
-if _score_aggregation_raw == "auto":
-    if len(SELECTED_TEST_NAMES) == 1 and SELECTED_TEST_NAMES[0] == "random_cube_pick":
-        SCORE_AGGREGATION = "sum"
-    else:
-        SCORE_AGGREGATION = "mean"
-else:
-    SCORE_AGGREGATION = _score_aggregation_raw
-
 # ─────────────────────────────────────────────
 # Global State
 # ─────────────────────────────────────────────

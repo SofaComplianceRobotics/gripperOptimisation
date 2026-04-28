@@ -21,30 +21,10 @@ import sys
 from pathlib import Path
 
 
-def _ensure_scene_paths() -> tuple[Path, Path, Path, Path]:
-    """Resolve and insert script/src/app/lab paths into sys.path if missing.
+sys.path.insert(0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir())))
+from labtests.core.scene_paths import ensure_scene_paths
 
-    Returns:
-        Tuple of (script_dir, src_root, app_root, lab_root).
-    """
-    script_dir = Path(__file__).resolve().parent
-    src_root = next(
-        (
-            candidate
-            for candidate in (script_dir, *script_dir.parents)
-            if (candidate / "labtests").is_dir()
-        ),
-        script_dir.parents[1],
-    )
-    app_root = src_root.parent
-    lab_root = app_root.parent
-    for candidate in (str(lab_root), str(app_root), str(src_root)):
-        if candidate not in sys.path:
-            sys.path.insert(0, candidate)
-    return script_dir, src_root, app_root, lab_root
-
-
-SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = _ensure_scene_paths()
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
 
 from labtests.core.scene_config import OptunaMeta  # noqa: E402
 

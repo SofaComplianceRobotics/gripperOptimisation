@@ -80,15 +80,18 @@ from optimize_utils import (
 
 TRAINING_STARTED_AT = 0.0
 
-# Build a max_scores lookup from the test registry once at import time.
-# Each test's scoring.py declares MAX_SCORE; the registry reads it via importlib.
-# Falls back to 1.0 for any test not found so older tests keep working.
+# Build per-test lookups from the registry once at import time.
+# Falls back to safe defaults for any test not found so older tests keep working.
 _SELECTED_TEST_MAX_SCORES: dict[str, float] = {}
+_SELECTED_TEST_AGGREGATIONS: dict[str, str] = {}
 for _test_name in SELECTED_TEST_NAMES:
     try:
-        _SELECTED_TEST_MAX_SCORES[_test_name] = get_test_spec(_test_name).max_score
+        _spec = get_test_spec(_test_name)
+        _SELECTED_TEST_MAX_SCORES[_test_name] = _spec.max_score
+        _SELECTED_TEST_AGGREGATIONS[_test_name] = _spec.score_aggregation
     except Exception:
         _SELECTED_TEST_MAX_SCORES[_test_name] = 1.0
+        _SELECTED_TEST_AGGREGATIONS[_test_name] = "mean"
 
 
 def wait_for_sofa_runs(
@@ -502,7 +505,8 @@ def run_generation(
                 # Aggregate repeated runs for a single test — no weighting or
                 # normalization here; that only applies when combining across tests.
                 test_aggregate, _, _, test_median = aggregate_trial_scores(
-                    valid_for_test
+                    valid_for_test,
+                    aggregation=_SELECTED_TEST_AGGREGATIONS.get(test_name, "mean"),
                 )
                 max_score = _SELECTED_TEST_MAX_SCORES.get(test_name, 1.0)
                 per_test_scores.append(test_aggregate)

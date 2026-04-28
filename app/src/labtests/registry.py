@@ -53,6 +53,7 @@ class TestSpec:
     max_score: float = 1.0
     default_selected: bool = False
     run_count: int = 1
+    score_aggregation: str = "mean"
 
     @property
     def display_label(self) -> str:
@@ -85,6 +86,7 @@ def get_test_catalog() -> dict[str, TestSpec]:
         description = meta.get("description", "")
         default_selected = bool(meta.get("default_selected", False))
         run_count = int(meta.get("run_count", 1))
+        score_aggregation = str(meta.get("score_aggregation", "mean"))
         max_score = _load_max_score(scoring_file)
         test_catalog[name] = TestSpec(
             name=name,
@@ -95,6 +97,7 @@ def get_test_catalog() -> dict[str, TestSpec]:
             max_score=max_score,
             default_selected=default_selected,
             run_count=run_count,
+            score_aggregation=score_aggregation,
         )
     return test_catalog
 

@@ -5,7 +5,7 @@ Defines the ModelParams dataclass that holds all tunable gripper design paramete
 used throughout the generation, assembly, and export pipeline.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # ─────────────────────────────────────────────
 # Constants
@@ -40,9 +40,15 @@ class ModelParams:
     """
 
     # Ring
-    cylinder_radius: float = 26.5
-    cylinder_height: float = 4.0
-    cylinder_hole_thickness: float = 3.0
+    cylinder_radius: float = field(
+        default=26.5, metadata={"opt": {"type": "float", "min": 24, "max": 28}}
+    )
+    cylinder_height: float = field(
+        default=4.0, metadata={"opt": {"type": "float", "min": 2, "max": 6}}
+    )
+    cylinder_hole_thickness: float = field(
+        default=3.0, metadata={"opt": {"type": "float", "min": 1, "max": 5}}
+    )
 
     # Leg attachment
     leg_hole_length: float = 10.0
@@ -56,18 +62,30 @@ class ModelParams:
 
     # Assembly
     leg_attachement_inward_offset: float = 3.0
-    leg_attachement_tilt_angle: float = -15.0
+    leg_attachement_tilt_angle: float = field(
+        default=-15.0, metadata={"opt": {"type": "float", "min": -30.0, "max": 30.0}}
+    )
     leg_attachement_lift: float = 2.5
     leg_attachement_drop_overlap: float = 0.15
 
     # Pincers
-    pincer_profile_width: float = 5.0
-    pincer_profile_height: float = 10.0
+    pincer_profile_width: float = field(
+        default=5.0, metadata={"opt": {"type": "float", "min": 2.0, "max": 8.0}}
+    )
+    pincer_profile_height: float = field(
+        default=10.0, metadata={"opt": {"type": "float", "min": 6.0, "max": 16.0}}
+    )
     pincer_profile_samples: int = 4
     pincer_round_cap_segments: int = 3
-    pincer_path_scale: float = 0.4
-    pincer_tilt_y_deg: float = 90.0
-    pincer_round_ends: bool = True
+    pincer_path_scale: float = field(
+        default=0.4, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+    )
+    pincer_tilt_y_deg: float = field(
+        default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+    )
+    pincer_round_ends: bool = field(
+        default=True, metadata={"opt": {"type": "bool", "min": 0, "max": 0}}
+    )
     pincer_points: tuple[PincerSplinePoint, ...] = (
         PincerSplinePoint(
             p=(0.0, 0.0),
@@ -87,11 +105,17 @@ class ModelParams:
     mesh_size_min_stl: float = 15
     mesh_size_max_vtk: float = 35
     mesh_size_min_vtk: float = 10
-    mesh_collision_size: float = 90.0
+    mesh_collision_size: float = field(
+        default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+    )
     mesh_collision_tail_fraction: float = 1.0 / 2.0
-    mesh_angle_smooth: float = 20.0
-    mesh_size_from_curvature: int = 12
-    mesh_show_viewer: bool = True
+    mesh_angle_smooth: float = field(
+        default=20.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+    )
+    mesh_size_from_curvature: int = field(
+        default=12, metadata={"opt": {"type": "int", "min": 0, "max": 0}}
+    )
+    mesh_show_viewer: bool = False
 
     # Export
     export_dir: str = "runtime/exports"
