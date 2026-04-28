@@ -1,8 +1,7 @@
 """PyQt6-based selection dialog for ShapeOPT tests.
 
-Drop-in replacement for the Tkinter version.
-Public API is identical: prompt_for_tests() returns tuple[str, ...] and
-the tuple carries a `.weights` attribute with {test_name: int} values.
+prompt_for_tests() returns tuple[str, ...] and the tuple carries a `.weights`
+attribute with {test_name: int} values.
 """
 
 from __future__ import annotations
