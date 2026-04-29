@@ -5,6 +5,7 @@ scenes are stateless — a fresh process reads its full config from the
 environment at startup. This module centralises all that parsing so each
 scene file only needs one call to get a fully populated config object.
 """
+
 from __future__ import annotations
 
 import os
@@ -101,7 +102,7 @@ class PlaybackConfig:
                 ),
             ),
             friction_coef=float(os.environ.get("SHAPEOPT_FRICTION_COEF", "0.6")),
-            floor_center_y=float(os.environ.get("SHAPEOPT_FLOOR_CENTER_Y", "-230.0")),
+            floor_center_y=float(os.environ.get("SHAPEOPT_FLOOR_CENTER_Y", "-240.0")),
             cube_spawn_clearance=float(
                 os.environ.get("SHAPEOPT_CUBE_SPAWN_CLEARANCE", "10")
             ),
@@ -133,7 +134,6 @@ class PlaybackConfig:
             no_pickup_penalty=float(os.environ.get("NO_PICKUP_PENALTY", "0.0")),
             undercube_penalty=float(os.environ.get("UNDERCUBE_PENALTY", "-0.2")),
             undercube_margin=float(os.environ.get("UNDERCUBE_MARGIN", "0.0")),
-            enable_undercube_check=os.environ.get("ENABLE_UNDERCUBE_CHECK", "0")
-            == "1",
+            enable_undercube_check=os.environ.get("ENABLE_UNDERCUBE_CHECK", "0") == "1",
             show_cube_y_graph=os.environ.get("SHOW_CUBE_Y_GRAPH", "0") == "1",
         )
