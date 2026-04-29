@@ -6,4 +6,4 @@ SCORE_KEY = "score"
 TEST_NAME = "grasp_hold"
 TEST_LABEL = "Grasp Hold"
 TEST_DESCRIPTION = "Current cube-lift benchmark"
-MAX_SCORE = 20.0
+MAX_SCORE = 15.0

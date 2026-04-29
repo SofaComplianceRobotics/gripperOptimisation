@@ -1,5 +1,6 @@
 {
   "label": "Grasp Hold: 1 run",
+  "short_label": "grasp",
   "description": "Maximizes grip by moving the cube in eratic patterns and trying to hold it",
   "default_selected": true,
   "run_count": 1

@@ -328,6 +328,7 @@ def make_playback_controller(SofaController):
                     "sim_time": sim_time,
                     "cube_y": cube_y,
                     "phase": self._current_phase(),
+                    "hold_time": self.hold_time,
                 }
             )
 

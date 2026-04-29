@@ -1,5 +1,6 @@
 {
   "label": "Tilt Test: 1 run",
+  "short_label": "tilt",
   "description": "Minimizes tilt of the gripper in edge cases",
   "default_selected": false,
   "run_count": 1

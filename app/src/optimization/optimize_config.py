@@ -202,7 +202,7 @@ PARAM_SPECS: list[dict] = [
     {"name": "p0_hout_dist",              "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
     {"name": "p0_hout_angle_deg",         "type": "float", "min": -90.0, "max": 90.0,  "default": 0.0},
     # ── Spline endpoint ──────────────────────────────────────────────────────────
-    {"name": "p1_dist",                   "type": "float", "min": 70.0,  "max": 90.0,  "default": 80.0},
+    {"name": "p1_dist",                   "type": "float", "min": 80.0,  "max": 110.0,  "default": 90.0},
     {"name": "p1_angle_deg",              "type": "float", "min": -90.0, "max": 45.0,  "default": -40.0},
     # ── Spline last handle ───────────────────────────────────────────────────────
     {"name": "p1_hin_dist",               "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
