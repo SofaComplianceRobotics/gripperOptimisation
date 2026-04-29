@@ -62,6 +62,10 @@ Monitor progress during a run:
 
 #python-button("assets/labs/lab_shapeOPT/app/src/analysis/progress_monitor.py")
 
+Inspect where each parameter sits within its bounds (latest gripper):
+
+#python-button("assets/labs/lab_shapeOPT/app/src/analysis/param_bounds_viewer.py")
+
 Analyse results after a run:
 
 #python-button("assets/labs/lab_shapeOPT/app/src/analysis/analyze_results.py")
