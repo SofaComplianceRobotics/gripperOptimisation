@@ -140,6 +140,21 @@ def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
             best_x.append(r["chron"])
             best_y.append(running_best)
 
+    # Per-test rolling averages
+    per_test_avg: dict[str, tuple[list, list]] = {}
+    for test_name in all_test_names:
+        avg_x_t, avg_y_t = [], []
+        for i, r in enumerate(records):
+            lo = max(0, i - CENTERED_AVG_HALF_WINDOW)
+            hi = min(len(records) - 1, i + CENTERED_AVG_HALF_WINDOW)
+            window_scores = [
+                _compute_contributions(records[k]).get(test_name, 0.0)
+                for k in range(lo, hi + 1)
+            ]
+            avg_x_t.append(r["chron"])
+            avg_y_t.append(sum(window_scores) / len(window_scores))
+        per_test_avg[test_name] = (avg_x_t, avg_y_t)
+
     # Generation tick marks (one per unique generation boundary)
     gen_tick_positions, gen_tick_labels = [], []
     prev_gen = None
@@ -159,6 +174,7 @@ def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
         "avg_y": avg_y,
         "best_x": best_x,
         "best_y": best_y,
+        "per_test_avg": per_test_avg,
         "gen_tick_positions": gen_tick_positions,
         "gen_tick_labels": gen_tick_labels,
     }
@@ -285,6 +301,17 @@ def _build_legend(ax, all_test_names: list[str]) -> None:
             label="Incomplete (running)",
         )
     )
+    for name in all_test_names:
+        color = _test_color(name, all_test_names)
+        handles.append(
+            plt.Line2D(
+                [0], [0],
+                color=color,
+                linestyle="-.",
+                linewidth=1.5,
+                label=f"~{name} avg",
+            )
+        )
     ax.legend(handles=handles, loc="lower right", fontsize=9, framealpha=0.9, ncol=2)
 
 
@@ -338,7 +365,7 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
     fig, ax = plt.subplots(figsize=(14, 8))
     fig.patch.set_facecolor(C_BG)
     ax.set_facecolor(C_SECTION)
-    fig.subplots_adjust(bottom=0.14)
+    fig.subplots_adjust(bottom=0.20)
 
     # ── State ──────────────────────────────────────────────────────────────
     state = {
@@ -346,6 +373,8 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         "show_failed": True,
         "rolling_avg": True,
         "best_so_far": True,
+        "show_bars": True,
+        **{f"test_avg_{n}": True for n in all_test_names},
     }
 
     # ── Redraw helper ──────────────────────────────────────────────────────
@@ -367,9 +396,10 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         ax.cla()
         ax.set_facecolor(C_SECTION)
 
-        _draw_bars(
-            ax, plot_data, all_test_names, bar_width, show_failed=state["show_failed"]
-        )
+        if state["show_bars"]:
+            _draw_bars(
+                ax, plot_data, all_test_names, bar_width, show_failed=state["show_failed"]
+            )
         ax.axhline(0, color=C_BORDER, linewidth=1.0, zorder=1)
 
         avg_x, avg_y = plot_data["avg_x"], plot_data["avg_y"]
@@ -395,6 +425,20 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
                 alpha=0.85,
                 zorder=5,
             )
+
+        for test_name in all_test_names:
+            if state.get(f"test_avg_{test_name}", True):
+                t_x, t_y = plot_data["per_test_avg"].get(test_name, ([], []))
+                if t_x:
+                    ax.plot(
+                        t_x,
+                        t_y,
+                        color=_test_color(test_name, all_test_names),
+                        linestyle="-.",
+                        linewidth=1.5,
+                        alpha=0.85,
+                        zorder=5,
+                    )
 
         ax.set_xlabel("Generation", fontsize=12, fontweight="bold")
         _set_gen_ticks(
@@ -428,6 +472,9 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
             all_ys.extend(plot_data["avg_y"])
         if plot_data["best_y"]:
             all_ys.extend(plot_data["best_y"])
+        for _t_x, t_y in plot_data.get("per_test_avg", {}).values():
+            if t_y:
+                all_ys.extend(t_y)
         if not all_ys:
             return
         y_min, y_max = min(all_ys), max(all_ys)
@@ -439,7 +486,7 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
             x_pad = max(1.0, (max(xs) - min(xs)) * 0.02)
             ax.set_xlim(min(xs) - x_pad, max(xs) + x_pad)
 
-    # ── Buttons — single row ───────────────────────────────────────────────
+    # ── Buttons ────────────────────────────────────────────────────────────
     btn_colors = {True: "#a0a0a0", False: "#d7d7d7"}
 
     def style_btn(btn, on: bool) -> None:
@@ -447,20 +494,45 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         btn.hovercolor = "#bdbdbd"
         btn.ax.set_facecolor(btn_colors[on])
 
-    live_ax   = fig.add_axes([0.02, 0.04, 0.10, 0.06])
-    failed_ax = fig.add_axes([0.13, 0.04, 0.10, 0.06])
-    avg_ax    = fig.add_axes([0.24, 0.04, 0.10, 0.06])
-    best_ax   = fig.add_axes([0.35, 0.04, 0.10, 0.06])
+    BW, BH, BG = 0.09, 0.05, 0.01
+
+    # Row 1: global controls
+    R1Y = 0.12
+    live_ax   = fig.add_axes([0.02 + 0 * (BW + BG), R1Y, BW, BH])
+    failed_ax = fig.add_axes([0.02 + 1 * (BW + BG), R1Y, BW, BH])
+    avg_ax    = fig.add_axes([0.02 + 2 * (BW + BG), R1Y, BW, BH])
+    best_ax   = fig.add_axes([0.02 + 3 * (BW + BG), R1Y, BW, BH])
+    bars_ax   = fig.add_axes([0.02 + 4 * (BW + BG), R1Y, BW, BH])
 
     btn_live   = Button(live_ax,   "Live: OFF")
     btn_failed = Button(failed_ax, "Failed")
     btn_avg    = Button(avg_ax,    "Avg")
     btn_best   = Button(best_ax,   "Best")
+    btn_bars   = Button(bars_ax,   "Bars")
 
     style_btn(btn_live,   state["live"])
     style_btn(btn_failed, state["show_failed"])
     style_btn(btn_avg,    state["rolling_avg"])
     style_btn(btn_best,   state["best_so_far"])
+    style_btn(btn_bars,   state["show_bars"])
+
+    # Row 2: per-test rolling average toggles
+    R2Y = 0.04
+    _per_test_btns: list[Button] = []
+    for j, test_name in enumerate(all_test_names):
+        t_ax = fig.add_axes([0.02 + j * (BW + BG), R2Y, BW, BH])
+        t_btn = Button(t_ax, f"~{test_name}")
+        style_btn(t_btn, state.get(f"test_avg_{test_name}", True))
+        _per_test_btns.append(t_btn)
+
+        def _make_toggle(name: str, btn: Button):
+            def _toggle(_e) -> None:
+                state[f"test_avg_{name}"] = not state.get(f"test_avg_{name}", True)
+                style_btn(btn, state[f"test_avg_{name}"])
+                full_redraw(records)
+            return _toggle
+
+        t_btn.on_clicked(_make_toggle(test_name, t_btn))
 
     refresh_timer = fig.canvas.new_timer(interval=int(LIVE_REFRESH_SECONDS * 1000))
 
@@ -499,10 +571,16 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         style_btn(btn_best, state["best_so_far"])
         full_redraw(records)
 
+    def toggle_bars(_e) -> None:
+        state["show_bars"] = not state["show_bars"]
+        style_btn(btn_bars, state["show_bars"])
+        full_redraw(records)
+
     btn_live.on_clicked(toggle_live)
     btn_failed.on_clicked(toggle_failed)
     btn_avg.on_clicked(toggle_avg)
     btn_best.on_clicked(toggle_best)
+    btn_bars.on_clicked(toggle_bars)
 
     def on_close(_e) -> None:
         refresh_timer.stop()
