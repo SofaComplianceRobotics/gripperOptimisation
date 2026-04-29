@@ -29,13 +29,17 @@ from core.params import ModelParams, validate_params
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
 
-def run_export(params: ModelParams, secondary_dir: Path | None = None) -> Path:
+def run_export(
+    params: ModelParams, secondary_dir: Path | None = None, fine: bool = False
+) -> Path:
     """Run the full export pipeline for a gripper design.
 
     Args:
         params: Model configuration object.
         secondary_dir: Optional directory to copy exported files to. If None,
             files are only saved to the exports/ directory.
+        fine: When True, only the main STL is generated (no VTK, no collision
+            STL, no JSON) — intended for 3D printing exports.
 
     Returns:
         Path to the generated STL file.
@@ -53,24 +57,29 @@ def run_export(params: ModelParams, secondary_dir: Path | None = None) -> Path:
         mesh_model = rotate_model_to_export_frame(result)
 
         stl_path = make_versioned_export_path(params, "stl")
-        json_path = stl_path.with_suffix(".json")
-        vtk_path = stl_path.with_suffix(".vtk")
 
         model_to_stl(mesh_model, params, stl_path)
-        export_leg_attachment_json(params, json_path)
-        model_to_vtk(mesh_model, params, vtk_path)
 
-        # Collision STL uses only the distal finger fraction for a coarser mesh.
-        collision_stl_path = stl_path.parent / f"{params.export_stem}_collision.stl"
-        pincers = make_pincer_pair_world_collision(params)
-        pincers_export = rotate_model_to_export_frame(pincers)
-        model_to_stl_collision(pincers_export, params, collision_stl_path)
+        if not fine:
+            json_path = stl_path.with_suffix(".json")
+            vtk_path = stl_path.with_suffix(".vtk")
+
+            export_leg_attachment_json(params, json_path)
+            model_to_vtk(mesh_model, params, vtk_path)
+
+            # Collision STL uses only the distal finger fraction for a coarser mesh.
+            collision_stl_path = stl_path.parent / f"{params.export_stem}_collision.stl"
+            pincers = make_pincer_pair_world_collision(params)
+            pincers_export = rotate_model_to_export_frame(pincers)
+            model_to_stl_collision(pincers_export, params, collision_stl_path)
 
         if secondary_dir:
             secondary_dir.mkdir(parents=True, exist_ok=True)
-            files_to_copy = [stl_path, json_path, collision_stl_path]
-            if vtk_path.exists():
-                files_to_copy.append(vtk_path)
+            files_to_copy = [stl_path]
+            if not fine:
+                files_to_copy += [json_path, collision_stl_path]
+                if vtk_path.exists():
+                    files_to_copy.append(vtk_path)
 
             for src_path in files_to_copy:
                 shutil.copy2(src_path, secondary_dir / src_path.name)

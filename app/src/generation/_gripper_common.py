@@ -163,5 +163,7 @@ def params_from_config(cfg: dict, base, fine: bool = False):
         kwargs["mesh_size_max_stl"] = 2.0
         kwargs["mesh_size_min_stl"] = 0.8
         kwargs["export_stem"] = "new_gripper_print"
+        current_samples = kwargs.get("pincer_profile_samples", base.pincer_profile_samples)
+        kwargs["pincer_profile_samples"] = current_samples * 10
 
     return replace(base, **kwargs)

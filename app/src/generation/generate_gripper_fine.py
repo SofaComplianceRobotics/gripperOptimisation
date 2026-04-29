@@ -45,13 +45,12 @@ def main() -> None:
 
     secondary_dir = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
 
-    stl_path = run_export(params, secondary_dir=secondary_dir)
+    stl_path = run_export(params, secondary_dir=secondary_dir, fine=True)
     if stl_path is None:
         raise RuntimeError("Mesh export did not produce an STL path.")
 
-    for path in (stl_path, stl_path.with_suffix(".json"), stl_path.with_suffix(".vtk")):
-        if path.exists():
-            print(f"Exported: {path}")
+    if stl_path.exists():
+        print(f"Exported: {stl_path}")
 
     elapsed = time.perf_counter() - _START_TS
     print(f"Total export time: {elapsed:.3f}s")

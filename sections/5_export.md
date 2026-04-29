@@ -54,28 +54,6 @@ STL
 
 </div>
 
-<div>
-
-VTK
-
-#icon("cubes")
-
-#open-button("assets/data/meshes/centerparts/new_gripper_print.vtk")
-
-</div>
-
-<div>
-
-JSON
-
-#icon("align-left")
-
-#open-button("assets/data/meshes/centerparts/new_gripper_print.json")
-
-</div>
-
-</div>
-
 ---
 
 ### SOFA & Tools
