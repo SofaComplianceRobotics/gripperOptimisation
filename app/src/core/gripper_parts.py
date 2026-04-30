@@ -30,71 +30,17 @@ def _make_variable_height_ring(
     height_func,
     n_samples: int = 72,
 ) -> cq.Workplane:
-    from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_ThruSections
-    from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeSolid, BRepBuilderAPI_Sewing
-    from OCC.Core.TopoDS import topods_Shell
+    sweep = 360.0 / n_samples
+    mid_r = (ro + ri) / 2.0
+    thickness = ro - ri
 
-    uniform_params = [i / n_samples for i in range(n_samples)]
-    angles = [2.0 * math.pi * t for t in uniform_params]
-    heights = [height_func(math.degrees(a)) for a in angles]
-
-    outer_top_pts = [Vector(ro * math.cos(a), ro * math.sin(a), h) for a, h in zip(angles, heights)]
-    outer_bot_pts = [Vector(ro * math.cos(a), ro * math.sin(a), 0.0) for a in angles]
-    outer_top_wire = Wire.makeSpline(outer_top_pts, periodic=True, parameters=uniform_params)
-    outer_bot_wire = Wire.makeSpline(outer_bot_pts, periodic=True, parameters=uniform_params)
-
-    outer_loft = BRepOffsetAPI_ThruSections(False, True)
-    outer_loft.AddWire(outer_bot_wire.wrapped)
-    outer_loft.AddWire(outer_top_wire.wrapped)
-    outer_loft.Build()
-
-    n_rad = 3
-    top_grid = []
-    for i in range(n_samples + 1):
-        a = 2.0 * math.pi * i / n_samples
-        h = height_func(math.degrees(a))
-        if ri > 0:
-            top_grid.append([
-                Vector(ri * math.cos(a), ri * math.sin(a), h),
-                Vector(((ri + ro) / 2.0) * math.cos(a), ((ri + ro) / 2.0) * math.sin(a), h),
-                Vector(ro * math.cos(a), ro * math.sin(a), h),
-            ])
-        else:
-            top_grid.append([
-                Vector(0.0, 0.0, h),
-                Vector((ro / 2.0) * math.cos(a), (ro / 2.0) * math.sin(a), h),
-                Vector(ro * math.cos(a), ro * math.sin(a), h),
-            ])
-    top_face = Face.makeSplineApprox(top_grid, tol=0.01, minDeg=1, maxDeg=3)
-
-    sew = BRepBuilderAPI_Sewing(0.1)
-    sew.Add(outer_loft.Shape())
-    sew.Add(top_face.wrapped)
-
-    if ri > 0:
-        inner_top_pts = [Vector(ri * math.cos(a), ri * math.sin(a), h) for a, h in zip(angles, heights)]
-        inner_bot_pts = [Vector(ri * math.cos(a), ri * math.sin(a), 0.0) for a in angles]
-        inner_top_wire = Wire.makeSpline(inner_top_pts, periodic=True, parameters=uniform_params)
-        inner_bot_wire = Wire.makeSpline(inner_bot_pts, periodic=True, parameters=uniform_params)
-
-        inner_loft = BRepOffsetAPI_ThruSections(False, True)
-        inner_loft.AddWire(inner_top_wire.wrapped)
-        inner_loft.AddWire(inner_bot_wire.wrapped)
-        inner_loft.Build()
-
-        bot_face = Face.makeFromWires(outer_bot_wire, [inner_bot_wire])
-        sew.Add(inner_loft.Shape())
-        sew.Add(bot_face.wrapped)
-    else:
-        bot_face = Face.makeFromWires(outer_bot_wire)
-        sew.Add(bot_face.wrapped)
-
-    sew.Perform()
-    sewn = sew.SewedShape()
-
-    solid_maker = BRepBuilderAPI_MakeSolid(topods_Shell(sewn))
-    solid_maker.Build()
-    return cq.Workplane("XY").newObject([solid_maker.Solid()])
+    result = None
+    for i in range(n_samples):
+        angle_start = i * sweep
+        h = height_func(angle_start + sweep / 2.0)
+        sector = annular_sector(mid_r, thickness, angle_start, sweep, h)
+        result = sector if result is None else result.union(sector)
+    return result
 
 
 def make_circle(p: ModelParams) -> cq.Workplane:
