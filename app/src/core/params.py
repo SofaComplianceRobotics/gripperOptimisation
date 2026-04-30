@@ -5,6 +5,7 @@ Defines the ModelParams dataclass that holds all tunable gripper design paramete
 used throughout the generation, assembly, and export pipeline.
 """
 
+import math
 from dataclasses import dataclass, field
 
 # ─────────────────────────────────────────────
@@ -86,18 +87,38 @@ class ModelParams:
     pincer_round_ends: bool = field(
         default=True, metadata={"opt": {"type": "bool", "min": 0, "max": 0}}
     )
-    pincer_points: tuple[PincerSplinePoint, ...] = (
-        PincerSplinePoint(
-            p=(0.0, 0.0),
-            h_in=None,
-            h_out=(24.0, 18.0),
-        ),
-        PincerSplinePoint(
-            p=(150.0, 70.0),
-            h_in=(118.0, 24.0),
-            h_out=None,
-        ),
+    # Bézier spline in polar form — absolute XY computed by pincer_points property
+    p0_hout_dist: float = field(
+        default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 80.0}}
     )
+    p0_hout_angle_deg: float = field(
+        default=0.0, metadata={"opt": {"type": "float", "min": -90.0, "max": 90.0}}
+    )
+    p1_dist: float = field(
+        default=90.0, metadata={"opt": {"type": "float", "min": 80.0, "max": 110.0}}
+    )
+    p1_angle_deg: float = field(
+        default=-40.0, metadata={"opt": {"type": "float", "min": -90.0, "max": 45.0}}
+    )
+    p1_hin_dist: float = field(
+        default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 80.0}}
+    )
+    p1_hin_angle_deg: float = field(
+        default=0.0, metadata={"opt": {"type": "float", "min": -10.0, "max": 260.0}}
+    )
+
+    @property
+    def pincer_points(self) -> tuple[PincerSplinePoint, ...]:
+        p0_hout_x = self.p0_hout_dist * math.cos(math.radians(self.p0_hout_angle_deg))
+        p0_hout_y = self.p0_hout_dist * math.sin(math.radians(self.p0_hout_angle_deg))
+        p1_x = self.p1_dist * math.cos(math.radians(self.p1_angle_deg))
+        p1_y = self.p1_dist * math.sin(math.radians(self.p1_angle_deg))
+        p1_hin_x = p1_x + self.p1_hin_dist * math.cos(math.radians(self.p1_hin_angle_deg))
+        p1_hin_y = p1_y + self.p1_hin_dist * math.sin(math.radians(self.p1_hin_angle_deg))
+        return (
+            PincerSplinePoint(p=(0.0, 0.0), h_in=None, h_out=(p0_hout_x, p0_hout_y)),
+            PincerSplinePoint(p=(p1_x, p1_y), h_in=(p1_hin_x, p1_hin_y), h_out=None),
+        )
 
     # Mesh
     mesh_enabled: bool = True

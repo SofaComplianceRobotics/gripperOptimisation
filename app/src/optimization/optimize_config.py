@@ -160,18 +160,11 @@ HARD_FAIL_SCORE = float(
 # ─────────────────────────────────────────────
 # Tunable Parameter Specifications
 #
-# Direct ModelParams fields carry their optimization range as field metadata
-# in core/params.py.  The helper below reads that metadata automatically.
-# To add or change a directly-mapped optimisable parameter, only edit
-# ModelParams in core/params.py:
-#   • set  metadata={"opt": {"type": "float", "min": X, "max": Y}}  to enable
-#   • set  metadata={"opt": {"type": "float", "min": 0, "max": 0}}   to freeze
+# All optimisable parameters are defined in core/params.py via field metadata:
+#   • metadata={"opt": {"type": "float", "min": X, "max": Y}}  — active
+#   • metadata={"opt": {"type": "float", "min": 0, "max": 0}}  — frozen (default used)
 #
-# Synthetic parameters (polar Bézier handles) have no corresponding
-# ModelParams field and are listed explicitly below.
-#
-# Fixed / frozen convention: min = 0 AND max = 0 means the optimizer never
-# suggests a new value; the field default is used verbatim every trial.
+# To add, remove, or re-range a parameter: edit ModelParams in core/params.py only.
 # ─────────────────────────────────────────────
 
 
@@ -194,21 +187,7 @@ def _param_specs_from_metadata(base: ModelParams) -> list[dict]:
     return specs
 
 
-PARAM_SPECS: list[dict] = [
-    # fmt: off
-    # ── Fields annotated in ModelParams (auto-generated from metadata) ──────────
-    *_param_specs_from_metadata(BASE_PARAMS),
-    # ── Spline first handle (anchor fixed at 0, 0) ──────────────────────────────
-    {"name": "p0_hout_dist",              "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
-    {"name": "p0_hout_angle_deg",         "type": "float", "min": -90.0, "max": 90.0,  "default": 0.0},
-    # ── Spline endpoint ──────────────────────────────────────────────────────────
-    {"name": "p1_dist",                   "type": "float", "min": 80.0,  "max": 110.0,  "default": 90.0},
-    {"name": "p1_angle_deg",              "type": "float", "min": -90.0, "max": 45.0,  "default": -40.0},
-    # ── Spline last handle ───────────────────────────────────────────────────────
-    {"name": "p1_hin_dist",               "type": "float", "min": 0.0,   "max": 80.0,  "default": 0.0},
-    {"name": "p1_hin_angle_deg",          "type": "float", "min": -10.0, "max": 260.0, "default": 0.0},
-    # fmt: on
-]
+PARAM_SPECS: list[dict] = _param_specs_from_metadata(BASE_PARAMS)
 
 # ─────────────────────────────────────────────
 # Simulation Scoring & Early Stop Parameters

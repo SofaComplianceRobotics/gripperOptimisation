@@ -26,13 +26,13 @@ The table below lists all parameters the optimiser is allowed to vary. Everythin
 | `pincer_profile_height` | 6 – 16 mm | Cross-section height |
 | `p0_hout_dist` | 0 – 80 mm | Length of the first Bézier handle |
 | `p0_hout_angle_deg` | −90 – 90° | Direction of the first Bézier handle |
-| `p1_dist` | 70 – 90 mm | Distance of the tip anchor |
+| `p1_dist` | 80 – 110 mm | Distance of the tip anchor |
 | `p1_angle_deg` | −90 – 45° | Angle of the tip anchor |
 | `p1_hin_dist` | 0 – 80 mm | Length of the last Bézier handle |
 | `p1_hin_angle_deg` | −10 – 260° | Direction of the last Bézier handle |
 | `leg_attachement_tilt_angle` | −30 – 30° | Leg lean angle |
 
-To change which parameters are active or adjust their ranges, edit `PARAM_SPECS` in `app/src/optimization/optimize_config.py`.
+To change which parameters are active or adjust their ranges, edit `ModelParams` in `app/src/core/params.py` — add or update the `metadata={"opt": {...}}` on any field.
 
 ---
 

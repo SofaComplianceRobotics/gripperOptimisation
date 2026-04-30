@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import math
 import re
 import subprocess
 import sys
@@ -93,9 +92,6 @@ def ensure_cadquery_runtime() -> None:
 def params_from_config(cfg: dict, base, fine: bool = False):
     """Build a ModelParams instance from a config dict.
 
-    Converts the polar Bézier representation in the config to absolute XY
-    coordinates expected by ModelParams, then applies all other fields.
-
     Args:
         cfg: Parsed lab_config.jsonc dict.
         base: A default ModelParams instance used for fallback values.
@@ -104,23 +100,6 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     Returns:
         A new ModelParams instance.
     """
-    from core.params import PincerSplinePoint
-
-    p0_hout_dist = float(cfg.get("p0_hout_dist", 0.0))
-    p0_hout_angle = math.radians(float(cfg.get("p0_hout_angle_deg", 0.0)))
-    p0_hout_x = p0_hout_dist * math.cos(p0_hout_angle)
-    p0_hout_y = p0_hout_dist * math.sin(p0_hout_angle)
-
-    p1_dist = float(cfg.get("p1_dist", 80.0))
-    p1_angle = math.radians(float(cfg.get("p1_angle_deg", -40.0)))
-    p1_x = p1_dist * math.cos(p1_angle)
-    p1_y = p1_dist * math.sin(p1_angle)
-
-    p1_hin_dist = float(cfg.get("p1_hin_dist", 0.0))
-    p1_hin_angle = math.radians(float(cfg.get("p1_hin_angle_deg", 0.0)))
-    p1_hin_x = p1_x + p1_hin_dist * math.cos(p1_hin_angle)
-    p1_hin_y = p1_y + p1_hin_dist * math.sin(p1_hin_angle)
-
     kwargs: dict = dict(
         cylinder_radius=float(cfg.get("cylinder_radius", base.cylinder_radius)),
         cylinder_height=float(cfg.get("cylinder_height", base.cylinder_height)),
@@ -133,10 +112,6 @@ def params_from_config(cfg: dict, base, fine: bool = False):
         pincer_path_scale=float(cfg.get("pincer_path_scale", base.pincer_path_scale)),
         pincer_tilt_y_deg=float(cfg.get("pincer_tilt_y_deg", base.pincer_tilt_y_deg)),
         pincer_round_ends=bool(cfg.get("pincer_round_ends", base.pincer_round_ends)),
-        pincer_points=(
-            PincerSplinePoint(p=(0.0, 0.0), h_in=None, h_out=(p0_hout_x, p0_hout_y)),
-            PincerSplinePoint(p=(p1_x, p1_y), h_in=(p1_hin_x, p1_hin_y), h_out=None),
-        ),
         mesh_enabled=True,
         mesh_show_viewer=False,
     )
