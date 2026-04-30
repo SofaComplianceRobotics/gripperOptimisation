@@ -100,10 +100,18 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     Returns:
         A new ModelParams instance.
     """
+    _legacy_h = cfg.get("cylinder_height")
+    _h_fallback = float(_legacy_h) if _legacy_h is not None else None
+
     kwargs: dict = dict(
         cylinder_radius=float(cfg.get("cylinder_radius", base.cylinder_radius)),
-        cylinder_height=float(cfg.get("cylinder_height", base.cylinder_height)),
         cylinder_hole_thickness=float(cfg.get("cylinder_hole_thickness", base.cylinder_hole_thickness)),
+        cylinder_height_A=float(cfg.get("cylinder_height_A", _h_fallback if _h_fallback is not None else base.cylinder_height_A)),
+        cylinder_height_B=float(cfg.get("cylinder_height_B", _h_fallback if _h_fallback is not None else base.cylinder_height_B)),
+        cylinder_height_C=float(cfg.get("cylinder_height_C", _h_fallback if _h_fallback is not None else base.cylinder_height_C)),
+        cylinder_plateau_A_deg=float(cfg.get("cylinder_plateau_A_deg", base.cylinder_plateau_A_deg)),
+        cylinder_plateau_B_deg=float(cfg.get("cylinder_plateau_B_deg", base.cylinder_plateau_B_deg)),
+        cylinder_plateau_C_deg=float(cfg.get("cylinder_plateau_C_deg", base.cylinder_plateau_C_deg)),
         leg_attachement_tilt_angle=float(cfg.get("leg_attachement_tilt_angle", base.leg_attachement_tilt_angle)),
         pincer_profile_width=float(cfg.get("pincer_profile_width", base.pincer_profile_width)),
         pincer_profile_height=float(cfg.get("pincer_profile_height", base.pincer_profile_height)),

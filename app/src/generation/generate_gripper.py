@@ -25,6 +25,10 @@ from core.params import ModelParams  # noqa: E402
 
 
 def main() -> None:
+    import sys
+
+    print(sys.executable)
+
     """Read parameters from lab_config.jsonc and run the mesh export pipeline."""
     parser = argparse.ArgumentParser(
         description="Generate gripper meshes from a JSONC config."

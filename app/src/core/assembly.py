@@ -78,16 +78,17 @@ def assemble_model(p: ModelParams) -> cq.Workplane:
         a = math.radians(angle_deg)
         x = leg_placement_radius * math.cos(a)
         y = leg_placement_radius * math.sin(a)
+        ring_h = p.cylinder_height_at(float(angle_deg))
 
         leg_base = leg.rotate((0, 0, 0), (0, 0, 1), angle_deg + 90).translate(
-            (x, y, p.cylinder_height + p.leg_attachement_lift)
+            (x, y, ring_h + p.leg_attachement_lift)
         )
 
-        axis_start = (x, y, p.cylinder_height + p.leg_attachement_lift)
+        axis_start = (x, y, ring_h + p.leg_attachement_lift)
         axis_end = (
             x - math.sin(a),
             y + math.cos(a),
-            p.cylinder_height + p.leg_attachement_lift,
+            ring_h + p.leg_attachement_lift,
         )
         tilt_axis = (axis_end[0] - axis_start[0], axis_end[1] - axis_start[1], 0.0)
         expected_bottom_normal = _rotate_vector_axis_angle(
@@ -97,7 +98,7 @@ def assemble_model(p: ModelParams) -> cq.Workplane:
         leg_i = leg_base.rotate(axis_start, axis_end, p.leg_attachement_tilt_angle)
         drop_i = make_vertical_drop_from_low_face(
             leg_i,
-            target_z=p.cylinder_height,
+            target_z=ring_h,
             overlap=p.leg_attachement_drop_overlap,
             expected_normal=expected_bottom_normal,
             min_final_z=0.0,
