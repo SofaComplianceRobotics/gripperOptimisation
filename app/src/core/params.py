@@ -48,22 +48,23 @@ class ModelParams:
         default=3.0, metadata={"opt": {"type": "float", "min": 1, "max": 5}}
     )
     cylinder_height_A: float = field(
-        default=4.0, metadata={"opt": {"type": "float", "min": 2, "max": 6}}
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 2}}
     )
     cylinder_height_B: float = field(
-        default=4.0, metadata={"opt": {"type": "float", "min": 2, "max": 6}}
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 2}}
     )
     cylinder_height_C: float = field(
-        default=4.0, metadata={"opt": {"type": "float", "min": 2, "max": 6}}
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 2}}
     )
     cylinder_plateau_A_deg: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 44}}
+        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
     )
     cylinder_plateau_B_deg: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 44}}
+        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
     )
+    # Effective max = 45 - max(plateau_A, plateau_B); clamped in the optimizer after sampling.
     cylinder_plateau_C_deg: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 44}}
+        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
     )
 
     # Leg attachment

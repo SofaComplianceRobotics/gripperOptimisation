@@ -86,7 +86,14 @@ def params_from_trial(trial) -> dict:
         if spec["min"] == 0 and spec["max"] == 0:
             result[name] = spec["default"]
         elif spec["type"] == "float":
-            result[name] = trial.suggest_float(name, spec["min"], spec["max"])
+            value = trial.suggest_float(name, spec["min"], spec["max"])
+            if name == "cylinder_plateau_C_deg":
+                max_c = max(0.0, 45.0 - max(
+                    result.get("cylinder_plateau_A_deg", 0.0),
+                    result.get("cylinder_plateau_B_deg", 0.0),
+                ))
+                value = min(value, max_c)
+            result[name] = value
         elif spec["type"] == "int":
             result[name] = trial.suggest_int(name, int(spec["min"]), int(spec["max"]))
         elif spec["type"] == "bool":
