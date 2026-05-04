@@ -120,7 +120,8 @@ def _leg_attachment_pose(
 
     x = placement_radius * math.cos(a)
     y = placement_radius * math.sin(a)
-    z = p.cylinder_height + p.leg_attachement_lift
+    ring_h = p.cylinder_height_at(float(angle_deg))
+    z = ring_h + p.leg_attachement_lift
 
     # Exported mesh files are already rotated into SOFA frame in export_pipeline.py.
     # Rotate each attachment pose into that same local frame so anchors lie on the mesh.
