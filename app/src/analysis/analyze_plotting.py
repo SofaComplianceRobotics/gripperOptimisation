@@ -1,15 +1,62 @@
 """
-analyze_plotting.py — Matplotlib visualization and interactive plots.
+analyze_plotting.py — Plotly interactive visualization with smooth interactivity.
 
 Creates performance plots with per-test contribution bars (diverging stacked),
-rolling averages, and per-generation trends.
+rolling averages, and per-generation trends. Preserves zoom/pan during live updates.
 """
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import matplotlib.patches as mpatches
-from matplotlib.widgets import Button
-import numpy as np
+# Auto-install plotly if not available
+try:
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    from plotly.subplots import make_subplots
+except ImportError:
+    print("[info] Plotly not found. Installing...")
+    import subprocess
+    import sys
+
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "plotly", "-q"])
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    from plotly.subplots import make_subplots
+
+    print("[info] Plotly installed successfully.")
+try:
+    # Dash (for live web-based updates)
+    from dash import Dash, dcc, html
+    from dash.dependencies import Input, Output, State
+
+    DASH_AVAILABLE = True
+except Exception:
+    DASH_AVAILABLE = False
+    try:
+        import subprocess, sys
+
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "dash", "-q"])
+        from dash import Dash, dcc, html
+        from dash.dependencies import Input, Output, State
+
+        DASH_AVAILABLE = True
+        print("[info] Dash installed successfully.")
+    except Exception as exc:
+        print(f"[warn] Dash not available and automatic install failed: {exc}")
+
+import threading
+import time
+import webbrowser
+import logging
+import os
+import sys
+import subprocess
+
+# Suppress Werkzeug and Dash logs
+os.environ["WERKZEUG_RUN_MAIN"] = "true"
+# Clear any leftover Werkzeug server FD environment variables
+os.environ.pop("WERKZEUG_SERVER_FD", None)
+os.environ.pop("WERKZEUG_SERVER_FD_DEF", None)
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
+logging.getLogger("dash").setLevel(logging.ERROR)
+logging.getLogger("dash.dash").setLevel(logging.ERROR)
 
 from analyze_config import CENTERED_AVG_HALF_WINDOW, LIVE_REFRESH_SECONDS
 from analyze_io import load_all_trials
@@ -29,7 +76,9 @@ TEST_COLORS = [
 ]
 
 NEG_ALPHA = 0.40  # alpha for negative-contribution segments
-NEG_HATCH = "////"  # hatch for negative segments
+NEG_HATCH = (
+    "////"  # hatch for negative segments (note: Plotly doesn't support hatching)
+)
 
 C_BANNER = "#404867"
 C_BG = "#ffffff"
@@ -181,171 +230,195 @@ def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Bar rendering
+# Plotly trace builders
 # ---------------------------------------------------------------------------
 
 
-def _draw_bars(
-    ax,
+def _build_bar_traces(
+    records: list[dict],
     plot_data: dict,
     all_test_names: list[str],
-    bar_width: float,
-    show_failed: bool = True,
-) -> list[dict]:
-    """Draw diverging stacked contribution bars on ax.
-
-    Positive contributions stack upward, negatives stack downward. Failed
-    trials render at reduced opacity; incomplete trials at lower opacity.
-
-    Returns:
-        List of bar metadata dicts with keys: index, x, width, record_index
-    """
+) -> list[go.Bar]:
+    """Build diverging stacked bar traces for Plotly."""
+    traces = []
     xs = plot_data["xs"]
     contributions = plot_data["contributions"]
     failed_mask = plot_data["failed_mask"]
     is_complete = plot_data["is_complete"]
 
-    tick_w = bar_width * 1
-    bar_info = []
+    # For each test, create a stacked bar trace (no hover on segments)
+    for test_name in all_test_names:
+        y_vals = []
+        colors_list = []
+        opacity_list = []
 
-    for i, (x, contrib, failed, complete) in enumerate(
-        zip(xs, contributions, failed_mask, is_complete)
-    ):
-        if failed and not show_failed:
-            continue
-
-        base_alpha = 0.30 if failed else 1.0
-        pos_bottom = 0.0
-        neg_bottom = 0.0
-        incomplete_alpha = 0.5 if not complete else 1.0
-
-        # Track bar info for hover/click detection
-        bar_info.append({
-            "index": i,
-            "x": x,
-            "width": bar_width,
-            "record_index": i,
-        })
-
-        for test_name in all_test_names:
+        for i, (x, contrib, failed, complete) in enumerate(
+            zip(xs, contributions, failed_mask, is_complete)
+        ):
             val = contrib.get(test_name, 0.0)
-            if val == 0.0:
-                continue
+            y_vals.append(val)
 
+            # Color and opacity based on state
             color = _test_color(test_name, all_test_names)
+            colors_list.append(color)
+            alpha = 0.3 if failed else 1.0
+            alpha *= 0.5 if not complete else 1.0
+            opacity_list.append(alpha)
 
-            if val > 0:
-                ax.bar(
-                    x,
-                    val,
-                    bottom=pos_bottom,
-                    width=bar_width,
-                    color=color,
-                    alpha=0.85 * base_alpha * incomplete_alpha,
-                    linewidth=0.5,
-                    edgecolor=color,
-                    zorder=2,
+        trace = go.Bar(
+            x=xs,
+            y=y_vals,
+            name=test_name,
+            uid=f"bar-{test_name}",
+            marker=dict(
+                color=colors_list,
+                opacity=opacity_list,
+                line=dict(color=_test_color(test_name, all_test_names), width=0.5),
+            ),
+            hoverinfo="skip",
+            showlegend=True,
+        )
+        traces.append(trace)
+
+    return traces
+
+
+def _build_hover_overlay(
+    records: list[dict],
+    plot_data: dict,
+    all_test_names: list[str],
+    bar_width: float,
+) -> go.Bar:
+    """Build an invisible bar overlay so hover works across the whole trial bar."""
+    xs = plot_data["xs"]
+    contributions = plot_data["contributions"]
+    hover_texts = []
+    y_vals = []
+
+    for i, contrib in enumerate(contributions):
+        r = records[i]
+        gen = r.get("gen_index", "?")
+        trial_id = r.get("trial_id", i)
+        final_score = sum(contrib.values())
+
+        detail_lines = [
+            f"<b>Gen {gen} | Trial {trial_id}</b>",
+            f"<b>Total Score: {final_score:.4f}</b>",
+            "─────────────────",
+        ]
+        for tn in all_test_names:
+            score = contrib.get(tn, 0.0)
+            detail_lines.append(f"{tn}: {score:.4f}")
+
+        hover_texts.append("<br>".join(detail_lines))
+        y_vals.append(final_score)
+
+    trace = go.Bar(
+        x=xs,
+        y=y_vals,
+        base=0,
+        width=[bar_width] * len(xs),
+        marker=dict(color="rgba(0,0,0,0)", line=dict(width=0)),
+        customdata=hover_texts,
+        hovertemplate="%{customdata}<extra></extra>",
+        hoverlabel=dict(
+            bgcolor="#d7ecff",
+            bordercolor="#9ec5fe",
+            font=dict(color="#16324f"),
+        ),
+        showlegend=False,
+        name="hover",
+        uid="hover-overlay",
+    )
+    return trace
+
+
+def _build_final_ticks(plot_data: dict, bar_width: float) -> go.Scatter:
+    """Build short horizontal tick segments (one per trial) showing final score.
+
+    Uses a single Scatter trace with NaN separators so segments are not connected.
+    """
+    xs = plot_data["xs"]
+    final_scores = plot_data["final_scores"]
+    x_segments = []
+    y_segments = []
+
+    halfw = bar_width / 2.0
+    for x, s in zip(xs, final_scores):
+        x_segments.extend([x - halfw, x + halfw, None])
+        y_segments.extend([s, s, None])
+
+    trace = go.Scatter(
+        x=x_segments,
+        y=y_segments,
+        mode="lines",
+        name="Final score",
+        uid="final-score",
+        line=dict(color=C_FINAL, width=2),
+        hoverinfo="skip",
+        showlegend=True,
+    )
+    return trace
+
+
+def _build_avg_traces(plot_data: dict, all_test_names: list[str]) -> list[go.Scatter]:
+    """Build rolling average and best-so-far traces."""
+    traces = []
+
+    # Rolling average
+    avg_x, avg_y = plot_data["avg_x"], plot_data["avg_y"]
+    if avg_x:
+        trace_avg = go.Scatter(
+            x=avg_x,
+            y=avg_y,
+            mode="lines",
+            name=f"Rolling avg (±{CENTERED_AVG_HALF_WINDOW})",
+            uid="rolling-avg",
+            line=dict(color=C_AVG, width=2, dash="dash"),
+            hoverinfo="skip",
+            showlegend=True,
+        )
+        traces.append(trace_avg)
+
+    # Best-so-far
+    best_x, best_y = plot_data["best_x"], plot_data["best_y"]
+    if best_x:
+        trace_best = go.Scatter(
+            x=best_x,
+            y=best_y,
+            mode="lines",
+            name="Best so far",
+            uid="best-so-far",
+            line=dict(color=C_BEST, width=2),
+            hoverinfo="skip",
+            showlegend=True,
+        )
+        traces.append(trace_best)
+
+    # Per-test rolling averages
+    per_test_avg = plot_data.get("per_test_avg", {})
+    for test_name in all_test_names:
+        if test_name in per_test_avg:
+            t_x, t_y = per_test_avg[test_name]
+            if t_x:
+                trace_t = go.Scatter(
+                    x=t_x,
+                    y=t_y,
+                    mode="lines",
+                    name=f"~{test_name} avg",
+                    uid=f"avg-{test_name}",
+                    line=dict(
+                        color=_test_color(test_name, all_test_names),
+                        width=1.5,
+                        dash="dashdot",
+                    ),
+                    hoverinfo="skip",
+                    visible="legendonly",  # Hidden by default
+                    showlegend=True,
                 )
-                pos_bottom += val
-            else:
-                ax.bar(
-                    x,
-                    val,
-                    bottom=neg_bottom,
-                    width=bar_width,
-                    color=color,
-                    alpha=0.85 * base_alpha * incomplete_alpha,
-                    linewidth=0.5,
-                    edgecolor=color,
-                    zorder=2,
-                )
-                neg_bottom += val
+                traces.append(trace_t)
 
-        net_score = pos_bottom + neg_bottom
-        line_style = "--" if not complete else "-"
-        ax.plot(
-            [x - tick_w / 2, x + tick_w / 2],
-            [net_score, net_score],
-            color=C_FINAL,
-            linewidth=2.0 if not failed else 1.0,
-            linestyle=line_style,
-            alpha=base_alpha * incomplete_alpha,
-            solid_capstyle="round",
-            zorder=4,
-        )
-
-    return bar_info
-
-
-# ---------------------------------------------------------------------------
-# Legend builder
-# ---------------------------------------------------------------------------
-
-
-def _build_legend(ax, all_test_names: list[str]) -> None:
-    """Attach a legend to ax covering per-test colors and overlay lines."""
-    handles = []
-    for name in all_test_names:
-        color = _test_color(name, all_test_names)
-        handles.append(mpatches.Patch(facecolor=color, alpha=0.85, label=f"{name}"))
-    handles.append(
-        plt.Line2D([0], [0], color=C_FINAL, linewidth=2, label="Final score")
-    )
-    handles.append(
-        plt.Line2D(
-            [0],
-            [0],
-            color=C_AVG,
-            linestyle="--",
-            linewidth=2,
-            label=f"Rolling avg (±{CENTERED_AVG_HALF_WINDOW})",
-        )
-    )
-    handles.append(
-        plt.Line2D(
-            [0], [0], color=C_BEST, linestyle="-", linewidth=2, label="Best so far"
-        )
-    )
-    handles.append(
-        mpatches.Patch(
-            facecolor="#cccccc",
-            alpha=0.6,
-            hatch="////",
-            edgecolor="#666666",
-            label="Incomplete (running)",
-        )
-    )
-    for name in all_test_names:
-        color = _test_color(name, all_test_names)
-        handles.append(
-            plt.Line2D(
-                [0], [0],
-                color=color,
-                linestyle="-.",
-                linewidth=1.5,
-                label=f"~{name} avg",
-            )
-        )
-    ax.legend(handles=handles, loc="lower right", fontsize=9, framealpha=0.9, ncol=2)
-
-
-# ---------------------------------------------------------------------------
-# X-axis tick helper — avoids black-bar overload at many generations
-# ---------------------------------------------------------------------------
-
-
-def _set_gen_ticks(ax, positions: list, labels: list, max_ticks: int = 12) -> None:
-    """Set X-axis ticks to generation boundaries, thinning when there are many generations."""
-    n = len(positions)
-    if n == 0:
-        return
-    if n <= max_ticks:
-        ax.set_xticks(positions)
-        ax.set_xticklabels(labels, rotation=0, fontsize=10)
-    else:
-        step = max(1, (n + max_ticks - 1) // max_ticks)
-        ax.set_xticks(positions[::step])
-        ax.set_xticklabels(labels[::step], rotation=0, fontsize=10)
+    return traces
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +427,7 @@ def _set_gen_ticks(ax, positions: list, labels: list, max_ticks: int = 12) -> No
 
 
 def plot_combined(records: list[dict], summaries: list[dict]) -> None:
-    """Plot per-test contribution bars, rolling average, and best-so-far.
+    """Plot per-test contribution bars, rolling average, and best-so-far using Plotly.
 
     Args:
         records: Trial records from analyze_io.load_all_trials.
@@ -367,390 +440,301 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
     _ = summaries
 
     all_test_names = _collect_all_test_names(records)
-
-    def _compute_bar_width(recs: list[dict]) -> float:
-        n = len(recs)
-        xs_range = max(r["chron"] for r in recs) - min(r["chron"] for r in recs) + 1
-        return max(0.4, xs_range / n * 0.8)
-
-    bar_width = _compute_bar_width(records)
     plot_data = compute_plot_data(records, all_test_names)
 
-    fig, ax = plt.subplots(figsize=(14, 8))
-    fig.patch.set_facecolor(C_BG)
-    ax.set_facecolor(C_SECTION)
-    fig.subplots_adjust(bottom=0.20)
+    # Compute bar width (used for final-score tick length)
+    xs = plot_data["xs"]
+    bar_width = max(0.4, (max(xs) - min(xs) + 1) / len(xs) * 0.8) if xs else 0.8
 
-    # ── State ──────────────────────────────────────────────────────────────
-    state = {
-        "live": False,
-        "show_failed": True,
-        "rolling_avg": True,
-        "best_so_far": True,
-        "show_bars": True,
-        "bar_info": [],  # Metadata for hover/click detection
-        "hovered_idx": None,  # Currently hovered bar index
-        "tooltip": None,  # Current tooltip annotation
-        "details_text": None,  # Current detail info text
-        **{f"test_avg_{n}": True for n in all_test_names},
-    }
+    # Build traces
+    bar_traces = _build_bar_traces(records, plot_data, all_test_names)
+    hover_overlay = _build_hover_overlay(records, plot_data, all_test_names, bar_width)
+    final_ticks = _build_final_ticks(plot_data, bar_width)
+    avg_traces = _build_avg_traces(plot_data, all_test_names)
+    all_traces = bar_traces + [hover_overlay, final_ticks] + avg_traces
 
-    # ── Redraw helper ──────────────────────────────────────────────────────
-    def full_redraw(updated_records: list[dict]) -> None:
-        nonlocal records, plot_data, bar_width
+    # Create figure
+    fig = go.Figure(data=all_traces)
 
-        records = updated_records
+    # Calculate axis limits
+    all_ys = list(plot_data["final_scores"])
+    for contrib in plot_data["contributions"]:
+        pos = sum(v for v in contrib.values() if v > 0)
+        neg = sum(v for v in contrib.values() if v < 0)
+        all_ys.extend([pos, neg])
+    if plot_data["avg_y"]:
+        all_ys.extend(plot_data["avg_y"])
+    if plot_data["best_y"]:
+        all_ys.extend(plot_data["best_y"])
 
-        # Refresh test names in-place so all closures stay consistent
-        new_names = _collect_all_test_names(records)
-        all_test_names.clear()
-        all_test_names.extend(new_names)
+    y_min, y_max = min(all_ys) if all_ys else 0, max(all_ys) if all_ys else 1
+    y_pad = max(1.0, abs(y_max - y_min) * 0.08)
 
-        if records:
-            bar_width = _compute_bar_width(records)
+    xs = plot_data["xs"]
+    x_min, x_max = min(xs), max(xs)
+    x_pad = max(1.0, (x_max - x_min) * 0.02)
 
-        plot_data = compute_plot_data(records, all_test_names)
+    # Update layout with buttons and interactivity
+    gen_ticks = plot_data["gen_tick_positions"]
+    gen_labels = plot_data["gen_tick_labels"]
 
-        ax.cla()
-        ax.set_facecolor(C_SECTION)
+    fig.update_layout(
+        title={
+            "text": "Gripper Optimization — Per-Test Contributions",
+            "font": {"size": 18, "color": C_BANNER},
+            "x": 0.5,
+            "xanchor": "center",
+        },
+        xaxis=dict(
+            title="Generation",
+            tickvals=gen_ticks,
+            ticktext=gen_labels,
+            showgrid=True,
+            gridwidth=1,
+            gridcolor="rgba(200,200,200,0.3)",
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="Score contribution",
+            showgrid=True,
+            gridwidth=1,
+            gridcolor="rgba(200,200,200,0.3)",
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor=C_BORDER,
+        ),
+        plot_bgcolor=C_SECTION,
+        paper_bgcolor=C_BG,
+        hovermode="closest",
+        uirevision="live-plot",
+        barmode="relative",
+        height=800,
+        margin=dict(b=100, l=80, r=80, t=100),
+        font=dict(family="Arial, sans-serif", size=11),
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=0.99,
+            xanchor="right",
+            x=0.99,
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor=C_BORDER,
+            borderwidth=1,
+            uirevision="live-plot",
+        ),
+    )
 
-        if state["show_bars"]:
-            state["bar_info"] = _draw_bars(
-                ax, plot_data, all_test_names, bar_width, show_failed=state["show_failed"]
-            )
-        else:
-            state["bar_info"] = []
-            
-        # Clear any existing tooltips/details
-        if state["tooltip"] is not None:
-            state["tooltip"].remove()
-            state["tooltip"] = None
-        if state["details_text"] is not None:
-            state["details_text"].remove()
-            state["details_text"] = None
-        state["hovered_idx"] = None
-        
-        ax.axhline(0, color=C_BORDER, linewidth=1.0, zorder=1)
+    # Set axis limits
+    fig.update_xaxes(range=[x_min - x_pad, x_max + x_pad])
+    fig.update_yaxes(range=[y_min - y_pad, y_max + y_pad])
 
-        avg_x, avg_y = plot_data["avg_x"], plot_data["avg_y"]
-        best_x, best_y = plot_data["best_x"], plot_data["best_y"]
+    # Add zero line
+    fig.add_hline(
+        y=0, line_dash="solid", line_color=C_BORDER, line_width=1, layer="below"
+    )
 
-        if state["rolling_avg"] and avg_x:
-            ax.plot(
-                avg_x,
-                avg_y,
-                color=C_AVG,
-                linestyle="--",
-                linewidth=2,
-                alpha=0.85,
-                zorder=5,
-            )
-        if state["best_so_far"] and best_x:
-            ax.plot(
-                best_x,
-                best_y,
-                color=C_BEST,
-                linestyle="-",
-                linewidth=2,
-                alpha=0.85,
-                zorder=5,
-            )
-
-        for test_name in all_test_names:
-            if state.get(f"test_avg_{test_name}", True):
-                t_x, t_y = plot_data["per_test_avg"].get(test_name, ([], []))
-                if t_x:
-                    ax.plot(
-                        t_x,
-                        t_y,
-                        color=_test_color(test_name, all_test_names),
-                        linestyle="-.",
-                        linewidth=1.5,
-                        alpha=0.85,
-                        zorder=5,
-                    )
-
-        ax.set_xlabel("Generation", fontsize=12, fontweight="bold")
-        _set_gen_ticks(
-            ax,
-            plot_data["gen_tick_positions"],
-            plot_data["gen_tick_labels"],
-        )
-        ax.set_ylabel("Score contribution", fontsize=12, fontweight="bold")
-        ax.set_title(
-            "Gripper Optimization — Per-Test Contributions",
-            fontsize=14,
-            fontweight="bold",
-            color=C_BANNER,
-        )
-        ax.grid(axis="y", which="both", alpha=0.25, linestyle="--")
-        ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=10))
-        for spine in ax.spines.values():
-            spine.set_edgecolor(C_BORDER)
-
-        _build_legend(ax, all_test_names)
-        _refit_axes()
-        fig.canvas.draw_idle()
-
-    def _refit_axes() -> None:
-        all_ys = list(plot_data["final_scores"])
-        for contrib in plot_data["contributions"]:
-            pos = sum(v for v in contrib.values() if v > 0)
-            neg = sum(v for v in contrib.values() if v < 0)
-            all_ys.extend([pos, neg])
-        if plot_data["avg_y"]:
-            all_ys.extend(plot_data["avg_y"])
-        if plot_data["best_y"]:
-            all_ys.extend(plot_data["best_y"])
-        for _t_x, t_y in plot_data.get("per_test_avg", {}).values():
-            if t_y:
-                all_ys.extend(t_y)
-        if not all_ys:
-            return
-        y_min, y_max = min(all_ys), max(all_ys)
-        pad = max(1.0, abs(y_max - y_min) * 0.08)
-        ax.set_ylim(y_min - pad, y_max + pad)
-
-        xs = plot_data["xs"]
-        if xs:
-            x_pad = max(1.0, (max(xs) - min(xs)) * 0.02)
-            ax.set_xlim(min(xs) - x_pad, max(xs) + x_pad)
-
-    # ── Buttons ────────────────────────────────────────────────────────────
-    btn_colors = {True: "#a0a0a0", False: "#d7d7d7"}
-
-    def style_btn(btn, on: bool) -> None:
-        btn.color = btn_colors[on]
-        btn.hovercolor = "#bdbdbd"
-        btn.ax.set_facecolor(btn_colors[on])
-
-    # ── Hover and Click Handlers ───────────────────────────────────────────
-    def _find_nearest_bar(mouse_x: float) -> int | None:
-        """Find bar index nearest to mouse_x position. Returns None if no bar nearby."""
-        if not state["bar_info"]:
-            return None
-        nearest_idx = None
-        min_dist = float('inf')
-        for info in state["bar_info"]:
-            dist = abs(info["x"] - mouse_x)
-            if dist < info["width"] * 1.2 and dist < min_dist:
-                min_dist = dist
-                nearest_idx = info["index"]
-        return nearest_idx
-
-    def _format_tooltip(record_idx: int) -> str:
-        """Format tooltip text with generation, trial, and score."""
-        if record_idx >= len(records):
-            return ""
-        r = records[record_idx]
-        gen = r.get("gen_index", "?")
-        trial_id = r.get("trial_id", record_idx)
-        final_score = sum(_compute_contributions(r).values())
-        return f"Gen {gen} | Trial {trial_id}\nScore: {final_score:.3f}"
-
-    def _format_detailed_info(record_idx: int) -> str:
-        """Format detailed info with per-test scores on click."""
-        if record_idx >= len(records):
-            return ""
-        r = records[record_idx]
-        gen = r.get("gen_index", "?")
-        trial_id = r.get("trial_id", record_idx)
-        
-        contrib = _compute_contributions(r)
-        final_score = sum(contrib.values())
-        
-        lines = [
-            f"Generation: {gen}",
-            f"Trial ID: {trial_id}",
-            f"Total Score: {final_score:.4f}",
-            "─" * 25,
-        ]
-        
-        # Add per-test scores
-        for test_name in all_test_names:
-            score = contrib.get(test_name, 0.0)
-            lines.append(f"{test_name}: {score:.4f}")
-        
-        return "\n".join(lines)
-
-    def on_motion(event) -> None:
-        """Handle mouse motion to show tooltip."""
-        if event.inaxes != ax or not state["show_bars"]:
-            # Hide tooltip if mouse leaves axes
-            if state["tooltip"] is not None:
-                state["tooltip"].remove()
-                state["tooltip"] = None
-            state["hovered_idx"] = None
-            fig.canvas.draw_idle()
-            return
-
-        nearest = _find_nearest_bar(event.xdata)
-        
-        if nearest == state["hovered_idx"]:
-            return  # No change
-        
-        state["hovered_idx"] = nearest
-        
-        # Remove old tooltip
-        if state["tooltip"] is not None:
-            state["tooltip"].remove()
-            state["tooltip"] = None
-        
-        if nearest is not None:
-            tooltip_text = _format_tooltip(nearest)
-            # Position tooltip slightly offset from mouse
-            state["tooltip"] = ax.text(
-                event.xdata,
-                event.ydata,
-                tooltip_text,
-                fontsize=9,
-                bbox=dict(
-                    boxstyle="round,pad=0.5",
-                    facecolor="#fffacd",
-                    alpha=0.9,
-                    edgecolor="#808000",
-                ),
-                zorder=10,
-                ha="left",
-            )
-        
-        fig.canvas.draw_idle()
-
-    def on_click(event) -> None:
-        """Handle click to show detailed info."""
-        if event.inaxes != ax or not state["show_bars"] or event.button != 1:
-            return
-        
-        nearest = _find_nearest_bar(event.xdata)
-        if nearest is None:
-            # Clear details if clicked empty area
-            if state["details_text"] is not None:
-                state["details_text"].remove()
-                state["details_text"] = None
-            fig.canvas.draw_idle()
-            return
-        
-        # Remove old details
-        if state["details_text"] is not None:
-            state["details_text"].remove()
-        
-        details_text = _format_detailed_info(nearest)
-        # Position in upper right, inside the axis
-        state["details_text"] = ax.text(
-            0.98,
-            0.97,
-            details_text,
-            fontsize=9,
-            bbox=dict(
-                boxstyle="round,pad=0.7",
-                facecolor="#e8f4f8",
-                alpha=0.95,
-                edgecolor="#0066cc",
-                linewidth=1.5,
-            ),
-            zorder=10,
-            ha="right",
-            va="top",
-            transform=ax.transAxes,
-            family="monospace",
-        )
-        
-        fig.canvas.draw_idle()
-
-    BW, BH, BG = 0.09, 0.05, 0.01
-
-    # Row 1: global controls
-    R1Y = 0.12
-    live_ax   = fig.add_axes([0.02 + 0 * (BW + BG), R1Y, BW, BH])
-    failed_ax = fig.add_axes([0.02 + 1 * (BW + BG), R1Y, BW, BH])
-    avg_ax    = fig.add_axes([0.02 + 2 * (BW + BG), R1Y, BW, BH])
-    best_ax   = fig.add_axes([0.02 + 3 * (BW + BG), R1Y, BW, BH])
-    bars_ax   = fig.add_axes([0.02 + 4 * (BW + BG), R1Y, BW, BH])
-
-    btn_live   = Button(live_ax,   "Live: OFF")
-    btn_failed = Button(failed_ax, "Failed")
-    btn_avg    = Button(avg_ax,    "Avg")
-    btn_best   = Button(best_ax,   "Best")
-    btn_bars   = Button(bars_ax,   "Bars")
-
-    style_btn(btn_live,   state["live"])
-    style_btn(btn_failed, state["show_failed"])
-    style_btn(btn_avg,    state["rolling_avg"])
-    style_btn(btn_best,   state["best_so_far"])
-    style_btn(btn_bars,   state["show_bars"])
-
-    # Row 2: per-test rolling average toggles
-    R2Y = 0.04
-    _per_test_btns: list[Button] = []
-    for j, test_name in enumerate(all_test_names):
-        t_ax = fig.add_axes([0.02 + j * (BW + BG), R2Y, BW, BH])
-        t_btn = Button(t_ax, f"~{test_name}")
-        style_btn(t_btn, state.get(f"test_avg_{test_name}", True))
-        _per_test_btns.append(t_btn)
-
-        def _make_toggle(name: str, btn: Button):
-            def _toggle(_e) -> None:
-                state[f"test_avg_{name}"] = not state.get(f"test_avg_{name}", True)
-                style_btn(btn, state[f"test_avg_{name}"])
-                full_redraw(records)
-            return _toggle
-
-        t_btn.on_clicked(_make_toggle(test_name, t_btn))
-
-    refresh_timer = fig.canvas.new_timer(interval=int(LIVE_REFRESH_SECONDS * 1000))
-
-    def on_timer() -> None:
+    # Use Dash for live-updating web view (preserves zoom/pan when possible)
+    if DASH_AVAILABLE:
         try:
-            updated = load_all_trials()
-            full_redraw(updated if updated else records)
-        except Exception as exc:
-            print(f"[warn] Live refresh failed: {exc}")
+            app = Dash(__name__, suppress_callback_exceptions=True)
 
-    refresh_timer.add_callback(on_timer)
+            def _make_plot_state() -> dict:
+                visibility = {}
+                for trace in fig.data:
+                    uid = getattr(trace, "uid", None)
+                    if uid:
+                        visibility[uid] = getattr(trace, "visible", True)
+                return {"xrange": None, "yrange": None, "visibility": visibility}
 
-    def toggle_live(_e) -> None:
-        state["live"] = not state["live"]
-        if state["live"]:
-            refresh_timer.start()
-            btn_live.label.set_text("Live: ON")
-        else:
-            refresh_timer.stop()
-            btn_live.label.set_text("Live: OFF")
-        style_btn(btn_live, state["live"])
-        fig.canvas.draw_idle()
+            app.layout = html.Div(
+                [
+                    dcc.Graph(id="plot", figure=fig, config={"displayModeBar": True}),
+                    dcc.Store(id="plot-state", data=_make_plot_state()),
+                    dcc.Interval(
+                        id="interval",
+                        interval=int(LIVE_REFRESH_SECONDS * 1000),
+                        n_intervals=0,
+                    ),
+                ],
+                style={"width": "100%", "height": "100%"},
+            )
 
-    def toggle_failed(_e) -> None:
-        state["show_failed"] = not state["show_failed"]
-        style_btn(btn_failed, state["show_failed"])
-        full_redraw(records)
+            @app.callback(
+                Output("plot-state", "data"),
+                [Input("plot", "relayoutData"), Input("plot", "restyleData")],
+                [State("plot", "figure"), State("plot-state", "data")],
+            )
+            def _update_plot_state(relayout, restyle, current_figure, plot_state):
+                state = plot_state or _make_plot_state()
 
-    def toggle_avg(_e) -> None:
-        state["rolling_avg"] = not state["rolling_avg"]
-        style_btn(btn_avg, state["rolling_avg"])
-        full_redraw(records)
+                if relayout:
+                    if "xaxis.range[0]" in relayout and "xaxis.range[1]" in relayout:
+                        state["xrange"] = [
+                            relayout["xaxis.range[0]"],
+                            relayout["xaxis.range[1]"],
+                        ]
+                    elif "xaxis.range" in relayout:
+                        state["xrange"] = relayout["xaxis.range"]
 
-    def toggle_best(_e) -> None:
-        state["best_so_far"] = not state["best_so_far"]
-        style_btn(btn_best, state["best_so_far"])
-        full_redraw(records)
+                    if "yaxis.range[0]" in relayout and "yaxis.range[1]" in relayout:
+                        state["yrange"] = [
+                            relayout["yaxis.range[0]"],
+                            relayout["yaxis.range[1]"],
+                        ]
+                    elif "yaxis.range" in relayout:
+                        state["yrange"] = relayout["yaxis.range"]
 
-    def toggle_bars(_e) -> None:
-        state["show_bars"] = not state["show_bars"]
-        style_btn(btn_bars, state["show_bars"])
-        full_redraw(records)
+                if restyle and current_figure:
+                    try:
+                        changes, trace_indices = restyle
+                    except Exception:
+                        changes, trace_indices = {}, []
 
-    btn_live.on_clicked(toggle_live)
-    btn_failed.on_clicked(toggle_failed)
-    btn_avg.on_clicked(toggle_avg)
-    btn_best.on_clicked(toggle_best)
-    btn_bars.on_clicked(toggle_bars)
+                    if not isinstance(trace_indices, (list, tuple)):
+                        trace_indices = [trace_indices]
 
-    def on_close(_e) -> None:
-        refresh_timer.stop()
+                    visible_change = (
+                        changes.get("visible") if isinstance(changes, dict) else None
+                    )
+                    if visible_change is not None:
+                        if isinstance(visible_change, (list, tuple)):
+                            visible_values = list(visible_change)
+                        else:
+                            visible_values = [visible_change] * max(
+                                1, len(trace_indices)
+                            )
 
-    fig.canvas.mpl_connect("close_event", on_close)
-    fig.canvas.mpl_connect("motion_notify_event", on_motion)
-    fig.canvas.mpl_connect("button_press_event", on_click)
+                        for idx_pos, trace_index in enumerate(trace_indices):
+                            if trace_index is None:
+                                continue
+                            if trace_index < len(current_figure.get("data", [])):
+                                trace_info = current_figure["data"][trace_index]
+                                uid = (
+                                    trace_info.get("uid")
+                                    or trace_info.get("name")
+                                    or str(trace_index)
+                                )
+                                state.setdefault("visibility", {})[uid] = (
+                                    visible_values[
+                                        min(idx_pos, len(visible_values) - 1)
+                                    ]
+                                )
 
-    full_redraw(records)
-    plt.show()
+                return state
+
+            @app.callback(
+                Output("plot", "figure"),
+                Input("interval", "n_intervals"),
+                State("plot-state", "data"),
+            )
+            def _update(n_intervals, plot_state):
+                try:
+                    updated = load_all_trials()
+                    use_records = updated if updated else records
+
+                    new_test_names = _collect_all_test_names(use_records)
+                    new_plot_data = compute_plot_data(use_records, new_test_names)
+
+                    new_bar_traces = _build_bar_traces(
+                        use_records, new_plot_data, new_test_names
+                    )
+                    new_hover = _build_hover_overlay(
+                        use_records, new_plot_data, new_test_names, bar_width
+                    )
+                    new_final = _build_final_ticks(new_plot_data, bar_width)
+                    new_avg_traces = _build_avg_traces(new_plot_data, new_test_names)
+
+                    new_fig = go.Figure(
+                        data=new_bar_traces + [new_hover, new_final] + new_avg_traces
+                    )
+                    # copy layout settings from original figure
+                    new_fig.update_layout(fig.layout)
+
+                    plot_state = plot_state or {}
+                    visibility_map = plot_state.get("visibility", {})
+                    for trace in new_fig.data:
+                        uid = getattr(trace, "uid", None)
+                        if uid and uid in visibility_map:
+                            trace.visible = visibility_map[uid]
+
+                    xr = plot_state.get("xrange")
+                    yr = plot_state.get("yrange")
+                    if xr:
+                        new_fig.update_xaxes(range=xr)
+                    if yr:
+                        new_fig.update_yaxes(range=yr)
+
+                    return new_fig
+                except Exception as exc:
+                    import traceback
+
+                    print(f"[warn] Dash update failed: {exc}")
+                    print(traceback.format_exc())
+                    return fig
+
+            # Run the Dash server (blocks until stopped)
+            print("[plot] Dash server starting at http://127.0.0.1:8050")
+
+            # Auto-open browser in a separate thread (allow server to start first)
+            def open_browser():
+                time.sleep(1.5)
+                try:
+                    # Try webbrowser first
+                    webbrowser.open("http://127.0.0.1:8050")
+                except Exception:
+                    try:
+                        # Fallback: use subprocess on Windows
+                        if sys.platform == "win32":
+                            subprocess.Popen(
+                                ["start", "http://127.0.0.1:8050"], shell=True
+                            )
+                    except Exception:
+                        pass  # Silently fail if both methods don't work
+
+            browser_thread = threading.Thread(target=open_browser, daemon=True)
+            browser_thread.start()
+
+            # Run Dash server in production mode with proper error handling
+            try:
+                # Try Dash run first
+                try:
+                    app.run(
+                        host="127.0.0.1", port=8050, debug=False, use_reloader=False
+                    )
+                except KeyError as ke:
+                    if "WERKZEUG_SERVER_FD" in str(ke):
+                        # Clear all WERKZEUG environment variables and try Flask directly
+                        for key in list(os.environ.keys()):
+                            if "WERKZEUG" in key:
+                                os.environ.pop(key, None)
+                        print(
+                            "[info] Retrying server with cleaned Werkzeug environment..."
+                        )
+                        app.run(
+                            host="127.0.0.1", port=8050, debug=False, use_reloader=False
+                        )
+                    else:
+                        raise
+            except OSError as e:
+                if "Address already in use" in str(e):
+                    print(
+                        f"[error] Port 8050 is already in use. Is the server already running?"
+                    )
+                else:
+                    print(f"[error] Failed to start Dash server: {e}")
+            except Exception as e:
+                print(f"[error] Unexpected error starting Dash server: {e}")
+                import traceback
+
+                print(traceback.format_exc())
+
+        except Exception as e:
+            print(f"[error] Failed to initialize Dash app: {e}")
+            import traceback
+
+            print(traceback.format_exc())
+    else:
+        print(
+            "[warn] Dash not available — falling back to static figure (open manually)."
+        )
+        fig.show()
