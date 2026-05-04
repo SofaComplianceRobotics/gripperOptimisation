@@ -44,11 +44,27 @@ class ModelParams:
     cylinder_radius: float = field(
         default=26.5, metadata={"opt": {"type": "float", "min": 24, "max": 28}}
     )
-    cylinder_height: float = field(
-        default=4.0, metadata={"opt": {"type": "float", "min": 2, "max": 6}}
-    )
     cylinder_hole_thickness: float = field(
         default=3.0, metadata={"opt": {"type": "float", "min": 1, "max": 5}}
+    )
+    cylinder_height_A: float = field(
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
+    )
+    cylinder_height_B: float = field(
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
+    )
+    cylinder_height_C: float = field(
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
+    )
+    cylinder_plateau_A_deg: float = field(
+        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
+    )
+    cylinder_plateau_B_deg: float = field(
+        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
+    )
+    # Effective max = 45 - max(plateau_A, plateau_B); clamped in the optimizer after sampling.
+    cylinder_plateau_C_deg: float = field(
+        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
     )
 
     # Leg attachment
@@ -107,14 +123,61 @@ class ModelParams:
         default=0.0, metadata={"opt": {"type": "float", "min": -10.0, "max": 260.0}}
     )
 
+    def cylinder_height_at(self, theta_deg: float) -> float:
+        """Return the ring height at a given angle (degrees)."""
+        cps = [
+            (0.0, self.cylinder_height_A, self.cylinder_plateau_A_deg),
+            (45.0, self.cylinder_height_C, self.cylinder_plateau_C_deg),
+            (90.0, self.cylinder_height_B, self.cylinder_plateau_B_deg),
+            (135.0, self.cylinder_height_C, self.cylinder_plateau_C_deg),
+            (180.0, self.cylinder_height_A, self.cylinder_plateau_A_deg),
+            (225.0, self.cylinder_height_C, self.cylinder_plateau_C_deg),
+            (270.0, self.cylinder_height_B, self.cylinder_plateau_B_deg),
+            (315.0, self.cylinder_height_C, self.cylinder_plateau_C_deg),
+        ]
+        theta = theta_deg % 360.0
+        gap = 45.0
+        n = len(cps)
+        for i in range(n):
+            angle_i, height_i, plateau_i = cps[i]
+            _, height_j, plateau_j = cps[(i + 1) % n]
+            rel = (theta - angle_i) % 360.0
+            if rel > gap + 1e-9:
+                continue
+            half_i = min(plateau_i / 2.0, gap / 2.0)
+            half_j = min(plateau_j / 2.0, gap / 2.0)
+            if half_i + half_j >= gap:
+                t = rel / gap
+                t_s = (1.0 - math.cos(math.pi * t)) / 2.0
+                return height_i + t_s * (height_j - height_i)
+            if rel <= half_i:
+                return height_i
+            transition_end = gap - half_j
+            if rel >= transition_end:
+                return height_j
+            t = (rel - half_i) / (transition_end - half_i)
+            t_s = (1.0 - math.cos(math.pi * t)) / 2.0
+            return height_i + t_s * (height_j - height_i)
+        return self.cylinder_height_A
+
+    @property
+    def cylinder_height(self) -> float:
+        return max(
+            self.cylinder_height_A, self.cylinder_height_B, self.cylinder_height_C
+        )
+
     @property
     def pincer_points(self) -> tuple[PincerSplinePoint, ...]:
         p0_hout_x = self.p0_hout_dist * math.cos(math.radians(self.p0_hout_angle_deg))
         p0_hout_y = self.p0_hout_dist * math.sin(math.radians(self.p0_hout_angle_deg))
         p1_x = self.p1_dist * math.cos(math.radians(self.p1_angle_deg))
         p1_y = self.p1_dist * math.sin(math.radians(self.p1_angle_deg))
-        p1_hin_x = p1_x + self.p1_hin_dist * math.cos(math.radians(self.p1_hin_angle_deg))
-        p1_hin_y = p1_y + self.p1_hin_dist * math.sin(math.radians(self.p1_hin_angle_deg))
+        p1_hin_x = p1_x + self.p1_hin_dist * math.cos(
+            math.radians(self.p1_hin_angle_deg)
+        )
+        p1_hin_y = p1_y + self.p1_hin_dist * math.sin(
+            math.radians(self.p1_hin_angle_deg)
+        )
         return (
             PincerSplinePoint(p=(0.0, 0.0), h_in=None, h_out=(p0_hout_x, p0_hout_y)),
             PincerSplinePoint(p=(p1_x, p1_y), h_in=(p1_hin_x, p1_hin_y), h_out=None),
@@ -154,7 +217,9 @@ def validate_params(p: ModelParams) -> None:
     """
     positive_fields = {
         "cylinder_radius": p.cylinder_radius,
-        "cylinder_height": p.cylinder_height,
+        "cylinder_height_A": p.cylinder_height_A,
+        "cylinder_height_B": p.cylinder_height_B,
+        "cylinder_height_C": p.cylinder_height_C,
         "cylinder_hole_thickness": p.cylinder_hole_thickness,
         "leg_hole_length": p.leg_hole_length,
         "leg_hole_width": p.leg_hole_width,

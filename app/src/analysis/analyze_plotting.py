@@ -191,11 +191,14 @@ def _draw_bars(
     all_test_names: list[str],
     bar_width: float,
     show_failed: bool = True,
-) -> None:
+) -> list[dict]:
     """Draw diverging stacked contribution bars on ax.
 
     Positive contributions stack upward, negatives stack downward. Failed
     trials render at reduced opacity; incomplete trials at lower opacity.
+
+    Returns:
+        List of bar metadata dicts with keys: index, x, width, record_index
     """
     xs = plot_data["xs"]
     contributions = plot_data["contributions"]
@@ -203,6 +206,7 @@ def _draw_bars(
     is_complete = plot_data["is_complete"]
 
     tick_w = bar_width * 1
+    bar_info = []
 
     for i, (x, contrib, failed, complete) in enumerate(
         zip(xs, contributions, failed_mask, is_complete)
@@ -214,6 +218,14 @@ def _draw_bars(
         pos_bottom = 0.0
         neg_bottom = 0.0
         incomplete_alpha = 0.5 if not complete else 1.0
+
+        # Track bar info for hover/click detection
+        bar_info.append({
+            "index": i,
+            "x": x,
+            "width": bar_width,
+            "record_index": i,
+        })
 
         for test_name in all_test_names:
             val = contrib.get(test_name, 0.0)
@@ -261,6 +273,8 @@ def _draw_bars(
             solid_capstyle="round",
             zorder=4,
         )
+
+    return bar_info
 
 
 # ---------------------------------------------------------------------------
@@ -374,6 +388,10 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         "rolling_avg": True,
         "best_so_far": True,
         "show_bars": True,
+        "bar_info": [],  # Metadata for hover/click detection
+        "hovered_idx": None,  # Currently hovered bar index
+        "tooltip": None,  # Current tooltip annotation
+        "details_text": None,  # Current detail info text
         **{f"test_avg_{n}": True for n in all_test_names},
     }
 
@@ -397,9 +415,21 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         ax.set_facecolor(C_SECTION)
 
         if state["show_bars"]:
-            _draw_bars(
+            state["bar_info"] = _draw_bars(
                 ax, plot_data, all_test_names, bar_width, show_failed=state["show_failed"]
             )
+        else:
+            state["bar_info"] = []
+            
+        # Clear any existing tooltips/details
+        if state["tooltip"] is not None:
+            state["tooltip"].remove()
+            state["tooltip"] = None
+        if state["details_text"] is not None:
+            state["details_text"].remove()
+            state["details_text"] = None
+        state["hovered_idx"] = None
+        
         ax.axhline(0, color=C_BORDER, linewidth=1.0, zorder=1)
 
         avg_x, avg_y = plot_data["avg_x"], plot_data["avg_y"]
@@ -494,6 +524,139 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         btn.hovercolor = "#bdbdbd"
         btn.ax.set_facecolor(btn_colors[on])
 
+    # ── Hover and Click Handlers ───────────────────────────────────────────
+    def _find_nearest_bar(mouse_x: float) -> int | None:
+        """Find bar index nearest to mouse_x position. Returns None if no bar nearby."""
+        if not state["bar_info"]:
+            return None
+        nearest_idx = None
+        min_dist = float('inf')
+        for info in state["bar_info"]:
+            dist = abs(info["x"] - mouse_x)
+            if dist < info["width"] * 1.2 and dist < min_dist:
+                min_dist = dist
+                nearest_idx = info["index"]
+        return nearest_idx
+
+    def _format_tooltip(record_idx: int) -> str:
+        """Format tooltip text with generation, trial, and score."""
+        if record_idx >= len(records):
+            return ""
+        r = records[record_idx]
+        gen = r.get("gen_index", "?")
+        trial_id = r.get("trial_id", record_idx)
+        final_score = sum(_compute_contributions(r).values())
+        return f"Gen {gen} | Trial {trial_id}\nScore: {final_score:.3f}"
+
+    def _format_detailed_info(record_idx: int) -> str:
+        """Format detailed info with per-test scores on click."""
+        if record_idx >= len(records):
+            return ""
+        r = records[record_idx]
+        gen = r.get("gen_index", "?")
+        trial_id = r.get("trial_id", record_idx)
+        
+        contrib = _compute_contributions(r)
+        final_score = sum(contrib.values())
+        
+        lines = [
+            f"Generation: {gen}",
+            f"Trial ID: {trial_id}",
+            f"Total Score: {final_score:.4f}",
+            "─" * 25,
+        ]
+        
+        # Add per-test scores
+        for test_name in all_test_names:
+            score = contrib.get(test_name, 0.0)
+            lines.append(f"{test_name}: {score:.4f}")
+        
+        return "\n".join(lines)
+
+    def on_motion(event) -> None:
+        """Handle mouse motion to show tooltip."""
+        if event.inaxes != ax or not state["show_bars"]:
+            # Hide tooltip if mouse leaves axes
+            if state["tooltip"] is not None:
+                state["tooltip"].remove()
+                state["tooltip"] = None
+            state["hovered_idx"] = None
+            fig.canvas.draw_idle()
+            return
+
+        nearest = _find_nearest_bar(event.xdata)
+        
+        if nearest == state["hovered_idx"]:
+            return  # No change
+        
+        state["hovered_idx"] = nearest
+        
+        # Remove old tooltip
+        if state["tooltip"] is not None:
+            state["tooltip"].remove()
+            state["tooltip"] = None
+        
+        if nearest is not None:
+            tooltip_text = _format_tooltip(nearest)
+            # Position tooltip slightly offset from mouse
+            state["tooltip"] = ax.text(
+                event.xdata,
+                event.ydata,
+                tooltip_text,
+                fontsize=9,
+                bbox=dict(
+                    boxstyle="round,pad=0.5",
+                    facecolor="#fffacd",
+                    alpha=0.9,
+                    edgecolor="#808000",
+                ),
+                zorder=10,
+                ha="left",
+            )
+        
+        fig.canvas.draw_idle()
+
+    def on_click(event) -> None:
+        """Handle click to show detailed info."""
+        if event.inaxes != ax or not state["show_bars"] or event.button != 1:
+            return
+        
+        nearest = _find_nearest_bar(event.xdata)
+        if nearest is None:
+            # Clear details if clicked empty area
+            if state["details_text"] is not None:
+                state["details_text"].remove()
+                state["details_text"] = None
+            fig.canvas.draw_idle()
+            return
+        
+        # Remove old details
+        if state["details_text"] is not None:
+            state["details_text"].remove()
+        
+        details_text = _format_detailed_info(nearest)
+        # Position in upper right, inside the axis
+        state["details_text"] = ax.text(
+            0.98,
+            0.97,
+            details_text,
+            fontsize=9,
+            bbox=dict(
+                boxstyle="round,pad=0.7",
+                facecolor="#e8f4f8",
+                alpha=0.95,
+                edgecolor="#0066cc",
+                linewidth=1.5,
+            ),
+            zorder=10,
+            ha="right",
+            va="top",
+            transform=ax.transAxes,
+            family="monospace",
+        )
+        
+        fig.canvas.draw_idle()
+
     BW, BH, BG = 0.09, 0.05, 0.01
 
     # Row 1: global controls
@@ -586,6 +749,8 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         refresh_timer.stop()
 
     fig.canvas.mpl_connect("close_event", on_close)
+    fig.canvas.mpl_connect("motion_notify_event", on_motion)
+    fig.canvas.mpl_connect("button_press_event", on_click)
 
     full_redraw(records)
     plt.show()
