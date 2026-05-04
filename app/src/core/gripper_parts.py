@@ -28,8 +28,13 @@ def _make_variable_height_ring(
     ro: float,
     ri: float,
     height_func,
-    n_samples: int = 72,
+    n_samples: int = 100,
 ) -> cq.Workplane:
+    """Create annular ring with smooth height variation using interpolated heights.
+
+    At 144 sectors (2.5° each), height differences between adjacent sectors are
+    sub-millimeter, so the mesh naturally interpolates smoothly without visible steps.
+    """
     sweep = 360.0 / n_samples
     mid_r = (ro + ri) / 2.0
     thickness = ro - ri
@@ -37,9 +42,16 @@ def _make_variable_height_ring(
     result = None
     for i in range(n_samples):
         angle_start = i * sweep
-        h = height_func(angle_start + sweep / 2.0)
-        sector = annular_sector(mid_r, thickness, angle_start, sweep, h)
+        angle_end = angle_start + sweep
+
+        # Interpolate height between sector edges
+        h_start = height_func(angle_start)
+        h_end = height_func(angle_end)
+        h_avg = (h_start + h_end) / 2.0
+
+        sector = annular_sector(mid_r, thickness, angle_start, sweep, h_avg)
         result = sector if result is None else result.union(sector)
+
     return result
 
 
@@ -61,7 +73,9 @@ def make_circle(p: ModelParams) -> cq.Workplane:
     base_ro = p.cylinder_radius + (base_thickness / 2.0)
     base_ri = p.cylinder_radius - (base_thickness / 2.0)
 
-    result = _make_variable_height_ring(base_ro, max(base_ri, 0.0), p.cylinder_height_at)
+    result = _make_variable_height_ring(
+        base_ro, max(base_ri, 0.0), p.cylinder_height_at
+    )
 
     sector_mid_r = p.cylinder_radius
     sector_inner_r = sector_mid_r - (thickened_thickness / 2.0)
@@ -76,8 +90,11 @@ def make_circle(p: ModelParams) -> cq.Workplane:
         start_deg = center_deg - (span / 2.0)
         result = result.union(
             annular_sector(
-                sector_mid_r, thickened_thickness, start_deg, span,
-                p.cylinder_height_at(float(center_deg))
+                sector_mid_r,
+                thickened_thickness,
+                start_deg,
+                span,
+                p.cylinder_height_at(float(center_deg)),
             )
         )
 

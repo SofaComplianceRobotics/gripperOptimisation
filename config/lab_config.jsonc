@@ -3,7 +3,7 @@
   "cylinder_height_A": 15.0, // 0° and 180° are tall
   "cylinder_height_B": 3.0, // 90° and 270° are short
   "cylinder_height_C": 4.5, // 45°/135°/225°/315° are mid
-  "cylinder_plateau_A_deg": 20.0, // flat for x° either side of 0° and 180°
+  "cylinder_plateau_A_deg": 0.0, // flat for x° either side of 0° and 180°
   "cylinder_plateau_B_deg": 0.0, // flat for x° either side of 90° and 270°
   "cylinder_plateau_C_deg": 0.0, // flat for x° either side of 45°/135°/225°/315°
   "cylinder_hole_thickness": 2.3115030747002887,

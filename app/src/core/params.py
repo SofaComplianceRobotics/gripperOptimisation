@@ -48,13 +48,13 @@ class ModelParams:
         default=3.0, metadata={"opt": {"type": "float", "min": 1, "max": 5}}
     )
     cylinder_height_A: float = field(
-        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 2}}
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
     )
     cylinder_height_B: float = field(
-        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 2}}
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
     )
     cylinder_height_C: float = field(
-        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 2}}
+        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
     )
     cylinder_plateau_A_deg: float = field(
         default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
@@ -126,9 +126,9 @@ class ModelParams:
     def cylinder_height_at(self, theta_deg: float) -> float:
         """Return the ring height at a given angle (degrees)."""
         cps = [
-            (  0.0, self.cylinder_height_A, self.cylinder_plateau_A_deg),
-            ( 45.0, self.cylinder_height_C, self.cylinder_plateau_C_deg),
-            ( 90.0, self.cylinder_height_B, self.cylinder_plateau_B_deg),
+            (0.0, self.cylinder_height_A, self.cylinder_plateau_A_deg),
+            (45.0, self.cylinder_height_C, self.cylinder_plateau_C_deg),
+            (90.0, self.cylinder_height_B, self.cylinder_plateau_B_deg),
             (135.0, self.cylinder_height_C, self.cylinder_plateau_C_deg),
             (180.0, self.cylinder_height_A, self.cylinder_plateau_A_deg),
             (225.0, self.cylinder_height_C, self.cylinder_plateau_C_deg),
@@ -162,7 +162,9 @@ class ModelParams:
 
     @property
     def cylinder_height(self) -> float:
-        return max(self.cylinder_height_A, self.cylinder_height_B, self.cylinder_height_C)
+        return max(
+            self.cylinder_height_A, self.cylinder_height_B, self.cylinder_height_C
+        )
 
     @property
     def pincer_points(self) -> tuple[PincerSplinePoint, ...]:
@@ -170,8 +172,12 @@ class ModelParams:
         p0_hout_y = self.p0_hout_dist * math.sin(math.radians(self.p0_hout_angle_deg))
         p1_x = self.p1_dist * math.cos(math.radians(self.p1_angle_deg))
         p1_y = self.p1_dist * math.sin(math.radians(self.p1_angle_deg))
-        p1_hin_x = p1_x + self.p1_hin_dist * math.cos(math.radians(self.p1_hin_angle_deg))
-        p1_hin_y = p1_y + self.p1_hin_dist * math.sin(math.radians(self.p1_hin_angle_deg))
+        p1_hin_x = p1_x + self.p1_hin_dist * math.cos(
+            math.radians(self.p1_hin_angle_deg)
+        )
+        p1_hin_y = p1_y + self.p1_hin_dist * math.sin(
+            math.radians(self.p1_hin_angle_deg)
+        )
         return (
             PincerSplinePoint(p=(0.0, 0.0), h_in=None, h_out=(p0_hout_x, p0_hout_y)),
             PincerSplinePoint(p=(p1_x, p1_y), h_in=(p1_hin_x, p1_hin_y), h_out=None),

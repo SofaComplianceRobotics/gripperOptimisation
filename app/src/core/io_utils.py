@@ -290,17 +290,21 @@ def _export_with_gmsh(
 
         if export_3d:
             gmsh.option.setNumber("Mesh.Algorithm3D", 10)  # HXT tetrahedra.
+            # HXT only supports triangles; do not recombine to quads.
             gmsh.option.setNumber("Mesh.RecombineAll", 0)
             gmsh.option.setNumber("Mesh.Binary", 0)  # ASCII VTK for compatibility.
             gmsh.model.mesh.generate(2)
             gmsh.model.mesh.generate(3)
         else:
             gmsh.option.setNumber("Mesh.AngleSmoothNormals", p.mesh_angle_smooth)
-            # Keep STL as pure triangles for robustness; quad recombination can
-            # create invalid facets on extreme coarse meshes.
-            gmsh.option.setNumber("Mesh.RecombineAll", 0)
-            gmsh.option.setNumber("Mesh.Smoothing", 1)
-            gmsh.option.setNumber("Mesh.Optimize", 1)
+            # Recombine triangles to quads for more efficient surface mesh.
+            gmsh.option.setNumber("Mesh.RecombineAll", 1)
+            # Aggressive smoothing to blend stepped geometry into smooth slopes
+            gmsh.option.setNumber("Mesh.Smoothing", 10)  # Multiple smoothing passes
+            gmsh.option.setNumber(
+                "Mesh.Optimize", 2
+            )  # Level 2 optimization (more aggressive)
+            gmsh.option.setNumber("Mesh.OptimizeNetgen", 1)  # Additional Netgen pass
             gmsh.option.setNumber("Mesh.Binary", 1)
             gmsh.model.mesh.generate(2)
 
@@ -392,7 +396,7 @@ def model_to_stl_collision(
         gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 0)
         gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
         gmsh.option.setNumber("Mesh.MeshSizeFromParametricPoints", 0)
-        gmsh.option.setNumber("Mesh.RecombineAll", 0)
+        gmsh.option.setNumber("Mesh.RecombineAll", 1)
 
         gmsh.option.setNumber("Mesh.Algorithm", 6)
         gmsh.option.setNumber("Mesh.Optimize", 1)
