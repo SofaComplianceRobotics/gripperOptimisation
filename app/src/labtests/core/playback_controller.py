@@ -56,7 +56,10 @@ def make_playback_controller(SofaController):
 
             self.finished = False
             self.frame = 0
-            self.recorded_frames = len(playback.motor_positions)
+            # recorded_frames is the sim-frame count for the recording phase,
+            # accounting for any DT mismatch between the recording and the sim.
+            rec_dt = playback.recording_dt
+            self.recorded_frames = round(len(playback.motor_positions) * rec_dt / DT)
             self.overload_frames = max(0, int(cfg.overload_max_time / DT))
             self.total_frames = self.recorded_frames + self.overload_frames
             self.peak_y = float("-inf")
@@ -407,9 +410,10 @@ def make_playback_controller(SofaController):
                 return
 
             # ── Motor replay ───────────────────────────────────────────────────
+            rec_frame = int(sim_time / self.playback.recording_dt)
             positions = (
-                self.playback.motor_positions[self.frame]
-                if self.frame < self.recorded_frames
+                self.playback.motor_positions[rec_frame]
+                if rec_frame < len(self.playback.motor_positions)
                 else self.last_positions
             )
             for i, constraint in enumerate(self.playback.joint_constraints):

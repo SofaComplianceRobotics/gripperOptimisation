@@ -48,9 +48,9 @@ Run the optimization loop:
 python app/src/launch/launch_optimize.py
 ```
 
-Analyze results after optimization:
+Open the analysis dashboard after optimization:
 ```bash
-python app/src/analysis/analyze_results.py
+python app/src/analysis/dashboard.py
 ```
 
 ---

@@ -85,15 +85,8 @@ STL
 
 <div style="border: 1px solid #d8dde3; border-radius: 12px; padding: 14px 16px; background: #fafbfc; display: flex; flex-direction: column; height: 100%; min-height: 250px;">
 <p align="center"><strong>Analysis & monitoring</strong></p>
-<p align="center">Analyse optimisation results</p>
 
 <div style="margin-top: auto; display: grid; gap: 10px;">
-
-#python-button("assets/labs/lab_shapeOPT/app/src/analysis/analyze_results.py")
-
-<p align="center">Monitor live progress</p>
-
-#python-button("assets/labs/lab_shapeOPT/app/src/analysis/progress_monitor.py")
 
 <p align="center">Benchmark SOFA concurrency</p>
 

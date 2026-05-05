@@ -50,7 +50,7 @@ import sys
 import subprocess
 
 # Suppress Werkzeug and Dash logs
-os.environ["WERKZEUG_RUN_MAIN"] = "true"
+os.environ.pop("WERKZEUG_RUN_MAIN", None)
 # Clear any leftover Werkzeug server FD environment variables
 os.environ.pop("WERKZEUG_SERVER_FD", None)
 os.environ.pop("WERKZEUG_SERVER_FD_DEF", None)

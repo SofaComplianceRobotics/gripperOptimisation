@@ -19,6 +19,7 @@ class PlaybackHandles(NamedTuple):
     motor_positions: list[list[float]]
     joint_constraints: list[object]
     num_motors: int
+    recording_dt: float  # time step used when recording (may differ from sim DT)
 
 
 def setup(emio, record_file: str | Path) -> PlaybackHandles:
@@ -52,9 +53,11 @@ def setup(emio, record_file: str | Path) -> PlaybackHandles:
     if not motor_positions:
         raise ValueError(f"[motor_playback] Recording is empty: {record_file}")
 
+    recording_dt = float(recording_data.get("dt", 0.01))
     num_motors = len(emio.motors)
     print(
         f"[motor_playback] Loaded {len(motor_positions)} frames "
+        f"(recording_dt={recording_dt}s) "
         f"for {num_motors} motors from {record_file.name}"
     )
 
@@ -71,4 +74,4 @@ def setup(emio, record_file: str | Path) -> PlaybackHandles:
         )
         joint_constraints.append(constraint)
 
-    return PlaybackHandles(motor_positions, joint_constraints, num_motors)
+    return PlaybackHandles(motor_positions, joint_constraints, num_motors, recording_dt)
