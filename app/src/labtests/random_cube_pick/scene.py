@@ -70,8 +70,7 @@ def createScene(rootnode):
 
     finish_bonus = float(os.environ.get("SHAPEOPT_FINISH_BONUS", "2.0"))
     weight_min = float(os.environ.get("SHAPEOPT_CUBE_WEIGHT_MIN", "0.02"))
-    # Lower default max mass to avoid overly heavy cubes during randomization
-    weight_max = float(os.environ.get("SHAPEOPT_CUBE_WEIGHT_MAX", "0.1"))
+    weight_max = float(os.environ.get("SHAPEOPT_CUBE_WEIGHT_MAX", "0.2"))
 
     cube_scale, cube_mass = _resolve_cube_config(
         cfg.meta.run_slot, cfg.meta.gen, weight_min, weight_max
