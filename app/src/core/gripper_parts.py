@@ -74,7 +74,10 @@ def make_circle(p: ModelParams) -> cq.Workplane:
     base_ri = p.cylinder_radius - (base_thickness / 2.0)
 
     result = _make_variable_height_ring(
-        base_ro, max(base_ri, 0.0), p.cylinder_height_at
+        base_ro,
+        max(base_ri, 0.0),
+        p.cylinder_height_at,
+        n_samples=p.ring_ramp_samples,
     )
 
     sector_mid_r = p.cylinder_radius

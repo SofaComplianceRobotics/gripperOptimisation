@@ -48,6 +48,7 @@ _bootstrap_lab_site_packages()
 def _has_required_runtime_packages() -> bool:
     try:
         import cadquery  # noqa: F401
+
         return True
     except ModuleNotFoundError:
         return False
@@ -59,10 +60,15 @@ def _install_lab_dependencies_here() -> bool:
     LAB_SITE_PACKAGES.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [
-            sys.executable, "-m", "pip", "install",
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
             "--disable-pip-version-check",
-            "--target", str(LAB_SITE_PACKAGES),
-            "-r", str(LAB_REQUIREMENTS),
+            "--target",
+            str(LAB_SITE_PACKAGES),
+            "-r",
+            str(LAB_REQUIREMENTS),
         ],
         check=False,
     )
@@ -105,21 +111,61 @@ def params_from_config(cfg: dict, base, fine: bool = False):
 
     kwargs: dict = dict(
         cylinder_radius=float(cfg.get("cylinder_radius", base.cylinder_radius)),
-        cylinder_hole_thickness=float(cfg.get("cylinder_hole_thickness", base.cylinder_hole_thickness)),
-        cylinder_height_A=float(cfg.get("cylinder_height_A", _h_fallback if _h_fallback is not None else base.cylinder_height_A)),
-        cylinder_height_B=float(cfg.get("cylinder_height_B", _h_fallback if _h_fallback is not None else base.cylinder_height_B)),
-        cylinder_height_C=float(cfg.get("cylinder_height_C", _h_fallback if _h_fallback is not None else base.cylinder_height_C)),
-        cylinder_plateau_A_deg=float(cfg.get("cylinder_plateau_A_deg", base.cylinder_plateau_A_deg)),
-        cylinder_plateau_B_deg=float(cfg.get("cylinder_plateau_B_deg", base.cylinder_plateau_B_deg)),
-        cylinder_plateau_C_deg=float(cfg.get("cylinder_plateau_C_deg", base.cylinder_plateau_C_deg)),
-        leg_attachement_tilt_angle=float(cfg.get("leg_attachement_tilt_angle", base.leg_attachement_tilt_angle)),
-        pincer_profile_width=float(cfg.get("pincer_profile_width", base.pincer_profile_width)),
-        pincer_profile_height=float(cfg.get("pincer_profile_height", base.pincer_profile_height)),
-        pincer_profile_samples=int(round(float(cfg.get("pincer_profile_samples", base.pincer_profile_samples)))),
-        pincer_round_cap_segments=int(round(float(cfg.get("pincer_round_cap_segments", base.pincer_round_cap_segments)))),
+        cylinder_hole_thickness=float(
+            cfg.get("cylinder_hole_thickness", base.cylinder_hole_thickness)
+        ),
+        cylinder_height_A=float(
+            cfg.get(
+                "cylinder_height_A",
+                _h_fallback if _h_fallback is not None else base.cylinder_height_A,
+            )
+        ),
+        cylinder_height_B=float(
+            cfg.get(
+                "cylinder_height_B",
+                _h_fallback if _h_fallback is not None else base.cylinder_height_B,
+            )
+        ),
+        cylinder_height_C=float(
+            cfg.get(
+                "cylinder_height_C",
+                _h_fallback if _h_fallback is not None else base.cylinder_height_C,
+            )
+        ),
+        cylinder_plateau_A_deg=float(
+            cfg.get("cylinder_plateau_A_deg", base.cylinder_plateau_A_deg)
+        ),
+        cylinder_plateau_B_deg=float(
+            cfg.get("cylinder_plateau_B_deg", base.cylinder_plateau_B_deg)
+        ),
+        cylinder_plateau_C_deg=float(
+            cfg.get("cylinder_plateau_C_deg", base.cylinder_plateau_C_deg)
+        ),
+        leg_attachement_tilt_angle=float(
+            cfg.get("leg_attachement_tilt_angle", base.leg_attachement_tilt_angle)
+        ),
+        pincer_profile_width=float(
+            cfg.get("pincer_profile_width", base.pincer_profile_width)
+        ),
+        pincer_profile_height=float(
+            cfg.get("pincer_profile_height", base.pincer_profile_height)
+        ),
+        pincer_profile_samples=int(
+            round(float(cfg.get("pincer_profile_samples", base.pincer_profile_samples)))
+        ),
+        pincer_round_cap_segments=int(
+            round(
+                float(
+                    cfg.get("pincer_round_cap_segments", base.pincer_round_cap_segments)
+                )
+            )
+        ),
         pincer_path_scale=float(cfg.get("pincer_path_scale", base.pincer_path_scale)),
         pincer_tilt_y_deg=float(cfg.get("pincer_tilt_y_deg", base.pincer_tilt_y_deg)),
         pincer_round_ends=bool(cfg.get("pincer_round_ends", base.pincer_round_ends)),
+        ring_ramp_samples=int(
+            round(float(cfg.get("ring_ramp_samples", base.ring_ramp_samples)))
+        ),
         mesh_enabled=True,
         mesh_show_viewer=False,
     )
@@ -146,7 +192,12 @@ def params_from_config(cfg: dict, base, fine: bool = False):
         kwargs["mesh_size_max_stl"] = 2.0
         kwargs["mesh_size_min_stl"] = 0.8
         kwargs["export_stem"] = "new_gripper_print"
-        current_samples = kwargs.get("pincer_profile_samples", base.pincer_profile_samples)
+        kwargs["ring_ramp_samples"] = max(
+            kwargs.get("ring_ramp_samples", base.ring_ramp_samples), 400
+        )
+        current_samples = kwargs.get(
+            "pincer_profile_samples", base.pincer_profile_samples
+        )
         kwargs["pincer_profile_samples"] = current_samples * 10
 
     return replace(base, **kwargs)

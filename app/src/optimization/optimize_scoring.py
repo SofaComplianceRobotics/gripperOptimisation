@@ -9,6 +9,7 @@ import json
 import os
 import statistics
 import time
+import errno
 from pathlib import Path
 
 from optimize_config import (
@@ -36,7 +37,7 @@ def write_run_status(path: Path, data: dict) -> None:
     """
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    tmp_path.replace(path)
+    _replace_with_retry(tmp_path, path)
 
 
 def _acquire_lock(lock_path: Path, timeout_s: float = 5.0) -> bool:
@@ -70,6 +71,43 @@ def _read_json_safe(path: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+
+def _replace_with_retry(tmp: Path, path: Path, timeout_s: float = 1.0) -> None:
+    """Replace `path` with `tmp` with retries to handle Windows permission errors.
+
+    On Windows, replacing a file can fail with PermissionError if another
+    process briefly holds the file open. Retry for a short timeout before
+    raising.
+    """
+    deadline = time.time() + float(timeout_s)
+    last_exc: Exception | None = None
+    while True:
+        try:
+            # Prefer Path.replace which uses os.replace under the hood.
+            tmp.replace(path)
+            return
+        except PermissionError as e:
+            last_exc = e
+            if time.time() >= deadline:
+                break
+            time.sleep(0.02)
+            continue
+        except OSError as e:
+            # Handle specific Windows access errors similarly.
+            last_exc = e
+            if e.errno in (errno.EACCES, errno.EPERM) and time.time() < deadline:
+                time.sleep(0.02)
+                continue
+            break
+    # Last resort: try os.replace directly once more (will raise original error)
+    try:
+        os.replace(str(tmp), str(path))
+        return
+    except Exception:
+        if last_exc:
+            raise last_exc
+        raise
 
 
 def init_trial_state(
@@ -139,7 +177,7 @@ def update_trial_run(path: Path, run_index: int, patch: dict) -> None:
 
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        tmp.replace(path)
+        _replace_with_retry(tmp, path)
     finally:
         _release_lock(lock_path)
 
@@ -170,7 +208,7 @@ def update_trial_summary(path: Path, patch: dict) -> None:
         data["updated_at"] = time.time()
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        tmp.replace(path)
+        _replace_with_retry(tmp, path)
     finally:
         _release_lock(lock_path)
 

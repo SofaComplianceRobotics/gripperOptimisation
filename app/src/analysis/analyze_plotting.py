@@ -234,6 +234,58 @@ def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _calculate_smart_ticks(
+    gen_tick_positions: list, gen_tick_labels: list, visible_range: tuple = None
+) -> tuple[list, list]:
+    """Calculate smart generation ticks with stride to avoid crowding.
+
+    Args:
+        gen_tick_positions: X positions of generation boundaries
+        gen_tick_labels: Generation numbers as strings
+        visible_range: (x_min, x_max) of currently visible area. If None, uses full range.
+
+    Returns:
+        (filtered_positions, filtered_labels) for use in tickvals/ticktext
+    """
+    if not gen_tick_positions:
+        return [], []
+
+    if visible_range:
+        x_min, x_max = visible_range
+    else:
+        x_min = gen_tick_positions[0]
+        x_max = gen_tick_positions[-1]
+
+    # Find ticks within visible range
+    visible_indices = [
+        i for i, pos in enumerate(gen_tick_positions) if x_min <= pos <= x_max
+    ]
+
+    if not visible_indices:
+        return [], []
+
+    num_visible = len(visible_indices)
+    max_comfortable_labels = 15
+
+    if num_visible <= max_comfortable_labels:
+        stride = 1
+    else:
+        min_stride = num_visible / max_comfortable_labels
+        standard_intervals = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+        stride = next(
+            (s for s in standard_intervals if s >= min_stride), standard_intervals[-1]
+        )
+
+    # Filter by stride, starting from first visible index
+    first_idx = visible_indices[0]
+    filtered_indices = [i for i in visible_indices if (i - first_idx) % stride == 0]
+
+    filtered_positions = [gen_tick_positions[i] for i in filtered_indices]
+    filtered_labels = [gen_tick_labels[i] for i in filtered_indices]
+
+    return filtered_positions, filtered_labels
+
+
 def _build_bar_traces(
     records: list[dict],
     plot_data: dict,
@@ -478,6 +530,11 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
     gen_ticks = plot_data["gen_tick_positions"]
     gen_labels = plot_data["gen_tick_labels"]
 
+    # Calculate initial smart ticks
+    filtered_tick_vals, filtered_tick_labels = _calculate_smart_ticks(
+        gen_ticks, gen_labels
+    )
+
     fig.update_layout(
         title={
             "text": "Gripper Optimization — Per-Test Contributions",
@@ -487,8 +544,8 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
         },
         xaxis=dict(
             title="Generation",
-            tickvals=gen_ticks,
-            ticktext=gen_labels,
+            tickvals=filtered_tick_vals,
+            ticktext=filtered_tick_labels,
             showgrid=True,
             gridwidth=1,
             gridcolor="rgba(200,200,200,0.3)",
@@ -544,7 +601,13 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
                     uid = getattr(trace, "uid", None)
                     if uid:
                         visibility[uid] = getattr(trace, "visible", True)
-                return {"xrange": None, "yrange": None, "visibility": visibility}
+                return {
+                    "xrange": None,
+                    "yrange": None,
+                    "visibility": visibility,
+                    "gen_tick_positions": plot_data["gen_tick_positions"],
+                    "gen_tick_labels": plot_data["gen_tick_labels"],
+                }
 
             app.layout = html.Div(
                 [
@@ -659,6 +722,18 @@ def plot_combined(records: list[dict], summaries: list[dict]) -> None:
 
                     xr = plot_state.get("xrange")
                     yr = plot_state.get("yrange")
+
+                    # Recalculate ticks based on current zoom range using current data
+                    gen_ticks = new_plot_data["gen_tick_positions"]
+                    gen_labels = new_plot_data["gen_tick_labels"]
+                    filtered_vals, filtered_labels = _calculate_smart_ticks(
+                        gen_ticks, gen_labels, xr
+                    )
+                    if filtered_vals:
+                        new_fig.update_xaxes(
+                            tickvals=filtered_vals, ticktext=filtered_labels
+                        )
+
                     if xr:
                         new_fig.update_xaxes(range=xr)
                     if yr:

@@ -184,6 +184,7 @@ class ModelParams:
         )
 
     # Mesh
+    ring_ramp_samples: int = 100
     mesh_enabled: bool = True
     mesh_size_max_stl: float = 35
     mesh_size_min_stl: float = 15
@@ -270,6 +271,10 @@ def validate_params(p: ModelParams) -> None:
     if p.pincer_profile_height <= 0:
         raise ValueError(
             f"pincer_profile_height must be > 0. Got {p.pincer_profile_height}."
+        )
+    if p.ring_ramp_samples < 8:
+        raise ValueError(
+            f"ring_ramp_samples must be >= 8. Got {p.ring_ramp_samples}."
         )
     if p.pincer_path_scale <= 0:
         raise ValueError(f"pincer_path_scale must be > 0. Got {p.pincer_path_scale}.")
