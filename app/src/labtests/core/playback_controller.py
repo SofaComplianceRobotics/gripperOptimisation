@@ -20,6 +20,7 @@ Three override hooks:
     _update_overload_mass()      per-frame mass update (default: ramp to cfg.cube_mass_max)
     _on_horizon_complete(t)      end-of-frames action  (default: write_pruned_and_stop)
 """
+
 from __future__ import annotations
 
 import os
@@ -162,9 +163,7 @@ def make_playback_controller(SofaController):
             if self.cube_gripper_contact_listener is None:
                 try:
                     self.cube_gripper_contact_listener = (
-                        self.rootnode.Simulation.getObject(
-                            "cubeGripperContactListener"
-                        )
+                        self.rootnode.Simulation.getObject("cubeGripperContactListener")
                     )
                 except Exception:
                     pass
@@ -379,10 +378,12 @@ def make_playback_controller(SofaController):
                         )
                     return
 
-                # Rule 2: pickup gate failed
+                # Rule 2: pickup gate failed — treat as explicit failure with score -1
                 if sim_time >= self.cfg.early_stop_sim_time and not self.was_picked_up:
-                    score = self.cfg.no_pickup_penalty
-                    reason = f"no_pickup_penalty={self.cfg.no_pickup_penalty:.2f} hold_time={self.hold_time:.2f}s"
+                    score = -1.0
+                    reason = (
+                        f"no_pickup score={score:.2f} hold_time={self.hold_time:.2f}s"
+                    )
                     self._save_cube_y_graph(score, reason)
                     self.writer.write_score_and_stop(
                         score,
