@@ -111,7 +111,7 @@ class ModelParams:
         default=0.0, metadata={"opt": {"type": "float", "min": -90.0, "max": 90.0}}
     )
     p1_dist: float = field(
-        default=90.0, metadata={"opt": {"type": "float", "min": 80.0, "max": 110.0}}
+        default=90.0, metadata={"opt": {"type": "float", "min": 80.0, "max": 120.0}}
     )
     p1_angle_deg: float = field(
         default=-40.0, metadata={"opt": {"type": "float", "min": -90.0, "max": 45.0}}
@@ -273,9 +273,7 @@ def validate_params(p: ModelParams) -> None:
             f"pincer_profile_height must be > 0. Got {p.pincer_profile_height}."
         )
     if p.ring_ramp_samples < 8:
-        raise ValueError(
-            f"ring_ramp_samples must be >= 8. Got {p.ring_ramp_samples}."
-        )
+        raise ValueError(f"ring_ramp_samples must be >= 8. Got {p.ring_ramp_samples}.")
     if p.pincer_path_scale <= 0:
         raise ValueError(f"pincer_path_scale must be > 0. Got {p.pincer_path_scale}.")
     if p.pincer_profile_samples < 4:

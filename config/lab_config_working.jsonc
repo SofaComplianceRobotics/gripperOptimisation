@@ -1,22 +1,25 @@
 {
-  "cylinder_radius": 26.5,
-  "cylinder_height": 4.0,
-  "cylinder_hole_thickness": 3.0,
-  "pincer_profile_width": 5.0,
-  "pincer_profile_height": 10.0,
+  "cylinder_radius": 27,
+  "cylinder_height_A": 10, // 0° and 180° are tall
+  "cylinder_height_B": 10, // 90° and 270° are short
+  "cylinder_height_C": 10, // 45°/135°/225°/315° are mid
+  "cylinder_plateau_A_deg": 0.0, // flat for x° either side of 0° and 180°
+  "cylinder_plateau_B_deg": 0.0, // flat for x° either side of 90° and 270°
+  "cylinder_plateau_C_deg": 0.0, // flat for x° either side of 45°/135°/225°/315°
+  "cylinder_hole_thickness": 2,
+  "leg_attachement_tilt_angle": 9,
+  "pincer_profile_width": 4,
+  "pincer_profile_height": 9,
   "pincer_path_scale": 0.4,
   "pincer_tilt_y_deg": 90.0,
   "pincer_round_ends": true,
-  "p0_hout_dist": 0.0,
-  "p0_hout_angle_deg": 0.0,
-  "p1_dist": 90.0,
-  "p1_angle_deg": -40.0,
-  "p1_hin_dist": 0.0,
-  "p1_hin_angle_deg": 0.0,
-  "leg_attachement_tilt_angle": 0.0,
-  "mesh_size_max": 9,
-  "mesh_size_min": 6,
   "mesh_collision_size": 90.0,
   "mesh_angle_smooth": 20.0,
-  "mesh_size_from_curvature": 12
+  "mesh_size_from_curvature": 12,
+  "p0_hout_dist": 0,
+  "p0_hout_angle_deg": 0,
+  "p1_dist": 90,
+  "p1_angle_deg": 0,
+  "p1_hin_dist": 0,
+  "p1_hin_angle_deg": 0
 }

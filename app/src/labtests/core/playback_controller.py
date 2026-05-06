@@ -20,6 +20,7 @@ Three override hooks:
     _update_overload_mass()      per-frame mass update (default: ramp to cfg.cube_mass_max)
     _on_horizon_complete(t)      end-of-frames action  (default: write_pruned_and_stop)
 """
+
 from __future__ import annotations
 
 import os
@@ -162,9 +163,7 @@ def make_playback_controller(SofaController):
             if self.cube_gripper_contact_listener is None:
                 try:
                     self.cube_gripper_contact_listener = (
-                        self.rootnode.Simulation.getObject(
-                            "cubeGripperContactListener"
-                        )
+                        self.rootnode.Simulation.getObject("cubeGripperContactListener")
                     )
                 except Exception:
                     pass
