@@ -23,6 +23,12 @@ from optimize_config import (
     PREVIEWS_DIR,
 )
 
+FLOAT_SUGGEST_STEP = 0.1
+
+
+def _round_float(value: float) -> float:
+    return round(float(value), 3)
+
 
 class GeometryExportTimeoutError(RuntimeError):
     """Raised when generate_gripper.py times out."""
@@ -86,14 +92,23 @@ def params_from_trial(trial) -> dict:
         if spec["min"] == 0 and spec["max"] == 0:
             result[name] = spec["default"]
         elif spec["type"] == "float":
-            value = trial.suggest_float(name, spec["min"], spec["max"])
+            value = trial.suggest_float(
+                name,
+                spec["min"],
+                spec["max"],
+                step=FLOAT_SUGGEST_STEP,
+            )
             if name == "cylinder_plateau_C_deg":
-                max_c = max(0.0, 45.0 - max(
-                    result.get("cylinder_plateau_A_deg", 0.0),
-                    result.get("cylinder_plateau_B_deg", 0.0),
-                ))
+                max_c = max(
+                    0.0,
+                    45.0
+                    - max(
+                        result.get("cylinder_plateau_A_deg", 0.0),
+                        result.get("cylinder_plateau_B_deg", 0.0),
+                    ),
+                )
                 value = min(value, max_c)
-            result[name] = value
+            result[name] = _round_float(value)
         elif spec["type"] == "int":
             result[name] = trial.suggest_int(name, int(spec["min"]), int(spec["max"]))
         elif spec["type"] == "bool":
