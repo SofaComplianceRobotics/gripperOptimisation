@@ -28,28 +28,34 @@ def _make_variable_height_ring(
     ro: float,
     ri: float,
     height_func,
-    n_samples: int = 100,
+    n_samples: int = 16,
 ) -> cq.Workplane:
-    """Create annular ring with smooth height variation using interpolated heights.
+    """Create annular ring with smooth height variation using sector-by-sector ruled lofts.
 
-    At 144 sectors (2.5° each), height differences between adjacent sectors are
-    sub-millimeter, so the mesh naturally interpolates smoothly without visible steps.
+    Each sector is a ruled loft between two radial cross-section rectangles, giving
+    smooth height interpolation between adjacent slice angles. Sector-by-sector avoids
+    the closed-loop seam issue that OCC's topology upgrader rejects on a full-ring loft.
     """
-    sweep = 360.0 / n_samples
-    mid_r = (ro + ri) / 2.0
-    thickness = ro - ri
-
     result = None
     for i in range(n_samples):
-        angle_start = i * sweep
-        angle_end = angle_start + sweep
+        angle_start = i * 360.0 / n_samples
+        angle_end = angle_start + 360.0 / n_samples
 
-        # Interpolate height between sector edges
-        h_start = height_func(angle_start)
-        h_end = height_func(angle_end)
-        h_avg = (h_start + h_end) / 2.0
+        wires = []
+        for angle_deg in (angle_start, angle_end):
+            angle_rad = math.radians(angle_deg)
+            h = height_func(angle_deg % 360.0)
+            ca, sa = math.cos(angle_rad), math.sin(angle_rad)
+            pts = [
+                Vector(ri * ca, ri * sa, 0),
+                Vector(ro * ca, ro * sa, 0),
+                Vector(ro * ca, ro * sa, h),
+                Vector(ri * ca, ri * sa, h),
+                Vector(ri * ca, ri * sa, 0),
+            ]
+            wires.append(Wire.makePolygon(pts))
 
-        sector = annular_sector(mid_r, thickness, angle_start, sweep, h_avg)
+        sector = cq.Workplane().add(cq.Solid.makeLoft(wires, ruled=True))
         result = sector if result is None else result.union(sector)
 
     return result

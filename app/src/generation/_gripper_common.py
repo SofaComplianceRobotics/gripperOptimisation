@@ -193,7 +193,7 @@ def params_from_config(cfg: dict, base, fine: bool = False):
         kwargs["mesh_size_min_stl"] = 0.8
         kwargs["export_stem"] = "new_gripper_print"
         kwargs["ring_ramp_samples"] = max(
-            kwargs.get("ring_ramp_samples", base.ring_ramp_samples), 400
+            kwargs.get("ring_ramp_samples", base.ring_ramp_samples), 64
         )
         current_samples = kwargs.get(
             "pincer_profile_samples", base.pincer_profile_samples

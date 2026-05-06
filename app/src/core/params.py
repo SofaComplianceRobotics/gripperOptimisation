@@ -184,11 +184,11 @@ class ModelParams:
         )
 
     # Mesh
-    ring_ramp_samples: int = 100
+    ring_ramp_samples: int = 32
     mesh_enabled: bool = True
-    mesh_size_max_stl: float = 35
+    mesh_size_max_stl: float = 45
     mesh_size_min_stl: float = 15
-    mesh_size_max_vtk: float = 35
+    mesh_size_max_vtk: float = 45
     mesh_size_min_vtk: float = 10
     mesh_collision_size: float = field(
         default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
