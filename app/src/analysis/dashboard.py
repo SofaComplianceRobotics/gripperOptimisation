@@ -328,22 +328,34 @@ def _build_progress_card(trial_record: dict) -> html.Div:
         or ("done" if trial_record.get("is_complete") else "running")
     ).lower()
 
+    # init_trial_state writes "running" which stays until the optimizer writes "done"
+    # after post-processing.  If every individual run is already terminal, infer "done"
+    # immediately so the card reflects reality without waiting for the optimizer.
+    _terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
+    if state not in _terminal and runs and all(
+        str(r.get("state", "")).lower() in _terminal
+        for r in runs
+        if isinstance(r, dict)
+    ):
+        state = "done"
+
     run_rows = []
     if runs:
         for run in runs:
             if not isinstance(run, dict):
                 continue
             run_state = str(run.get("state", "not-started")).lower()
-            score = run.get("score")
             bar_color = _state_color(run_state)
 
-            # Normalize score against the declared MAX_SCORE for this test
+            # Normalize against MAX_SCORE for this test
             test_name = run.get("test_name") or run.get("run_label") or ""
             max_score = _get_test_max_score(test_name)
 
-            if isinstance(score, (int, float)) and run_state not in {"not-started"}:
-                bar_pct = max(0.0, min(100.0, float(score) / max_score * 100)) if max_score > 0 else 0.0
-                score_label = f"{float(score):.3f}"
+            live_val, is_final = _get_live_score(run)
+            if live_val is not None and run_state not in {"not-started"}:
+                bar_pct = max(0.0, min(100.0, live_val / max_score * 100)) if max_score > 0 else 0.0
+                # Tilde prefix on live (non-final) values so the user knows it's in progress
+                score_label = f"{live_val:.3f}" if is_final else f"~{live_val:.3f}"
             else:
                 bar_pct = 0.0
                 score_label = "--"
@@ -541,6 +553,8 @@ def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.F
             margin={"l": 50, "r": 50, "t": 50, "b": 50},
             plot_bgcolor=C_BG,
             paper_bgcolor=C_BG,
+            # Keep zoom/pan/legend state across data refreshes
+            uirevision="performance-graph",
         )
         # Hint Plotly to animate updates smoothly when figures are replaced
         try:
@@ -772,6 +786,23 @@ def _build_progress_grid(records: list[dict]) -> html.Div:
     return html.Div(rows, style={"display": "grid", "gap": "12px"})
 
 
+def _get_live_score(run: dict) -> tuple[float | None, bool]:
+    """Return (value, is_final) for the best available score from a run dict.
+
+    Priority:
+      1. run["score"]    — final score written by write_score_and_stop (is_final=True)
+      2. run["hold_time"]— live tally for pickup tests; equals the final score in progress
+      Returns (None, False) when nothing meaningful is available yet.
+    """
+    score = run.get("score")
+    if isinstance(score, (int, float)):
+        return float(score), True
+    hold_time = run.get("hold_time")
+    if isinstance(hold_time, (int, float)):
+        return float(hold_time), False
+    return None, False
+
+
 def _find_earliest_not_done(records: list[dict]) -> str | None:
     """Return the card ID of the first trial that is not yet in a terminal state."""
     terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
@@ -866,16 +897,19 @@ def create_app() -> Dash:
     def update_bounds(_, heatmap_on):
         return _build_param_bounds_graph(show_heatmap=bool(heatmap_on))
 
-    @callback(
-        [Output("heatmap-toggle", "children"), Output("heatmap-enabled", "data")],
+    # Heatmap toggle — clientside so the button responds instantly
+    app.clientside_callback(
+        "function(n, cur) { if (!n) return window.dash_clientside.no_update; return !cur; }",
+        Output("heatmap-enabled", "data"),
         Input("heatmap-toggle", "n_clicks"),
         State("heatmap-enabled", "data"),
+        prevent_initial_call=True,
     )
-    def toggle_heatmap(n, current):
-        if not n:
-            return ("Show History" if not current else "Hide History"), bool(current)
-        new_state = not bool(current)
-        return ("Hide History" if new_state else "Show History"), new_state
+    app.clientside_callback(
+        'function(on) { return on ? "Hide History" : "Show History"; }',
+        Output("heatmap-toggle", "children"),
+        Input("heatmap-enabled", "data"),
+    )
 
     @callback(
         [Output("progress-stats", "children"), Output("progress-grid", "children")],
@@ -932,13 +966,33 @@ def create_app() -> Dash:
         Input("jump-running-target-store", "data"),
     )
 
-    # Disable auto-jump whenever the user has scrolled down (checked each interval tick)
+    # Detect USER-initiated scroll (wheel / touch / keyboard) via event listeners.
+    # Polling window.pageYOffset does NOT work here because the auto-jump itself calls
+    # scrollIntoView which moves the page and would immediately disable auto-jump.
+    # Using event listeners we only catch real user gestures.
     app.clientside_callback(
         """
         function(n_intervals, auto_enabled) {
-            if (!auto_enabled) { return window.dash_clientside.no_update; }
-            var offset = window.pageYOffset || document.documentElement.scrollTop || 0;
-            if (offset > 80) { return false; }
+            if (!window._ajScrollListenerReady) {
+                window._ajUserScrolled = false;
+                var mark = function() { window._ajUserScrolled = true; };
+                window.addEventListener('wheel',     mark, {passive: true});
+                window.addEventListener('touchmove', mark, {passive: true});
+                window.addEventListener('keydown', function(e) {
+                    if ([' ','ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(e.key)) {
+                        window._ajUserScrolled = true;
+                    }
+                }, {passive: true});
+                window._ajScrollListenerReady = true;
+            }
+            if (!auto_enabled) {
+                window._ajUserScrolled = false;
+                return window.dash_clientside.no_update;
+            }
+            if (window._ajUserScrolled) {
+                window._ajUserScrolled = false;
+                return false;
+            }
             return window.dash_clientside.no_update;
         }
         """,
@@ -948,7 +1002,7 @@ def create_app() -> Dash:
         prevent_initial_call=True,
     )
 
-    # Clicking "Top" also disables auto-jump so it doesn't immediately scroll back down
+    # "Top" button: scroll to top and disable auto-jump
     app.clientside_callback(
         """
         function(n) {
@@ -962,32 +1016,27 @@ def create_app() -> Dash:
         prevent_initial_call=True,
     )
 
-    # Clientside scroll-to-top when the Top button is pressed (visual side-effect only)
+    # jump-top-output is unused but kept to satisfy the existing layout element
     app.clientside_callback(
-        """
-        function(n) {
-            return window.dash_clientside.no_update;
-        }
-        """,
+        "function(n) { return window.dash_clientside.no_update; }",
         Output("jump-top-output", "children"),
         Input("jump-top-button", "n_clicks"),
     )
 
-    @callback(
-        [Output("jump-auto-toggle", "children"), Output("jump-auto-enabled", "data", allow_duplicate=True)],
+    # Auto-jump toggle — clientside so the button responds instantly without a server round-trip
+    app.clientside_callback(
+        "function(n, cur) { if (!n) return window.dash_clientside.no_update; return !cur; }",
+        Output("jump-auto-enabled", "data", allow_duplicate=True),
         Input("jump-auto-toggle", "n_clicks"),
         State("jump-auto-enabled", "data"),
         prevent_initial_call=True,
     )
-    def toggle_auto_jump(n, current):
-        # Toggle the auto-jump enabled flag and update button label
-        if not current:
-            current = False
-        if not n:
-            # initial render
-            return ("Auto-jump: On" if current else "Auto-jump: Off"), current
-        new_state = not bool(current)
-        return ("Auto-jump: On" if new_state else "Auto-jump: Off"), new_state
+    # Label always mirrors the store — updated by ANY source that changes the store
+    app.clientside_callback(
+        'function(on) { return on ? "Auto-jump: On" : "Auto-jump: Off"; }',
+        Output("jump-auto-toggle", "children"),
+        Input("jump-auto-enabled", "data"),
+    )
 
     return app
 

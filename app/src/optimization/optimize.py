@@ -412,179 +412,202 @@ def run_generation(
             prelaunch_scores.append(HARD_FAIL_SCORE)
             all_scores.append(HARD_FAIL_SCORE)
 
-    # --- Wait for all SOFA instances and collect scores ---
+    # --- Score each trial as soon as all its SOFA runs finish ---
     try:
-        wait_for_sofa_runs(gen_index, processes, all_scores, N_REPEATS)
-
+        finalized: set[int] = set()  # trial_index values already scored and written
         gen_scores = prelaunch_scores.copy()
+        total_runs = sum(len(runs) for _, _, runs in processes)
+        bar_width = 28
+        start_time = time.time()
+        last_print = 0.0
 
-        def _is_pruned_status(status_data: dict | None) -> bool:
-            if not isinstance(status_data, dict):
-                return False
-            state = str(status_data.get("state", "")).lower()
-            reason = str(status_data.get("reason", "")).lower()
-            return (
-                state == "pruned"
-                or "pruned" in reason
-                or "test horizon complete" in reason
-                or "glitched through floor after pickup" in reason
-            )
-
-        for trial_index, trial, runs in processes:
-            trial_dir = gen_dir / f"trial_{trial_index:02d}"
-            trial_state_path = trial_dir / "trial_state.json"
-            run_scores = []
-            run_plan_entries = list(RUN_PLAN)
-
-            for run_number, (p, _trial_state_path, run_slot) in enumerate(
-                runs, start=1
-            ):
-                run_data = read_trial_run(trial_state_path, run_slot) or {}
-                raw_score = run_data.get("score")
-                score = (
-                    float(raw_score)
-                    if isinstance(raw_score, (int, float))
-                    else float("-inf")
-                )
-                run_scores.append(score)
-                test_name, _, _ = run_plan_entries[run_number - 1]
-
-            if any(score == float("-inf") for score in run_scores):
-                final_score = HARD_FAIL_SCORE
-                study.tell(trial, final_score)
-                print(
-                    f"[score] trial_{trial_index:02d} → {final_score:.2f} "
-                    f"(generation failure)"
-                )
-                gen_scores.append(final_score)
-                all_scores.append(final_score)
-                update_trial_summary(
-                    trial_state_path,
-                    {
-                        "state": "failed",
-                        "final_score": final_score,
-                        "outcome": "generation failure",
-                    },
-                )
-                continue
-
-            valid_scores = [s for s in run_scores if s != float("-inf")]
-
-            if not valid_scores:
-                final_score = HARD_FAIL_SCORE
-                study.tell(trial, final_score)
-                gen_scores.append(final_score)
-                all_scores.append(final_score)
-                update_trial_summary(
-                    trial_state_path,
-                    {
-                        "state": "failed",
-                        "final_score": final_score,
-                        "outcome": "no valid run scores",
-                    },
-                )
-                continue
-
-            # Aggregate scores per test first so a 3-run test still contributes one
-            # score to the overall trial.
-            test_names_in_order = []
-            per_test_scores: list[float] = []
-            per_test_details: dict[str, dict[str, float | list[float]]] = {}
-            for test_name, _, test_run_total in run_plan_entries:
-                if test_name in per_test_details:
+        while len(finalized) < len(processes):
+            for trial_index, trial, runs in processes:
+                if trial_index in finalized:
                     continue
-                scores_for_test = [
-                    s
-                    for (t_name, _, _), s in zip(run_plan_entries, run_scores)
-                    if t_name == test_name
-                ]
-                valid_for_test = [s for s in scores_for_test if s != float("-inf")]
-                if not valid_for_test:
+                # Skip if any SOFA subprocess for this trial is still alive
+                if any(p.poll() is None for p, _, _ in runs):
                     continue
-                test_names_in_order.append(test_name)
-                # Aggregate repeated runs for a single test — no weighting or
-                # normalization here; that only applies when combining across tests.
-                test_aggregate, _, _, test_median = aggregate_trial_scores(
-                    valid_for_test,
-                    aggregation=_SELECTED_TEST_AGGREGATIONS.get(test_name, "mean"),
+
+                # All runs done — finalize this trial immediately
+                finalized.add(trial_index)
+                trial_dir = gen_dir / f"trial_{trial_index:02d}"
+                trial_state_path = trial_dir / "trial_state.json"
+                run_plan_entries = list(RUN_PLAN)
+                run_scores = []
+
+                for run_number, (p, _trial_state_path, run_slot) in enumerate(runs, start=1):
+                    run_data = read_trial_run(trial_state_path, run_slot) or {}
+                    raw_score = run_data.get("score")
+                    score = (
+                        float(raw_score)
+                        if isinstance(raw_score, (int, float))
+                        else float("-inf")
+                    )
+                    run_scores.append(score)
+
+                if any(score == float("-inf") for score in run_scores):
+                    final_score = HARD_FAIL_SCORE
+                    study.tell(trial, final_score)
+                    print(
+                        f"[score] trial_{trial_index:02d} → {final_score:.2f} "
+                        f"(generation failure)"
+                    )
+                    gen_scores.append(final_score)
+                    all_scores.append(final_score)
+                    update_trial_summary(
+                        trial_state_path,
+                        {
+                            "state": "failed",
+                            "final_score": final_score,
+                            "outcome": "generation failure",
+                        },
+                    )
+                    continue
+
+                valid_scores = [s for s in run_scores if s != float("-inf")]
+
+                if not valid_scores:
+                    final_score = HARD_FAIL_SCORE
+                    study.tell(trial, final_score)
+                    gen_scores.append(final_score)
+                    all_scores.append(final_score)
+                    update_trial_summary(
+                        trial_state_path,
+                        {
+                            "state": "failed",
+                            "final_score": final_score,
+                            "outcome": "no valid run scores",
+                        },
+                    )
+                    continue
+
+                # Aggregate scores per test first so a 3-run test still contributes one
+                # score to the overall trial.
+                test_names_in_order = []
+                per_test_scores: list[float] = []
+                per_test_details: dict[str, dict[str, float | list[float]]] = {}
+                for test_name, _, test_run_total in run_plan_entries:
+                    if test_name in per_test_details:
+                        continue
+                    scores_for_test = [
+                        s
+                        for (t_name, _, _), s in zip(run_plan_entries, run_scores)
+                        if t_name == test_name
+                    ]
+                    valid_for_test = [s for s in scores_for_test if s != float("-inf")]
+                    if not valid_for_test:
+                        continue
+                    test_names_in_order.append(test_name)
+                    test_aggregate, _, _, test_median = aggregate_trial_scores(
+                        valid_for_test,
+                        aggregation=_SELECTED_TEST_AGGREGATIONS.get(test_name, "mean"),
+                    )
+                    max_score = _SELECTED_TEST_MAX_SCORES.get(test_name, 1.0)
+                    per_test_scores.append(test_aggregate)
+                    per_test_details[test_name] = {
+                        "run_count": len(valid_for_test),
+                        "run_scores": [round(s, 4) for s in scores_for_test],
+                        "aggregate_score": round(test_aggregate, 4),
+                        "median_score": round(test_median, 4),
+                        "run_total": test_run_total,
+                        "max_score": max_score,
+                        "weight_pct": round(
+                            SELECTED_TEST_WEIGHTS.get(test_name, 0.0) * 100, 1
+                        ),
+                        # Normalized score for this test in [0, 1], clamped at 1.
+                        "normalized_score": round(
+                            min(test_aggregate / max_score, 1.0) if max_score > 0 else 0.0,
+                            4,
+                        ),
+                    }
+
+                if not per_test_scores:
+                    final_score = HARD_FAIL_SCORE
+                    study.tell(trial, final_score)
+                    gen_scores.append(final_score)
+                    all_scores.append(final_score)
+                    update_trial_summary(
+                        trial_state_path,
+                        {
+                            "state": "failed",
+                            "final_score": final_score,
+                            "outcome": "no valid per-test scores",
+                        },
+                    )
+                    continue
+
+                # Combine per-test scores into one trial score out of 100.
+                # Formula: Σ  min(score_i / max_i, 1.0)  *  weight_pct_i
+                aggregate_score, _, final_score, median_score = aggregate_trial_scores(
+                    per_test_scores,
+                    weights=SELECTED_TEST_WEIGHTS,
+                    names=test_names_in_order,
+                    max_scores=_SELECTED_TEST_MAX_SCORES,
                 )
-                max_score = _SELECTED_TEST_MAX_SCORES.get(test_name, 1.0)
-                per_test_scores.append(test_aggregate)
-                per_test_details[test_name] = {
-                    "run_count": len(valid_for_test),
-                    "run_scores": [round(s, 4) for s in scores_for_test],
-                    "aggregate_score": round(test_aggregate, 4),
-                    "median_score": round(test_median, 4),
-                    "run_total": test_run_total,
-                    "max_score": max_score,
-                    "weight_pct": round(
-                        SELECTED_TEST_WEIGHTS.get(test_name, 0.0) * 100, 1
-                    ),
-                    # Normalized score for this test in [0, 1], clamped at 1.
-                    "normalized_score": round(
-                        min(test_aggregate / max_score, 1.0) if max_score > 0 else 0.0,
-                        4,
-                    ),
+                study.tell(trial, final_score)
+
+                trial_stats = {
+                    "trial": trial_index,
+                    "gen": gen_index,
+                    "state": "done",
+                    "n_runs": len(valid_scores),
+                    "test_names": list(SELECTED_TEST_NAMES),
+                    "test_weights": {
+                        name: round(SELECTED_TEST_WEIGHTS.get(name, 0.0) * 100, 1)
+                        for name in SELECTED_TEST_NAMES
+                    },
+                    "test_max_scores": {
+                        name: _SELECTED_TEST_MAX_SCORES.get(name, 1.0)
+                        for name in SELECTED_TEST_NAMES
+                    },
+                    "run_test_names": [name for name, _, _ in run_plan_entries],
+                    "test_scores": per_test_details,
+                    "avg_score": round(sum(valid_scores) / len(valid_scores), 4),
+                    "median_score": round(median_score, 4),
+                    "aggregate_score": round(aggregate_score, 4),
+                    "best_run": round(max(valid_scores), 4),
+                    "worst_run": round(min(valid_scores), 4),
+                    "final_score": round(final_score, 4),
+                    "run_scores": [round(s, 4) for s in run_scores],
                 }
+                update_trial_summary(trial_state_path, trial_stats)
 
-            if not per_test_scores:
-                final_score = HARD_FAIL_SCORE
-                study.tell(trial, final_score)
+                print(
+                    f"\n[score] trial_{trial_index:02d} → {final_score:.2f}/100 "
+                    f"(weighted_normalized_agg: {aggregate_score:.2f})"
+                )
+
                 gen_scores.append(final_score)
                 all_scores.append(final_score)
-                update_trial_summary(
-                    trial_state_path,
-                    {
-                        "state": "failed",
-                        "final_score": final_score,
-                        "outcome": "no valid per-test scores",
-                    },
+
+            # Print a shared progress bar while waiting for remaining trials
+            now = time.time()
+            if now - last_print >= 0.5:
+                total_done = sum(
+                    sum(1 for p, _, _ in runs if p.poll() is not None)
+                    for _, _, runs in processes
                 )
-                continue
+                pct = (100.0 * total_done / total_runs) if total_runs else 100.0
+                filled = int(bar_width * total_done / total_runs) if total_runs else bar_width
+                bar = "#" * filled + "-" * (bar_width - filled)
+                elapsed = now - start_time
+                print(
+                    f"\r[progress] Gen {gen_index:04d} SOFA [{bar}] "
+                    f"{total_done}/{total_runs} ({pct:5.1f}%)  elapsed {elapsed:5.1f}s",
+                    end="",
+                    flush=True,
+                )
+                last_print = now
 
-            # Combine per-test scores into one trial score out of 100.
-            # Formula: Σ  min(score_i / max_i, 1.0)  *  weight_pct_i
-            aggregate_score, _, final_score, median_score = aggregate_trial_scores(
-                per_test_scores,
-                weights=SELECTED_TEST_WEIGHTS,
-                names=test_names_in_order,
-                max_scores=_SELECTED_TEST_MAX_SCORES,
-            )
-            study.tell(trial, final_score)
+            if len(finalized) < len(processes):
+                time.sleep(0.2)
 
-            trial_stats = {
-                "trial": trial_index,
-                "gen": gen_index,
-                "state": "done",
-                "n_runs": len(valid_scores),
-                "test_names": list(SELECTED_TEST_NAMES),
-                "test_weights": {
-                    name: round(SELECTED_TEST_WEIGHTS.get(name, 0.0) * 100, 1)
-                    for name in SELECTED_TEST_NAMES
-                },
-                "test_max_scores": {
-                    name: _SELECTED_TEST_MAX_SCORES.get(name, 1.0)
-                    for name in SELECTED_TEST_NAMES
-                },
-                "run_test_names": [name for name, _, _ in run_plan_entries],
-                "test_scores": per_test_details,
-                "avg_score": round(sum(valid_scores) / len(valid_scores), 4),
-                "median_score": round(median_score, 4),
-                "aggregate_score": round(aggregate_score, 4),
-                "best_run": round(max(valid_scores), 4),
-                "worst_run": round(min(valid_scores), 4),
-                "final_score": round(final_score, 4),
-                "run_scores": [round(s, 4) for s in run_scores],
-            }
-            update_trial_summary(trial_state_path, trial_stats)
-
-            print(
-                f"[score] trial_{trial_index:02d} → {final_score:.2f}/100 "
-                f"(weighted_normalized_agg: {aggregate_score:.2f})"
-            )
-
-            gen_scores.append(final_score)
-            all_scores.append(final_score)
+        total_elapsed = time.time() - start_time
+        print(
+            f"\r[progress] Gen {gen_index:04d} SOFA [{'#' * bar_width}] "
+            f"{total_runs}/{total_runs} (100.0%)  elapsed {total_elapsed:5.1f}s"
+        )
 
         write_gen_summary(gen_dir, gen_index, gen_scores)
         cleanup_generation_status_files(gen_dir)
