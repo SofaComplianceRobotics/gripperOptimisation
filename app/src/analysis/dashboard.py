@@ -60,6 +60,26 @@ from analyze_plotting import (
 )
 from analyze_config import CENTERED_AVG_HALF_WINDOW
 
+# Cache MAX_SCORE per test so we don't re-import scoring modules on every update
+_MAX_SCORE_CACHE: dict[str, float] = {}
+
+
+def _get_test_max_score(test_name: str) -> float:
+    """Return the declared MAX_SCORE for a test, falling back to 1.0."""
+    if not test_name:
+        return 1.0
+    if test_name in _MAX_SCORE_CACHE:
+        return _MAX_SCORE_CACHE[test_name]
+    try:
+        from labtests.registry import get_test_catalog
+        catalog = get_test_catalog()
+        spec = catalog.get(test_name)
+        result = spec.max_score if spec else 1.0
+    except Exception:
+        result = 1.0
+    _MAX_SCORE_CACHE[test_name] = result
+    return result
+
 
 def install_dependencies():
     """Auto-install missing dependencies."""
@@ -111,7 +131,24 @@ def build_param_bounds_tab() -> html.Div:
         [
             html.H3("Parameter Bounds Monitor", className="mb-3"),
             html.P("Live tracking of parameter values within optimization bounds."),
-            dcc.Graph(id="param-bounds-graph", style={"height": "600px"}),
+            html.Div(
+                [
+                    html.Button(
+                        "Show History",
+                        id="heatmap-toggle",
+                        n_clicks=0,
+                        className="btn btn-outline-secondary btn-sm",
+                    ),
+                    html.Span(
+                        "Toggle search-history markers (off by default).",
+                        className="text-muted ms-2",
+                    ),
+                ],
+                className="mb-3",
+            ),
+            dcc.Store(id="heatmap-enabled", data=False),
+            # No fixed height — figure height adapts to parameter count; page scrolls naturally
+            dcc.Graph(id="param-bounds-graph"),
             dcc.Interval(id="bounds-interval", interval=2000, n_intervals=0),
         ],
         className="p-3",
@@ -135,13 +172,13 @@ def build_progress_tab() -> html.Div:
             html.Div(
                 [
                     html.Button(
-                        "Jump to earliest running trial",
+                        "Jump to earliest unfinished trial",
                         id="jump-running-trial",
                         n_clicks=0,
                         className="btn btn-primary btn-sm",
                     ),
                     html.Span(
-                        "Scrolls to the trial most likely to finish next.",
+                        "Scrolls to the first trial that is not yet complete.",
                         className="text-muted ms-3",
                     ),
                 ],
@@ -154,7 +191,7 @@ def build_progress_tab() -> html.Div:
                     "padding": "8px 0",
                 },
             ),
-            dcc.Store(id="jump-auto-enabled", data=True),
+            dcc.Store(id="jump-auto-enabled", data=False),
             html.Div(id="progress-stats", className="mb-3"),
             html.Div(id="progress-grid"),
             dcc.Store(id="jump-running-target-store"),
@@ -170,7 +207,7 @@ def build_progress_tab() -> html.Div:
                         className="btn btn-sm btn-secondary me-2",
                     ),
                     html.Button(
-                        "Auto-jump: On",
+                        "Auto-jump: Off",
                         id="jump-auto-toggle",
                         n_clicks=0,
                         className="btn btn-sm btn-outline-primary",
@@ -296,62 +333,43 @@ def _build_progress_card(trial_record: dict) -> html.Div:
         for run in runs:
             if not isinstance(run, dict):
                 continue
-            frame_pct = _run_progress_pct(run)
             run_state = str(run.get("state", "not-started")).lower()
             score = run.get("score")
-            total_frames = run.get("total_frames")
-            current_frame = run.get("current_frame")
             bar_color = _state_color(run_state)
 
-            # Bar fill: score-based when available (assumed 0-1 range), else frame progress
-            if isinstance(score, (int, float)) and run_state not in {"not-started"}:
-                bar_pct = max(0.0, min(100.0, float(score) * 100))
-                bar_label = f"{float(score):.3f}"
-            else:
-                bar_pct = frame_pct
-                bar_label = ""
+            # Normalize score against the declared MAX_SCORE for this test
+            test_name = run.get("test_name") or run.get("run_label") or ""
+            max_score = _get_test_max_score(test_name)
 
-            # Header line: label · score (prominent) · frames · state
-            header_parts = []
-            if isinstance(score, (int, float)):
-                header_parts.append(
-                    html.Span(
-                        f"{float(score):.3f}",
-                        style={"color": bar_color, "fontWeight": 700, "fontSize": "1rem"},
-                    )
-                )
-            if isinstance(current_frame, (int, float)) and isinstance(total_frames, (int, float)):
-                header_parts.append(
-                    html.Span(
-                        f"  {int(current_frame)}/{int(total_frames)}",
-                        className="text-muted",
-                        style={"fontSize": "0.8rem"},
-                    )
-                )
-            header_parts.append(
-                html.Span(
-                    f"  {run_state}",
-                    style={"color": bar_color, "fontSize": "0.8rem"},
-                )
-            )
+            if isinstance(score, (int, float)) and run_state not in {"not-started"}:
+                bar_pct = max(0.0, min(100.0, float(score) / max_score * 100)) if max_score > 0 else 0.0
+                score_label = f"{float(score):.3f}"
+            else:
+                bar_pct = 0.0
+                score_label = "--"
 
             run_rows.append(
                 html.Div(
                     [
                         html.Div(
                             [
-                                html.Span(
-                                    _format_run_label(run), className="fw-semibold"
-                                ),
+                                html.Span(_format_run_label(run), className="fw-semibold"),
                                 html.Span(" · ", className="text-muted"),
-                                html.Span(header_parts),
+                                html.Span(
+                                    score_label,
+                                    style={"color": bar_color, "fontWeight": 700, "fontSize": "1rem"},
+                                ),
+                                html.Span(
+                                    f"  {run_state}",
+                                    style={"color": bar_color, "fontSize": "0.8rem"},
+                                ),
                             ],
                             className="d-flex align-items-center gap-1 mb-1",
                         ),
                         html.Div(
                             [
                                 html.Div(
-                                    bar_label,
+                                    score_label if bar_pct > 8 else "",
                                     style={
                                         "width": f"{bar_pct:.1f}%",
                                         "height": "100%",
@@ -535,8 +553,8 @@ def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.F
         return go.Figure().add_annotation(text=f"Error: {e}")
 
 
-def _build_param_bounds_graph() -> go.Figure:
-    """Build parameter bounds visualization with history heatmap."""
+def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
+    """Build parameter bounds visualization with optional history heatmap."""
     try:
         import json, re
         from optimization.optimize_config import PARAM_SPECS
@@ -580,7 +598,7 @@ def _build_param_bounds_graph() -> go.Figure:
 
         # History scatter dots (older = faint, newer = opaque) — drawn first so bars render on top
         n_hist = len(trial_configs)
-        if n_hist > 1:
+        if show_heatmap and n_hist > 1:
             for spec in active_specs:
                 name = spec["name"]
                 span = (spec["max"] - spec["min"]) or 1.0
@@ -639,6 +657,8 @@ def _build_param_bounds_graph() -> go.Figure:
                 )
             )
 
+        # Row height: taller when heatmap is on to give room for dots; extra room for min/max labels
+        row_h = 58 if show_heatmap else 52
         fig.update_layout(
             title="Parameter Bounds Monitor (Latest Trial)",
             xaxis=dict(
@@ -653,26 +673,26 @@ def _build_param_bounds_graph() -> go.Figure:
                 fixedrange=True,
             ),
             barmode="overlay",
-            height=max(350, 80 + len(active_specs) * 44),
+            height=max(400, 90 + len(active_specs) * row_h),
             showlegend=False,
-            margin={"l": 160, "r": 90, "t": 50, "b": 50},
+            margin={"l": 160, "r": 70, "t": 50, "b": 50},
             plot_bgcolor=C_BG,
             paper_bgcolor=C_BG,
         )
 
-        # Min/max value labels on left and right of each row
+        # Min/max labels placed BELOW each bar row to avoid overlapping the y-axis param names
         for spec in active_specs:
             fig.add_annotation(
-                x=0, y=spec["name"],
+                x=0.0, y=spec["name"],
                 text=f"{spec['min']:.3f}",
-                xanchor="right", showarrow=False, xshift=-8,
-                font=dict(size=10, color="#666"),
+                xanchor="left", yanchor="top", showarrow=False,
+                yshift=-18, font=dict(size=9, color="#888"),
             )
             fig.add_annotation(
-                x=1, y=spec["name"],
+                x=1.0, y=spec["name"],
                 text=f"{spec['max']:.3f}",
-                xanchor="left", showarrow=False, xshift=8,
-                font=dict(size=10, color="#666"),
+                xanchor="right", yanchor="top", showarrow=False,
+                yshift=-18, font=dict(size=9, color="#888"),
             )
 
         return fig
@@ -752,30 +772,15 @@ def _build_progress_grid(records: list[dict]) -> html.Div:
     return html.Div(rows, style={"display": "grid", "gap": "12px"})
 
 
-def _find_earliest_running_trial(records: list[dict]) -> str | None:
+def _find_earliest_not_done(records: list[dict]) -> str | None:
+    """Return the card ID of the first trial that is not yet in a terminal state."""
+    terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
     for record in records:
-        trial_state = _load_trial_state(record) or {}
-        trial_state_name = str(trial_state.get("state") or "").lower()
-        if trial_state_name in {
-            "done",
-            "failed",
-            "error",
-            "pruned",
-            "skipped",
-            "cancelled",
-        }:
+        if record.get("is_complete"):
             continue
-
-        runs = (
-            trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
-        )
-        if any(
-            str(run.get("state", "")).lower() in {"running", "launching", "not-started"}
-            for run in runs
-            if isinstance(run, dict)
-        ):
+        trial_state = _load_trial_state(record) or {}
+        if str(trial_state.get("state") or "").lower() not in terminal:
             return f"trial-card-{record.get('gen_index', 0):04d}-{record.get('trial_index', 0):04d}"
-
     return None
 
 
@@ -856,9 +861,21 @@ def create_app() -> Dash:
     @callback(
         Output("param-bounds-graph", "figure"),
         Input("bounds-interval", "n_intervals"),
+        State("heatmap-enabled", "data"),
     )
-    def update_bounds(_):
-        return _build_param_bounds_graph()
+    def update_bounds(_, heatmap_on):
+        return _build_param_bounds_graph(show_heatmap=bool(heatmap_on))
+
+    @callback(
+        [Output("heatmap-toggle", "children"), Output("heatmap-enabled", "data")],
+        Input("heatmap-toggle", "n_clicks"),
+        State("heatmap-enabled", "data"),
+    )
+    def toggle_heatmap(n, current):
+        if not n:
+            return ("Show History" if not current else "Hide History"), bool(current)
+        new_state = not bool(current)
+        return ("Hide History" if new_state else "Show History"), new_state
 
     @callback(
         [Output("progress-stats", "children"), Output("progress-grid", "children")],
@@ -896,7 +913,7 @@ def create_app() -> Dash:
 
         records, _summaries = _load_data()
         current_records = _current_generation_records(records)
-        return {"target_id": _find_earliest_running_trial(current_records)}
+        return {"target_id": _find_earliest_not_done(current_records)}
 
     app.clientside_callback(
         """
@@ -915,12 +932,40 @@ def create_app() -> Dash:
         Input("jump-running-target-store", "data"),
     )
 
-    # Clientside scroll-to-top when the Top button is pressed
+    # Disable auto-jump whenever the user has scrolled down (checked each interval tick)
+    app.clientside_callback(
+        """
+        function(n_intervals, auto_enabled) {
+            if (!auto_enabled) { return window.dash_clientside.no_update; }
+            var offset = window.pageYOffset || document.documentElement.scrollTop || 0;
+            if (offset > 80) { return false; }
+            return window.dash_clientside.no_update;
+        }
+        """,
+        Output("jump-auto-enabled", "data", allow_duplicate=True),
+        Input("progress-interval", "n_intervals"),
+        State("jump-auto-enabled", "data"),
+        prevent_initial_call=True,
+    )
+
+    # Clicking "Top" also disables auto-jump so it doesn't immediately scroll back down
     app.clientside_callback(
         """
         function(n) {
             if (!n) { return window.dash_clientside.no_update; }
             window.scrollTo({top: 0, behavior: 'smooth'});
+            return false;
+        }
+        """,
+        Output("jump-auto-enabled", "data", allow_duplicate=True),
+        Input("jump-top-button", "n_clicks"),
+        prevent_initial_call=True,
+    )
+
+    # Clientside scroll-to-top when the Top button is pressed (visual side-effect only)
+    app.clientside_callback(
+        """
+        function(n) {
             return window.dash_clientside.no_update;
         }
         """,
@@ -929,9 +974,10 @@ def create_app() -> Dash:
     )
 
     @callback(
-        [Output("jump-auto-toggle", "children"), Output("jump-auto-enabled", "data")],
+        [Output("jump-auto-toggle", "children"), Output("jump-auto-enabled", "data", allow_duplicate=True)],
         Input("jump-auto-toggle", "n_clicks"),
         State("jump-auto-enabled", "data"),
+        prevent_initial_call=True,
     )
     def toggle_auto_jump(n, current):
         # Toggle the auto-jump enabled flag and update button label
