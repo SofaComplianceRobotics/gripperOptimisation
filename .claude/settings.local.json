@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell($data = Get-Content \"c:\\\\Users\\\\Cesar\\\\emio-labs\\\\v25.12.00\\\\assets\\\\labs\\\\lab_shapeOPT\\\\runtime\\\\recordings\\\\grasp_hold\\\\motor_recording.json\" | ConvertFrom-Json; Write-Output \"DT in recording: $\\($data.dt\\)\"; $pos = $data.motor_positions; $first = $pos[0]; $atFrame40 = $pos[40]; $atFrame100 = $pos[100]; Write-Output \"Positions at frame 0: $first\"; Write-Output \"Positions at frame 40 \\(spawn\\): $atFrame40\"; Write-Output \"Positions at frame 100 \\(no-pickup gate\\): $atFrame100\")"
-    ]
-  }
-}

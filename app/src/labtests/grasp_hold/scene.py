@@ -43,11 +43,6 @@ def createScene(rootnode):
     from labtests.core.scene_config import PlaybackConfig
     from labtests.core.scoring import ScoreWriter
 
-    import os
-
-    os.environ["EARLY_STOP_SIM_TIME"] = os.environ.get(
-        "GRASP_HOLD_EARLY_STOP_SIM_TIME", "5.0"
-    )
     cfg = PlaybackConfig.from_env(LAB_ROOT)
 
     nodes = build_base_scene(rootnode, inverse=False, friction=cfg.friction_coef)

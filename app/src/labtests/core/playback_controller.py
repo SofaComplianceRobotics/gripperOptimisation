@@ -20,6 +20,7 @@ Three override hooks:
     _update_overload_mass()      per-frame mass update (default: ramp to cfg.cube_mass_max)
     _on_horizon_complete(t)      end-of-frames action  (default: write_pruned_and_stop)
 """
+
 from __future__ import annotations
 
 import os
@@ -56,10 +57,7 @@ def make_playback_controller(SofaController):
 
             self.finished = False
             self.frame = 0
-            # recorded_frames is the sim-frame count for the recording phase,
-            # accounting for any DT mismatch between the recording and the sim.
-            rec_dt = playback.recording_dt
-            self.recorded_frames = round(len(playback.motor_positions) * rec_dt / DT)
+            self.recorded_frames = len(playback.motor_positions)
             self.overload_frames = max(0, int(cfg.overload_max_time / DT))
             self.total_frames = self.recorded_frames + self.overload_frames
             self.peak_y = float("-inf")
@@ -165,9 +163,7 @@ def make_playback_controller(SofaController):
             if self.cube_gripper_contact_listener is None:
                 try:
                     self.cube_gripper_contact_listener = (
-                        self.rootnode.Simulation.getObject(
-                            "cubeGripperContactListener"
-                        )
+                        self.rootnode.Simulation.getObject("cubeGripperContactListener")
                     )
                 except Exception:
                     pass
@@ -410,10 +406,9 @@ def make_playback_controller(SofaController):
                 return
 
             # ── Motor replay ───────────────────────────────────────────────────
-            rec_frame = int(sim_time / self.playback.recording_dt)
             positions = (
-                self.playback.motor_positions[rec_frame]
-                if rec_frame < len(self.playback.motor_positions)
+                self.playback.motor_positions[self.frame]
+                if self.frame < self.recorded_frames
                 else self.last_positions
             )
             for i, constraint in enumerate(self.playback.joint_constraints):
