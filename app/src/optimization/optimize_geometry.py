@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 
-import pyvista as pv
+import pyvista as pv  # type: ignore
 
 from optimize_config import (
     APP_ROOT,

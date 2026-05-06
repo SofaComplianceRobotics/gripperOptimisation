@@ -296,19 +296,45 @@ def _build_progress_card(trial_record: dict) -> html.Div:
         for run in runs:
             if not isinstance(run, dict):
                 continue
-            pct = _run_progress_pct(run)
+            frame_pct = _run_progress_pct(run)
             run_state = str(run.get("state", "not-started")).lower()
             score = run.get("score")
             total_frames = run.get("total_frames")
             current_frame = run.get("current_frame")
-            right_text = []
-            if isinstance(current_frame, (int, float)) and isinstance(
-                total_frames, (int, float)
-            ):
-                right_text.append(f"{int(current_frame)}/{int(total_frames)}")
+            bar_color = _state_color(run_state)
+
+            # Bar fill: score-based when available (assumed 0-1 range), else frame progress
+            if isinstance(score, (int, float)) and run_state not in {"not-started"}:
+                bar_pct = max(0.0, min(100.0, float(score) * 100))
+                bar_label = f"{float(score):.3f}"
+            else:
+                bar_pct = frame_pct
+                bar_label = ""
+
+            # Header line: label · score (prominent) · frames · state
+            header_parts = []
             if isinstance(score, (int, float)):
-                right_text.append(f"score {float(score):.2f}")
-            right_text.append(run_state)
+                header_parts.append(
+                    html.Span(
+                        f"{float(score):.3f}",
+                        style={"color": bar_color, "fontWeight": 700, "fontSize": "1rem"},
+                    )
+                )
+            if isinstance(current_frame, (int, float)) and isinstance(total_frames, (int, float)):
+                header_parts.append(
+                    html.Span(
+                        f"  {int(current_frame)}/{int(total_frames)}",
+                        className="text-muted",
+                        style={"fontSize": "0.8rem"},
+                    )
+                )
+            header_parts.append(
+                html.Span(
+                    f"  {run_state}",
+                    style={"color": bar_color, "fontSize": "0.8rem"},
+                )
+            )
+
             run_rows.append(
                 html.Div(
                     [
@@ -318,28 +344,35 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                                     _format_run_label(run), className="fw-semibold"
                                 ),
                                 html.Span(" · ", className="text-muted"),
-                                html.Span(
-                                    ", ".join(right_text),
-                                    style={"color": _state_color(run_state)},
-                                ),
+                                html.Span(header_parts),
                             ],
-                            className="d-flex justify-content-between align-items-center mb-1",
+                            className="d-flex align-items-center gap-1 mb-1",
                         ),
                         html.Div(
                             [
                                 html.Div(
+                                    bar_label,
                                     style={
-                                        "width": f"{pct:.1f}%",
+                                        "width": f"{bar_pct:.1f}%",
                                         "height": "100%",
-                                        "background": _state_color(run_state),
+                                        "background": bar_color,
                                         "borderRadius": "999px",
                                         "transition": "width 600ms ease",
                                         "willChange": "width",
-                                    }
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "paddingLeft": "8px",
+                                        "color": "#fff",
+                                        "fontSize": "0.72rem",
+                                        "fontWeight": 600,
+                                        "minWidth": "0",
+                                        "overflow": "hidden",
+                                        "whiteSpace": "nowrap",
+                                    },
                                 )
                             ],
                             style={
-                                "height": "10px",
+                                "height": "20px",
                                 "background": "#e9ecef",
                                 "borderRadius": "999px",
                                 "overflow": "hidden",
@@ -503,8 +536,9 @@ def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.F
 
 
 def _build_param_bounds_graph() -> go.Figure:
-    """Build parameter bounds visualization."""
+    """Build parameter bounds visualization with history heatmap."""
     try:
+        import json, re
         from optimization.optimize_config import PARAM_SPECS
 
         active_specs = [p for p in PARAM_SPECS if p["min"] < p["max"]]
@@ -512,92 +546,134 @@ def _build_param_bounds_graph() -> go.Figure:
         if not active_specs:
             return go.Figure().add_annotation(text="No active parameters to display")
 
-        # Find latest trial values
-        latest_config = None
-        best_gen, best_trial = -1, -1
-        for gen_dir in TRIALS_DIR.glob("gen_*"):
-            try:
-                gen_num = int(gen_dir.name.split("_")[1])
-            except (ValueError, IndexError):
-                continue
-            for trial_dir in gen_dir.glob("trial_*"):
-                try:
-                    trial_num = int(trial_dir.name.split("_")[1])
-                except (ValueError, IndexError):
-                    continue
-                config_file = trial_dir / "lab_config.jsonc"
-                if config_file.exists() and (gen_num, trial_num) > (
-                    best_gen,
-                    best_trial,
-                ):
-                    best_gen, best_trial = gen_num, trial_num
-                    latest_config = config_file
+        def _parse_jsonc(text: str) -> dict:
+            clean = re.sub(r"//[^\n]*", "", text)
+            return json.loads(clean)
 
+        # Collect trial configs in chronological order (cap at last 40)
+        trial_config_paths = []
+        try:
+            for gen_dir in sorted(
+                TRIALS_DIR.glob("gen_*"),
+                key=lambda d: int(d.name.split("_")[1]) if len(d.name.split("_")) > 1 else 0,
+            ):
+                for trial_dir in sorted(
+                    gen_dir.glob("trial_*"),
+                    key=lambda d: int(d.name.split("_")[1]) if len(d.name.split("_")) > 1 else 0,
+                ):
+                    cfg = trial_dir / "lab_config.jsonc"
+                    if cfg.exists():
+                        trial_config_paths.append(cfg)
+        except Exception:
+            pass
+
+        trial_configs = []
+        for cfg_path in trial_config_paths[-40:]:
+            try:
+                trial_configs.append(_parse_jsonc(cfg_path.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+
+        latest_config = trial_configs[-1] if trial_configs else None
+        param_names = [spec["name"] for spec in active_specs]
         fig = go.Figure()
 
+        # History scatter dots (older = faint, newer = opaque) — drawn first so bars render on top
+        n_hist = len(trial_configs)
+        if n_hist > 1:
+            for spec in active_specs:
+                name = spec["name"]
+                span = (spec["max"] - spec["min"]) or 1.0
+                xs, dot_colors = [], []
+                for i, cfg in enumerate(trial_configs):
+                    if isinstance(cfg.get(name), (int, float)):
+                        norm = max(0.0, min(1.0, (cfg[name] - spec["min"]) / span))
+                        xs.append(norm)
+                        alpha = 0.08 + 0.82 * (i / max(n_hist - 1, 1))
+                        dot_colors.append(f"rgba(60,120,220,{alpha:.2f})")
+                if xs:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=xs,
+                            y=[name] * len(xs),
+                            mode="markers",
+                            marker=dict(color=dot_colors, size=9, symbol="line-ns-open", line=dict(width=2, color=dot_colors)),
+                            showlegend=False,
+                            hoverinfo="skip",
+                        )
+                    )
+
+        # Current value bars
         for spec in active_specs:
             name = spec["name"]
-            param_min = spec["min"]
-            param_max = spec["max"]
-            # Default to midpoint if no latest config
-            current_val = (param_min + param_max) / 2
+            param_min, param_max = spec["min"], spec["max"]
+            span = (param_max - param_min) or 1.0
+            mid = (param_min + param_max) / 2
+            current_val = mid
+            if latest_config and isinstance(latest_config.get(name), (int, float)):
+                current_val = latest_config[name]
 
-            # Try to extract from latest config
-            if latest_config:
-                try:
-                    import json
+            normalized = max(0.0, min(1.0, (current_val - param_min) / span))
 
-                    content = latest_config.read_text()
-                    # Simple JSON parsing (ignoring comments)
-                    data = json.loads(content.split("//")[0])
-                    current_val = data.get(name, current_val)
-                except Exception:
-                    pass
-
-            # Normalize to 0-1
-            normalized = (
-                (current_val - param_min) / (param_max - param_min)
-                if param_max > param_min
-                else 0.5
-            )
-            normalized = max(0, min(1, normalized))
-
-            # Color based on position
             if normalized < 0.1 or normalized > 0.9:
-                color = "#f44336"  # red - critical
+                color = "#f44336"
             elif normalized < 0.15 or normalized > 0.85:
-                color = "#ff9800"  # orange - warning
+                color = "#ff9800"
             else:
-                color = "#4caf50"  # green - ok
+                color = "#4caf50"
 
             fig.add_trace(
                 go.Bar(
                     y=[name],
                     x=[normalized],
                     orientation="h",
-                    marker=dict(color=color),
+                    marker=dict(color=color, opacity=0.75),
                     text=f"{current_val:.3f}",
-                    textposition="auto",
-                    hovertemplate=f"<b>{name}</b><br>Value: {current_val:.3f}<br>Range: [{param_min:.3f}, {param_max:.3f}]<extra></extra>",
+                    textposition="inside",
+                    hovertemplate=(
+                        f"<b>{name}</b><br>"
+                        f"Current: {current_val:.3f}<br>"
+                        f"Min: {param_min:.3f} | Max: {param_max:.3f}<extra></extra>"
+                    ),
                     showlegend=False,
                 )
             )
 
         fig.update_layout(
             title="Parameter Bounds Monitor (Latest Trial)",
-            xaxis_title="Position in Range (0=Min, 1=Max)",
-            height=400 + len(active_specs) * 30,
+            xaxis=dict(
+                title="Position in Range (0 = Min, 1 = Max)",
+                range=[0, 1],
+                fixedrange=True,
+            ),
+            yaxis=dict(
+                # Lock the category order so the axis never shifts on update
+                categoryorder="array",
+                categoryarray=list(reversed(param_names)),
+                fixedrange=True,
+            ),
+            barmode="overlay",
+            height=max(350, 80 + len(active_specs) * 44),
             showlegend=False,
-            margin={"l": 150, "r": 50, "t": 50, "b": 50},
+            margin={"l": 160, "r": 90, "t": 50, "b": 50},
             plot_bgcolor=C_BG,
             paper_bgcolor=C_BG,
         )
-        # Hint Plotly to animate updates smoothly when figures are replaced
-        try:
-            fig.layout.transition = dict(duration=600, easing="cubic-in-out")
-        except Exception:
-            pass
-        fig.update_xaxes(range=[0, 1])
+
+        # Min/max value labels on left and right of each row
+        for spec in active_specs:
+            fig.add_annotation(
+                x=0, y=spec["name"],
+                text=f"{spec['min']:.3f}",
+                xanchor="right", showarrow=False, xshift=-8,
+                font=dict(size=10, color="#666"),
+            )
+            fig.add_annotation(
+                x=1, y=spec["name"],
+                text=f"{spec['max']:.3f}",
+                xanchor="left", showarrow=False, xshift=8,
+                font=dict(size=10, color="#666"),
+            )
 
         return fig
     except Exception as e:
