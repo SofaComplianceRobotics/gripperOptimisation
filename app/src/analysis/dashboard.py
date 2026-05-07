@@ -115,7 +115,7 @@ def build_performance_tab(records: list[dict], summaries: list[dict]) -> html.Di
             dcc.Graph(id="performance-graph", style={"height": "600px"}),
             html.Hr(),
             html.Div(id="leaderboard-table", className="mt-4"),
-            dcc.Interval(id="performance-interval", interval=5000, n_intervals=0),
+            dcc.Interval(id="performance-interval", interval=1000, n_intervals=0),
         ],
         className="p-3",
     )
@@ -135,7 +135,7 @@ def build_param_bounds_tab() -> html.Div:
             # The parameter history is shown as a heatmap (last ~40 trials).
             # No fixed height — figure height adapts to parameter count; page scrolls naturally
             dcc.Graph(id="param-bounds-graph"),
-            dcc.Interval(id="bounds-interval", interval=2000, n_intervals=0),
+            dcc.Interval(id="bounds-interval", interval=1000, n_intervals=0),
         ],
         className="p-3",
     )
@@ -243,7 +243,11 @@ def _current_generation_records(records: list[dict]) -> list[dict]:
     if current_gen < 0:
         return []
 
-    return [record for record in records if record.get("gen_index", -1) == current_gen]
+    # Sort by trial_index to ensure consistent ordering across all callbacks
+    result = [
+        record for record in records if record.get("gen_index", -1) == current_gen
+    ]
+    return sorted(result, key=lambda r: r.get("trial_index", 0))
 
 
 def _read_json(path: Path) -> dict | None:
@@ -302,6 +306,37 @@ def _format_run_label(run: dict) -> str:
     return str(label)
 
 
+def _get_trial_actual_state(trial_record: dict) -> str:
+    """Determine the actual state of a trial using the same logic as display.
+
+    This matches the logic in _build_progress_card to ensure consistency
+    between what we display and what we check for completion.
+    """
+    trial_state = _load_trial_state(trial_record) or {}
+    runs = trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
+
+    # Start with explicit state or default based on is_complete flag
+    state = str(
+        trial_state.get("state")
+        or ("done" if trial_record.get("is_complete") else "running")
+    ).lower()
+
+    # If state is not terminal but all individual runs ARE terminal, infer "done"
+    terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
+    if (
+        state not in terminal
+        and runs
+        and all(
+            str(r.get("state", "")).lower() in terminal
+            for r in runs
+            if isinstance(r, dict)
+        )
+    ):
+        state = "done"
+
+    return state
+
+
 def _build_progress_card(trial_record: dict) -> html.Div:
     trial_state = _load_trial_state(trial_record) or {}
     runs = trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
@@ -309,25 +344,9 @@ def _build_progress_card(trial_record: dict) -> html.Div:
         f"{trial_record.get('gen_name', '')} / {trial_record.get('trial_name', '')}"
     )
     final_score = trial_record.get("final_score")
-    state = str(
-        trial_state.get("state")
-        or ("done" if trial_record.get("is_complete") else "running")
-    ).lower()
 
-    # init_trial_state writes "running" which stays until the optimizer writes "done"
-    # after post-processing.  If every individual run is already terminal, infer "done"
-    # immediately so the card reflects reality without waiting for the optimizer.
-    _terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
-    if (
-        state not in _terminal
-        and runs
-        and all(
-            str(r.get("state", "")).lower() in _terminal
-            for r in runs
-            if isinstance(r, dict)
-        )
-    ):
-        state = "done"
+    # Use the shared state determination logic
+    state = _get_trial_actual_state(trial_record)
 
     run_rows = []
     if runs:
@@ -871,10 +890,9 @@ def _find_earliest_not_done(records: list[dict]) -> str | None:
     """Return the card ID of the first trial that is not yet in a terminal state."""
     terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
     for record in records:
-        if record.get("is_complete"):
-            continue
-        trial_state = _load_trial_state(record) or {}
-        if str(trial_state.get("state") or "").lower() not in terminal:
+        # Use the same state determination as the display
+        state = _get_trial_actual_state(record)
+        if state not in terminal:
             return f"trial-card-{record.get('gen_index', 0):04d}-{record.get('trial_index', 0):04d}"
     return None
 
@@ -946,9 +964,10 @@ def create_app() -> Dash:
         Input("performance-interval", "n_intervals"),
     )
     def update_performance(tab, _):
+        # Always update data, but only render if on the performance tab
+        records, summaries = _load_data()
         if tab != "performance":
             return go.Figure(), html.Div()
-        records, summaries = _load_data()
         fig = _build_performance_graph(records, summaries)
         leaderboard = _build_leaderboard_html(records)
         return fig, leaderboard
