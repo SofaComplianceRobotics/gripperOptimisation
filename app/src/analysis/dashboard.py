@@ -72,6 +72,7 @@ def _get_test_max_score(test_name: str) -> float:
         return _MAX_SCORE_CACHE[test_name]
     try:
         from labtests.registry import get_test_catalog
+
         catalog = get_test_catalog()
         spec = catalog.get(test_name)
         result = spec.max_score if spec else 1.0
@@ -131,22 +132,7 @@ def build_param_bounds_tab() -> html.Div:
         [
             html.H3("Parameter Bounds Monitor", className="mb-3"),
             html.P("Live tracking of parameter values within optimization bounds."),
-            html.Div(
-                [
-                    html.Button(
-                        "Show History",
-                        id="heatmap-toggle",
-                        n_clicks=0,
-                        className="btn btn-outline-secondary btn-sm",
-                    ),
-                    html.Span(
-                        "Toggle search-history markers (off by default).",
-                        className="text-muted ms-2",
-                    ),
-                ],
-                className="mb-3",
-            ),
-            dcc.Store(id="heatmap-enabled", data=False),
+            # The parameter history is shown as a heatmap (last ~40 trials).
             # No fixed height — figure height adapts to parameter count; page scrolls naturally
             dcc.Graph(id="param-bounds-graph"),
             dcc.Interval(id="bounds-interval", interval=2000, n_intervals=0),
@@ -332,10 +318,14 @@ def _build_progress_card(trial_record: dict) -> html.Div:
     # after post-processing.  If every individual run is already terminal, infer "done"
     # immediately so the card reflects reality without waiting for the optimizer.
     _terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
-    if state not in _terminal and runs and all(
-        str(r.get("state", "")).lower() in _terminal
-        for r in runs
-        if isinstance(r, dict)
+    if (
+        state not in _terminal
+        and runs
+        and all(
+            str(r.get("state", "")).lower() in _terminal
+            for r in runs
+            if isinstance(r, dict)
+        )
     ):
         state = "done"
 
@@ -353,7 +343,11 @@ def _build_progress_card(trial_record: dict) -> html.Div:
 
             live_val, is_final = _get_live_score(run)
             if live_val is not None and run_state not in {"not-started"}:
-                bar_pct = max(0.0, min(100.0, live_val / max_score * 100)) if max_score > 0 else 0.0
+                bar_pct = (
+                    max(0.0, min(100.0, live_val / max_score * 100))
+                    if max_score > 0
+                    else 0.0
+                )
                 # Tilde prefix on live (non-final) values so the user knows it's in progress
                 score_label = f"{live_val:.3f}" if is_final else f"~{live_val:.3f}"
             else:
@@ -365,11 +359,17 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                     [
                         html.Div(
                             [
-                                html.Span(_format_run_label(run), className="fw-semibold"),
+                                html.Span(
+                                    _format_run_label(run), className="fw-semibold"
+                                ),
                                 html.Span(" · ", className="text-muted"),
                                 html.Span(
                                     score_label,
-                                    style={"color": bar_color, "fontWeight": 700, "fontSize": "1rem"},
+                                    style={
+                                        "color": bar_color,
+                                        "fontWeight": 700,
+                                        "fontSize": "1rem",
+                                    },
                                 ),
                                 html.Span(
                                     f"  {run_state}",
@@ -587,11 +587,15 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         try:
             for gen_dir in sorted(
                 TRIALS_DIR.glob("gen_*"),
-                key=lambda d: int(d.name.split("_")[1]) if len(d.name.split("_")) > 1 else 0,
+                key=lambda d: (
+                    int(d.name.split("_")[1]) if len(d.name.split("_")) > 1 else 0
+                ),
             ):
                 for trial_dir in sorted(
                     gen_dir.glob("trial_*"),
-                    key=lambda d: int(d.name.split("_")[1]) if len(d.name.split("_")) > 1 else 0,
+                    key=lambda d: (
+                        int(d.name.split("_")[1]) if len(d.name.split("_")) > 1 else 0
+                    ),
                 ):
                     cfg = trial_dir / "lab_config.jsonc"
                     if cfg.exists():
@@ -610,69 +614,121 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         param_names = [spec["name"] for spec in active_specs]
         fig = go.Figure()
 
-        # History scatter dots (older = faint, newer = opaque) — drawn first so bars render on top
+        # Build a per-parameter heatmap from the last N trial configs.
+        # X axis = trial index (older -> left), Y axis = parameter name.
         n_hist = len(trial_configs)
-        if show_heatmap and n_hist > 1:
+        cyclical_cs = [
+            [0.0, "#FFEB3B"],
+            [0.5, "#F44336"],
+            [1.0, "#FFEB3B"],
+        ]
+
+        if n_hist > 0:
+            # Build density histograms across the normalized parameter range for each spec.
+            nbins = 64
+            bin_centers = [(i + 0.5) / nbins for i in range(nbins)]
+
+            z_rows = []
             for spec in active_specs:
                 name = spec["name"]
                 span = (spec["max"] - spec["min"]) or 1.0
-                xs, dot_colors = [], []
-                for i, cfg in enumerate(trial_configs):
-                    if isinstance(cfg.get(name), (int, float)):
-                        norm = max(0.0, min(1.0, (cfg[name] - spec["min"]) / span))
-                        xs.append(norm)
-                        alpha = 0.08 + 0.82 * (i / max(n_hist - 1, 1))
-                        dot_colors.append(f"rgba(60,120,220,{alpha:.2f})")
-                if xs:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=xs,
-                            y=[name] * len(xs),
-                            mode="markers",
-                            marker=dict(color=dot_colors, size=9, symbol="line-ns-open", line=dict(width=2, color=dot_colors)),
-                            showlegend=False,
-                            hoverinfo="skip",
-                        )
-                    )
+                counts = [0] * nbins
+                total = 0
+                for cfg in trial_configs:
+                    v = cfg.get(name)
+                    if isinstance(v, (int, float)):
+                        norm = max(0.0, min(1.0, (v - spec["min"]) / span))
+                        idx = int(norm * nbins)
+                        if idx >= nbins:
+                            idx = nbins - 1
+                        counts[idx] += 1
+                        total += 1
 
-        # Current value bars
+                # Normalize per-row so color shows relative density for that parameter.
+                if total > 0:
+                    maxc = max(counts)
+                    row = [c / maxc if maxc > 0 else 0.0 for c in counts]
+                else:
+                    row = [0.0 for _ in counts]
+                z_rows.append(row)
+
+            # Use a sequential colorscale for density (yellow->red).
+            fig.add_trace(
+                go.Heatmap(
+                    x=bin_centers,
+                    y=param_names,
+                    z=z_rows,
+                    colorscale="YlOrRd",
+                    showscale=False,
+                    hovertemplate="%{y}<br>Value: %{x:.2f}<br>Rel. density: %{z:.2f}<extra></extra>",
+                    zmin=0,
+                    zmax=1,
+                )
+            )
+
+        # Current value markers: support single numeric OR list of numerics
         for spec in active_specs:
             name = spec["name"]
             param_min, param_max = spec["min"], spec["max"]
             span = (param_max - param_min) or 1.0
-            mid = (param_min + param_max) / 2
-            current_val = mid
-            if latest_config and isinstance(latest_config.get(name), (int, float)):
-                current_val = latest_config[name]
 
-            normalized = max(0.0, min(1.0, (current_val - param_min) / span))
-
-            if normalized < 0.1 or normalized > 0.9:
-                color = "#f44336"
-            elif normalized < 0.15 or normalized > 0.85:
-                color = "#ff9800"
+            values = []
+            if latest_config is None:
+                values = []
             else:
-                color = "#4caf50"
+                v = latest_config.get(name)
+                if isinstance(v, (int, float)):
+                    values = [float(v)]
+                elif isinstance(v, (list, tuple)):
+                    # filter numeric entries
+                    values = [float(x) for x in v if isinstance(x, (int, float))]
 
-            fig.add_trace(
-                go.Bar(
-                    y=[name],
-                    x=[normalized],
-                    orientation="h",
-                    marker=dict(color=color, opacity=0.75),
-                    text=f"{current_val:.3f}",
-                    textposition="inside",
-                    hovertemplate=(
-                        f"<b>{name}</b><br>"
-                        f"Current: {current_val:.3f}<br>"
-                        f"Min: {param_min:.3f} | Max: {param_max:.3f}<extra></extra>"
-                    ),
-                    showlegend=False,
+            # If no explicit current value, fall back to mid-point
+            if not values:
+                values = [(param_min + param_max) / 2]
+
+            # Plot each current value as a white-ringed marker and collect text for side-list
+            side_texts = []
+            marker_xs = []
+            for val in values:
+                norm = max(0.0, min(1.0, (val - param_min) / span))
+                marker_xs.append(norm)
+                side_texts.append(f"{val:.3f}")
+
+            if marker_xs:
+                fig.add_trace(
+                    go.Scatter(
+                        x=marker_xs,
+                        y=[name] * len(marker_xs),
+                        mode="markers",
+                        marker=dict(
+                            symbol="diamond",
+                            size=12,
+                            color="#ffffff",
+                            line=dict(width=2, color="#212121"),
+                        ),
+                        hovertemplate=(
+                            f"<b>{name}</b><br>Current: "
+                            + ", ".join(side_texts)
+                            + f"<br>Min: {param_min:.3f} | Max: {param_max:.3f}<extra></extra>"
+                        ),
+                        showlegend=False,
+                    )
                 )
-            )
+
+                # Add side annotation listing the present values similar to history representation
+                fig.add_annotation(
+                    x=1.02,
+                    y=name,
+                    text="[" + ", ".join(side_texts) + "]",
+                    showarrow=False,
+                    xanchor="left",
+                    yanchor="middle",
+                    font=dict(size=11, color="#111"),
+                )
 
         # Row height: taller when heatmap is on to give room for dots; extra room for min/max labels
-        row_h = 58 if show_heatmap else 52
+        row_h = 70 if show_heatmap else 52
         fig.update_layout(
             title="Parameter Bounds Monitor (Latest Trial)",
             xaxis=dict(
@@ -697,16 +753,24 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         # Min/max labels placed BELOW each bar row to avoid overlapping the y-axis param names
         for spec in active_specs:
             fig.add_annotation(
-                x=0.0, y=spec["name"],
+                x=0.0,
+                y=spec["name"],
                 text=f"{spec['min']:.3f}",
-                xanchor="left", yanchor="top", showarrow=False,
-                yshift=-18, font=dict(size=9, color="#888"),
+                xanchor="left",
+                yanchor="top",
+                showarrow=False,
+                yshift=-18,
+                font=dict(size=9, color="#888"),
             )
             fig.add_annotation(
-                x=1.0, y=spec["name"],
+                x=1.0,
+                y=spec["name"],
                 text=f"{spec['max']:.3f}",
-                xanchor="right", yanchor="top", showarrow=False,
-                yshift=-18, font=dict(size=9, color="#888"),
+                xanchor="right",
+                yanchor="top",
+                showarrow=False,
+                yshift=-18,
+                font=dict(size=9, color="#888"),
             )
 
         return fig
@@ -892,24 +956,11 @@ def create_app() -> Dash:
     @callback(
         Output("param-bounds-graph", "figure"),
         Input("bounds-interval", "n_intervals"),
-        State("heatmap-enabled", "data"),
     )
-    def update_bounds(_, heatmap_on):
-        return _build_param_bounds_graph(show_heatmap=bool(heatmap_on))
+    def update_bounds(_):
+        return _build_param_bounds_graph(show_heatmap=True)
 
-    # Heatmap toggle — clientside so the button responds instantly
-    app.clientside_callback(
-        "function(n, cur) { if (!n) return window.dash_clientside.no_update; return !cur; }",
-        Output("heatmap-enabled", "data"),
-        Input("heatmap-toggle", "n_clicks"),
-        State("heatmap-enabled", "data"),
-        prevent_initial_call=True,
-    )
-    app.clientside_callback(
-        'function(on) { return on ? "Hide History" : "Show History"; }',
-        Output("heatmap-toggle", "children"),
-        Input("heatmap-enabled", "data"),
-    )
+    # History is always rendered as a heatmap; removed manual toggle.
 
     @callback(
         [Output("progress-stats", "children"), Output("progress-grid", "children")],
