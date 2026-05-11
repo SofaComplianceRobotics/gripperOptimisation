@@ -113,6 +113,7 @@ def build_performance_tab(records: list[dict], summaries: list[dict]) -> html.Di
         [
             html.H3("Performance & Leaderboard", className="mb-3"),
             dcc.Graph(id="performance-graph", style={"height": "600px"}),
+            html.Div(id="trial-detail-panel", className="my-3"),
             html.Hr(),
             html.Div(id="leaderboard-table", className="mt-4"),
             dcc.Interval(id="performance-interval", interval=1000, n_intervals=0),
@@ -489,6 +490,141 @@ def _build_progress_card(trial_record: dict) -> html.Div:
         id=f"trial-card-{trial_record.get('gen_index', 0):04d}-{trial_record.get('trial_index', 0):04d}",
         className="p-3 border rounded",
         style={"background": "#fafbfc"},
+    )
+
+
+def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div:
+    """Build the per-trial detail panel shown when the user clicks a bar."""
+    final_score = state.get("final_score", 0.0) or 0.0
+    test_scores: dict = state.get("test_scores") or {}
+
+    header = html.Div(
+        [
+            html.Span(f"{gen_name} / {trial_name}", className="fw-semibold me-3"),
+            html.Span(
+                f"Final score: {final_score:.2f} / 100",
+                style={"color": C_FINAL, "fontWeight": 700},
+            ),
+        ],
+        className="d-flex align-items-center mb-3",
+        style={"fontSize": "1.05rem"},
+    )
+
+    rows = []
+    for test_name, info in sorted(
+        test_scores.items(), key=lambda kv: kv[1].get("weight_pct", 0), reverse=True
+    ):
+        if not isinstance(info, dict):
+            continue
+        agg = float(info.get("aggregate_score", 0.0) or 0.0)
+        max_s = float(info.get("max_score", 1.0) or 1.0)
+        weight = float(info.get("weight_pct", 0.0) or 0.0)
+        norm = min(agg / max_s, 1.0) if max_s > 0 else 0.0
+        contribution = norm * weight          # pts earned out of weight_pct max
+        success_pct = norm * 100             # % of the test's own maximum
+        run_scores: list = info.get("run_scores") or []
+        run_total = int(info.get("run_total", 1))
+
+        bar_pct = min(norm * 100, 100)
+
+        # Mini run-score table for multi-run tests
+        run_cells = []
+        if run_total > 1 and run_scores:
+            for idx, rs in enumerate(run_scores):
+                if rs == float("-inf") or rs is None:
+                    label, color = "FAIL", "#e03131"
+                else:
+                    label, color = f"{rs:.3f}", "#2f9e44"
+                run_cells.append(
+                    html.Span(
+                        f"run {idx + 1}: {label}",
+                        style={
+                            "color": color,
+                            "background": "#f1f3f5",
+                            "borderRadius": "4px",
+                            "padding": "2px 8px",
+                            "fontSize": "0.78rem",
+                            "fontWeight": 600,
+                            "marginRight": "6px",
+                        },
+                    )
+                )
+
+        rows.append(
+            html.Div(
+                [
+                    # Test name + weight badge
+                    html.Div(
+                        [
+                            html.Span(test_name, className="fw-semibold me-2"),
+                            html.Span(
+                                f"{weight:.0f}% of score",
+                                style={
+                                    "background": "#e7f5ff",
+                                    "color": "#1971c2",
+                                    "borderRadius": "999px",
+                                    "padding": "1px 10px",
+                                    "fontSize": "0.78rem",
+                                    "fontWeight": 600,
+                                },
+                            ),
+                        ],
+                        className="d-flex align-items-center mb-1",
+                    ),
+                    # Progress bar
+                    html.Div(
+                        html.Div(
+                            style={
+                                "width": f"{bar_pct:.1f}%",
+                                "height": "100%",
+                                "background": C_BANNER,
+                                "borderRadius": "999px",
+                                "transition": "width 400ms ease",
+                            }
+                        ),
+                        style={
+                            "height": "10px",
+                            "background": "#dee2e6",
+                            "borderRadius": "999px",
+                            "overflow": "hidden",
+                            "marginBottom": "4px",
+                        },
+                    ),
+                    # Score line
+                    html.Div(
+                        [
+                            html.Span(
+                                f"{agg:.3f} / {max_s:.3f}",
+                                style={"fontWeight": 600, "marginRight": "6px"},
+                            ),
+                            html.Span(
+                                f"→ {success_pct:.1f}% success rate",
+                                className="text-muted me-3",
+                            ),
+                            html.Span(
+                                f"earned {contribution:.2f} / {weight:.1f} pts",
+                                style={"color": C_FINAL, "fontWeight": 600},
+                            ),
+                        ],
+                        style={"fontSize": "0.82rem"},
+                        className="mb-1",
+                    ),
+                    # Individual run scores (multi-run tests only)
+                    html.Div(run_cells, className="d-flex flex-wrap") if run_cells else html.Div(),
+                ],
+                className="mb-3 pb-3",
+                style={"borderBottom": f"1px solid {C_BORDER}"},
+            )
+        )
+
+    return html.Div(
+        [header] + rows,
+        style={
+            "background": "#f8f9fa",
+            "border": f"1px solid {C_BORDER}",
+            "borderRadius": "8px",
+            "padding": "16px 20px",
+        },
     )
 
 
@@ -956,6 +1092,29 @@ def create_app() -> Dash:
 
     # Callbacks
     @callback(
+        Output("trial-detail-panel", "children"),
+        Input("performance-graph", "clickData"),
+    )
+    def on_trial_click(click_data):
+        if not click_data:
+            return html.Div()
+        try:
+            point = click_data["points"][0]
+            cd = point.get("customdata")
+            # customdata layout: [hover_html, gen_name, trial_name]
+            if not cd or len(cd) < 3:
+                return html.Div()
+            gen_name, trial_name = cd[1], cd[2]
+            if not gen_name or not trial_name:
+                return html.Div()
+            state = _read_json(TRIALS_DIR / gen_name / trial_name / "trial_state.json")
+            if not state:
+                return html.Div("No detail available for this trial.", className="text-muted")
+            return _build_trial_detail(state, gen_name, trial_name)
+        except Exception as e:
+            return html.Div(f"Could not load trial: {e}", className="text-muted")
+
+    @callback(
         [
             Output("performance-graph", "figure"),
             Output("leaderboard-table", "children"),
@@ -1011,18 +1170,28 @@ def create_app() -> Dash:
         if ctx is not None:
             triggered = getattr(ctx, "triggered_id", None)
 
+        is_auto = triggered == "progress-interval"
+
         # If this was an interval tick and auto-jump is disabled, do nothing
-        if triggered == "progress-interval" and not bool(auto_enabled):
-            return {"target_id": None}
+        if is_auto and not bool(auto_enabled):
+            return {"target_id": None, "auto": True}
 
         records, _summaries = _load_data()
         current_records = _current_generation_records(records)
-        return {"target_id": _find_earliest_not_done(current_records)}
+        return {"target_id": _find_earliest_not_done(current_records), "auto": is_auto}
 
     app.clientside_callback(
         """
-        function(target) {
+        function(target, auto_enabled) {
             if (!target || !target.target_id) {
+                return window.dash_clientside.no_update;
+            }
+            // For auto-jumps, re-check the store at execution time.
+            // The scroll-detection clientside callback (fast) has already updated
+            // the store by the time this fires (after the slower server round-trip),
+            // so this catches the race where the server emitted a target before
+            // learning the user had scrolled.
+            if (target.auto && !auto_enabled) {
                 return window.dash_clientside.no_update;
             }
             const el = document.getElementById(target.target_id);
@@ -1034,6 +1203,7 @@ def create_app() -> Dash:
         """,
         Output("jump-running-target-output", "children"),
         Input("jump-running-target-store", "data"),
+        State("jump-auto-enabled", "data"),
     )
 
     # Detect USER-initiated scroll (wheel / touch / keyboard) via event listeners.

@@ -365,14 +365,20 @@ def _build_hover_overlay(
         hover_texts.append("<br>".join(detail_lines))
         y_vals.append(final_score)
 
+    # customdata[0] = hover HTML, customdata[1] = gen_name, customdata[2] = trial_name
+    customdata = [
+        [hover_texts[i], records[i].get("gen_name", ""), records[i].get("trial_name", "")]
+        for i in range(len(records))
+    ]
+
     trace = go.Bar(
         x=xs,
         y=y_vals,
         base=0,
         width=[bar_width] * len(xs),
         marker=dict(color="rgba(0,0,0,0)", line=dict(width=0)),
-        customdata=hover_texts,
-        hovertemplate="%{customdata}<extra></extra>",
+        customdata=customdata,
+        hovertemplate="%{customdata[0]}<extra></extra>",
         hoverlabel=dict(
             bgcolor="#d7ecff",
             bordercolor="#9ec5fe",

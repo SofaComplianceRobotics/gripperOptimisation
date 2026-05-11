@@ -379,7 +379,9 @@ def aggregate_trial_scores(
         #   2 cubes → sum × 10
         #   3 cubes → sum × 100
         # This makes specialising for one cube far worse than grasping all three.
-        n_grasped = len(valid_scores)
+        # Use s > 0 (not just s != -inf) — a failed run can return 0.0 and must
+        # not be counted as a successful grasp.
+        n_grasped = sum(1 for s in valid_scores if s > 0)
         multiplier = 10 ** (n_grasped - 1) if n_grasped > 0 else 0.0
         aggregate_score = sum(valid_scores) * multiplier
         return aggregate_score, 0.0, aggregate_score, median_score
