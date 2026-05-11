@@ -23,8 +23,9 @@ import random
 import sys
 from pathlib import Path
 
-
-sys.path.insert(0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir())))
+sys.path.insert(
+    0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir()))
+)
 from labtests.core.scene_paths import ensure_scene_paths
 
 SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
@@ -43,12 +44,27 @@ def _resolve_cube_config(
 ) -> tuple[list[float], float]:
     """Return (cube_scale, cube_mass) for this run slot and generation."""
     cube_scale = list(_CUBE_SIZE_CYCLE[run_slot % 3])
-    lo = min(weight_min, weight_max)
-    hi = max(weight_min, weight_max)
-    cube_mass = random.Random(gen).uniform(lo, hi)
+
+    # Check for manual weight override (for manual testing with 3 sizes)
+    manual_weight_str = os.environ.get("MANUAL_WEIGHT")
+    if manual_weight_str:
+        try:
+            cube_mass = float(manual_weight_str)
+            mode = "MANUAL"
+        except ValueError:
+            lo = min(weight_min, weight_max)
+            hi = max(weight_min, weight_max)
+            cube_mass = random.Random(gen).uniform(lo, hi)
+            mode = "RANDOM"
+    else:
+        lo = min(weight_min, weight_max)
+        hi = max(weight_min, weight_max)
+        cube_mass = random.Random(gen).uniform(lo, hi)
+        mode = "RANDOM"
+
     print(
         f"[cube] random_cube_pick slot={run_slot} gen={gen} "
-        f"scale={cube_scale} mass={cube_mass:.5f}kg"
+        f"scale={cube_scale} mass={cube_mass:.5f}kg ({mode})"
     )
     return cube_scale, cube_mass
 
