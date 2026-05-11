@@ -6,4 +6,4 @@ SCORE_KEY = "score"
 TEST_NAME = "random"
 TEST_LABEL = "Random Cube"
 TEST_DESCRIPTION = "Random cube placement benchmark"
-MAX_SCORE = 2115
+MAX_SCORE = 84.6

@@ -374,15 +374,15 @@ def aggregate_trial_scores(
 
     if aggregation == "exponential_coverage":
         # Reward grippers that can handle ALL cube sizes, not just one.
-        # Each additional cube grasped multiplies the score by 10:
+        # Each additional cube grasped multiplies the score by 2:
         #   1 cube  → sum × 1
-        #   2 cubes → sum × 10
-        #   3 cubes → sum × 100
+        #   2 cubes → sum × 2
+        #   3 cubes → sum × 4
         # This makes specialising for one cube far worse than grasping all three.
         # Use s > 0 (not just s != -inf) — a failed run can return 0.0 and must
         # not be counted as a successful grasp.
         n_grasped = sum(1 for s in valid_scores if s > 0)
-        multiplier = 10 ** (n_grasped - 1) if n_grasped > 0 else 0.0
+        multiplier = 2 ** (n_grasped - 1) if n_grasped > 0 else 0.0
         aggregate_score = sum(valid_scores) * multiplier
         return aggregate_score, 0.0, aggregate_score, median_score
 
