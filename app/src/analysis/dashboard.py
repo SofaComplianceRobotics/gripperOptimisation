@@ -58,10 +58,14 @@ from analyze_plotting import (
     C_AVG,
     C_BEST,
 )
-from analyze_config import CENTERED_AVG_HALF_WINDOW
+from analyze_config import CENTERED_AVG_HALF_WINDOW, LIVE_REFRESH_SECONDS
 
 # Cache MAX_SCORE per test so we don't re-import scoring modules on every update
 _MAX_SCORE_CACHE: dict[str, float] = {}
+
+# Simple in-memory cache to avoid re-parsing thousands of JSON files
+# on every interval tick or initial page load.
+_DATA_CACHE: dict = {"records": [], "summaries": [], "last_load": 0.0}
 
 
 def _get_test_max_score(test_name: str) -> float:
@@ -107,7 +111,7 @@ if not DASH_AVAILABLE:
 # ─────────────────────────────────────────────────────────────
 
 
-def build_performance_tab(records: list[dict], summaries: list[dict]) -> html.Div:
+def build_performance_tab() -> html.Div:
     """Build performance visualization tab with bars and score lines."""
     return html.Div(
         [
@@ -116,7 +120,11 @@ def build_performance_tab(records: list[dict], summaries: list[dict]) -> html.Di
             html.Div(id="trial-detail-panel", className="my-3"),
             html.Hr(),
             html.Div(id="leaderboard-table", className="mt-4"),
-            dcc.Interval(id="performance-interval", interval=1000, n_intervals=0),
+            dcc.Interval(
+                id="performance-interval",
+                interval=int(max(1.0, LIVE_REFRESH_SECONDS) * 1000),
+                n_intervals=0,
+            ),
         ],
         className="p-3",
     )
@@ -136,7 +144,11 @@ def build_param_bounds_tab() -> html.Div:
             # The parameter history is shown as a heatmap (last ~40 trials).
             # No fixed height — figure height adapts to parameter count; page scrolls naturally
             dcc.Graph(id="param-bounds-graph"),
-            dcc.Interval(id="bounds-interval", interval=1000, n_intervals=0),
+            dcc.Interval(
+                id="bounds-interval",
+                interval=int(max(1.0, LIVE_REFRESH_SECONDS) * 1000),
+                n_intervals=0,
+            ),
         ],
         className="p-3",
     )
@@ -211,7 +223,11 @@ def build_progress_tab() -> html.Div:
                     "background": "#ffffff",
                 },
             ),
-            dcc.Interval(id="progress-interval", interval=1000, n_intervals=0),
+            dcc.Interval(
+                id="progress-interval",
+                interval=int(max(1.0, LIVE_REFRESH_SECONDS) * 1000),
+                n_intervals=0,
+            ),
         ],
         className="p-3",
     )
@@ -223,14 +239,33 @@ def build_progress_tab() -> html.Div:
 
 
 def _load_data():
-    """Load all trial data and summaries."""
+    """Load all trial data and summaries with a short in-memory cache.
+
+    This avoids re-parsing thousands of JSON files on every interval tick
+    or initial page render. The cache TTL is controlled by
+    `LIVE_REFRESH_SECONDS` in `analyze_config`.
+    """
     try:
+        now = time.time()
+        # Use cached values when recent
+        if _DATA_CACHE.get("records") and (
+            now - float(_DATA_CACHE.get("last_load", 0))
+        ) < max(0.5, float(LIVE_REFRESH_SECONDS)):
+            return _DATA_CACHE["records"], _DATA_CACHE["summaries"]
+
         records = load_all_trials()
         summaries = load_gen_summaries()
+        _DATA_CACHE["records"] = records
+        _DATA_CACHE["summaries"] = summaries
+        _DATA_CACHE["last_load"] = now
         return records, summaries
     except Exception as e:
         print(f"[warn] Error loading data: {e}")
-        return [], []
+        # Fall back to cached data when available
+        return (
+            _DATA_CACHE.get("records", []) or [],
+            _DATA_CACHE.get("summaries", []) or [],
+        )
 
 
 def _current_generation_records(records: list[dict]) -> list[dict]:
@@ -520,8 +555,8 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
         max_s = float(info.get("max_score", 1.0) or 1.0)
         weight = float(info.get("weight_pct", 0.0) or 0.0)
         norm = min(agg / max_s, 1.0) if max_s > 0 else 0.0
-        contribution = norm * weight          # pts earned out of weight_pct max
-        success_pct = norm * 100             # % of the test's own maximum
+        contribution = norm * weight  # pts earned out of weight_pct max
+        success_pct = norm * 100  # % of the test's own maximum
         run_scores: list = info.get("run_scores") or []
         run_total = int(info.get("run_total", 1))
 
@@ -610,7 +645,11 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
                         className="mb-1",
                     ),
                     # Individual run scores (multi-run tests only)
-                    html.Div(run_cells, className="d-flex flex-wrap") if run_cells else html.Div(),
+                    (
+                        html.Div(run_cells, className="d-flex flex-wrap")
+                        if run_cells
+                        else html.Div()
+                    ),
                 ],
                 className="mb-3 pb-3",
                 style={"borderBottom": f"1px solid {C_BORDER}"},
@@ -1047,9 +1086,6 @@ def create_app() -> Dash:
         ],
     )
 
-    # Global data store
-    records, summaries = _load_data()
-
     app.layout = html.Div(
         [
             html.Div(
@@ -1071,7 +1107,7 @@ def create_app() -> Dash:
                     dcc.Tab(
                         label="📊 Performance & Leaderboard",
                         value="performance",
-                        children=build_performance_tab(records, summaries),
+                        children=build_performance_tab(),
                     ),
                     dcc.Tab(
                         label="📈 Progress Monitor",
@@ -1085,7 +1121,6 @@ def create_app() -> Dash:
                     ),
                 ],
             ),
-            dcc.Store(id="data-store", data={"records": records}),
         ],
         className="py-3",
     )
@@ -1109,7 +1144,9 @@ def create_app() -> Dash:
                 return html.Div()
             state = _read_json(TRIALS_DIR / gen_name / trial_name / "trial_state.json")
             if not state:
-                return html.Div("No detail available for this trial.", className="text-muted")
+                return html.Div(
+                    "No detail available for this trial.", className="text-muted"
+                )
             return _build_trial_detail(state, gen_name, trial_name)
         except Exception as e:
             return html.Div(f"Could not load trial: {e}", className="text-muted")
@@ -1155,10 +1192,9 @@ def create_app() -> Dash:
         Output("jump-running-target-store", "data"),
         Input("jump-running-trial", "n_clicks"),
         Input("progress-interval", "n_intervals"),
-        State("data-store", "data"),
         State("jump-auto-enabled", "data"),
     )
-    def update_jump_target(_clicks, _intervals, data, auto_enabled):
+    def update_jump_target(_clicks, _intervals, auto_enabled):
         # Decide whether to emit a jump target: either user clicked the button
         # or auto-jump is enabled during an interval tick.
         try:
