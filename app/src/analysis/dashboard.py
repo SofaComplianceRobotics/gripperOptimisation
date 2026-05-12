@@ -164,10 +164,6 @@ def build_progress_tab() -> html.Div:
     return html.Div(
         [
             html.H3("Optimization Progress", className="mb-3"),
-            html.P(
-                "Only the current generation's trials are shown, one card per trial and one progress bar per run slot.",
-                className="text-muted mb-3",
-            ),
             html.Div(
                 [
                     html.Button(
@@ -175,10 +171,6 @@ def build_progress_tab() -> html.Div:
                         id="jump-running-trial",
                         n_clicks=0,
                         className="btn btn-primary btn-sm",
-                    ),
-                    html.Span(
-                        "Scrolls to the first trial that is not yet complete.",
-                        className="text-muted ms-3",
                     ),
                 ],
                 className="d-flex align-items-center gap-2 mb-3",
@@ -330,16 +322,9 @@ def _state_color(state: str) -> str:
         return "#0270ff"
     if state in {"failed", "error", "pruned", "skipped", "cancelled"}:
         return "#e03131"
+    if state in {"waiting", "pending", "queued"}:
+        return "#868e96"
     return "#868e96"
-
-
-def _format_run_label(run: dict) -> str:
-    label = run.get("run_label") or run.get("test_name") or "run"
-    idx = run.get("test_run_index")
-    total = run.get("test_run_total")
-    if label and idx and total:
-        return f"{label}"
-    return str(label)
 
 
 def _get_trial_actual_state(trial_record: dict) -> str:
@@ -348,7 +333,11 @@ def _get_trial_actual_state(trial_record: dict) -> str:
     This matches the logic in _build_progress_card to ensure consistency
     between what we display and what we check for completion.
     """
-    trial_state = _load_trial_state(trial_record) or {}
+    raw_state = _load_trial_state(trial_record)
+    # No state file and not complete → trial hasn't started yet
+    if raw_state is None and not trial_record.get("is_complete"):
+        return "waiting"
+    trial_state = raw_state or {}
     runs = trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
 
     # Start with explicit state or default based on is_complete flag
@@ -376,12 +365,9 @@ def _get_trial_actual_state(trial_record: dict) -> str:
 def _build_progress_card(trial_record: dict) -> html.Div:
     trial_state = _load_trial_state(trial_record) or {}
     runs = trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
-    trial_label = (
-        f"{trial_record.get('gen_name', '')} / {trial_record.get('trial_name', '')}"
-    )
+    trial_index = trial_record.get("trial_index", 0)
     final_score = trial_record.get("final_score")
 
-    # Use the shared state determination logic
     state = _get_trial_actual_state(trial_record)
 
     run_rows = []
@@ -392,8 +378,7 @@ def _build_progress_card(trial_record: dict) -> html.Div:
             run_state = str(run.get("state", "not-started")).lower()
             bar_color = _state_color(run_state)
 
-            # Normalize against MAX_SCORE for this test
-            test_name = run.get("test_name") or run.get("run_label") or ""
+            test_name = run.get("test_name") or run.get("run_label") or "run"
             max_score = _get_test_max_score(test_name)
 
             live_val, is_final = _get_live_score(run)
@@ -403,60 +388,51 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                     if max_score > 0
                     else 0.0
                 )
-                # Tilde prefix on live (non-final) values so the user knows it's in progress
                 score_label = f"{live_val:.3f}" if is_final else f"~{live_val:.3f}"
             else:
                 bar_pct = 0.0
                 score_label = "--"
 
+            run_idx = run.get("test_run_index")
+            run_total = run.get("test_run_total")
+            count_str = (
+                f" {run_idx}/{run_total} |"
+                if run_idx is not None and run_total is not None and run_total > 1
+                else ""
+            )
+            label_text = f"{test_name} | {count_str} {score_label} | {run_state}"
+
             run_rows.append(
                 html.Div(
                     [
-                        html.Div(
-                            [
-                                html.Span(
-                                    _format_run_label(run), className="fw-semibold"
-                                ),
-                                html.Span(" · ", className="text-muted"),
-                                html.Span(
-                                    score_label,
-                                    style={
-                                        "color": bar_color,
-                                        "fontWeight": 700,
-                                        "fontSize": "1rem",
-                                    },
-                                ),
-                                html.Span(
-                                    f"  {run_state}",
-                                    style={"color": bar_color, "fontSize": "0.8rem"},
-                                ),
-                            ],
-                            className="d-flex align-items-center gap-1 mb-1",
+                        html.Span(
+                            label_text,
+                            style={
+                                "width": "260px",
+                                "minWidth": "260px",
+                                "flexShrink": 0,
+                                "fontSize": "0.82rem",
+                                "color": bar_color,
+                                "fontWeight": 600,
+                                "whiteSpace": "nowrap",
+                                "overflow": "hidden",
+                                "textOverflow": "ellipsis",
+                            },
                         ),
                         html.Div(
-                            [
-                                html.Div(
-                                    score_label if bar_pct > 8 else "",
-                                    style={
-                                        "width": f"{bar_pct:.1f}%",
-                                        "height": "100%",
-                                        "background": bar_color,
-                                        "borderRadius": "999px",
-                                        "transition": "width 600ms ease",
-                                        "willChange": "width",
-                                        "display": "flex",
-                                        "alignItems": "center",
-                                        "paddingLeft": "8px",
-                                        "color": "#fff",
-                                        "fontSize": "0.72rem",
-                                        "fontWeight": 600,
-                                        "minWidth": "0",
-                                        "overflow": "hidden",
-                                        "whiteSpace": "nowrap",
-                                    },
-                                )
-                            ],
+                            html.Div(
+                                style={
+                                    "width": f"{bar_pct:.1f}%",
+                                    "height": "100%",
+                                    "background": bar_color,
+                                    "borderRadius": "999px",
+                                    "transition": "width 600ms ease",
+                                    "willChange": "width",
+                                    "minWidth": "0",
+                                }
+                            ),
                             style={
+                                "flexGrow": 1,
                                 "height": "20px",
                                 "background": "#e9ecef",
                                 "borderRadius": "999px",
@@ -464,7 +440,12 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                             },
                         ),
                     ],
-                    className="mb-2",
+                    style={
+                        "display": "flex",
+                        "alignItems": "center",
+                        "gap": "12px",
+                        "marginBottom": "6px",
+                    },
                 )
             )
 
@@ -475,9 +456,9 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                     html.Div(
                         [
                             html.Div("Trial", className="text-muted"),
-                            html.Div(trial_label, className="fw-semibold"),
+                            html.Div(str(trial_index), className="fw-semibold"),
                         ],
-                        className="col-12 col-md-5",
+                        className="col-12 col-md-4",
                     ),
                     html.Div(
                         [
@@ -487,11 +468,11 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                                 style={"color": _state_color(state), "fontWeight": 600},
                             ),
                         ],
-                        className="col-12 col-md-3",
+                        className="col-12 col-md-4",
                     ),
                     html.Div(
                         [
-                            html.Div("Final score", className="text-muted"),
+                            html.Div("Score", className="text-muted"),
                             html.Div(
                                 (
                                     f"{final_score:.4f}"
@@ -501,17 +482,7 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                                 className="fw-semibold",
                             ),
                         ],
-                        className="col-12 col-md-2",
-                    ),
-                    html.Div(
-                        [
-                            html.Div("Runs", className="text-muted"),
-                            html.Div(
-                                str(len(runs) or trial_record.get("n_runs", 0)),
-                                className="fw-semibold",
-                            ),
-                        ],
-                        className="col-12 col-md-2",
+                        className="col-12 col-md-4",
                     ),
                 ],
                 className="row g-3 mb-3",
@@ -973,15 +944,15 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         return go.Figure().add_annotation(text=f"Error: {e}")
 
 
-def _build_progress_stats(records: list[dict]) -> html.Div:
+def _build_progress_stats(
+    current_records: list[dict], all_records: list[dict]
+) -> html.Div:
     """Build progress statistics display."""
-    total = len(records)
-    failed = sum(1 for r in records if r.get("failed", False))
-    valid = total - failed
-    success_pct = (100 * valid / total) if total > 0 else 0
+    gen_index = current_records[0].get("gen_index", -1) if current_records else -1
+    gen_label = f"Gen {gen_index}" if gen_index >= 0 else "—"
 
     best_record = max(
-        [r for r in records if not r.get("failed", False)],
+        [r for r in all_records if not r.get("failed", False)],
         key=lambda x: x.get("final_score", 0),
         default=None,
     )
@@ -998,24 +969,10 @@ def _build_progress_stats(records: list[dict]) -> html.Div:
                 [
                     html.Div(
                         [
-                            html.H6("Total Trials", className="text-muted"),
-                            html.H4(str(total), className="text-info"),
+                            html.H6("Generation", className="text-muted"),
+                            html.H4(gen_label, className="text-info"),
                         ],
-                        className="col-12 col-md-3",
-                    ),
-                    html.Div(
-                        [
-                            html.H6("Success Rate", className="text-muted"),
-                            html.H4(f"{success_pct:.1f}%", className="text-success"),
-                        ],
-                        className="col-12 col-md-3",
-                    ),
-                    html.Div(
-                        [
-                            html.H6("Failed", className="text-muted"),
-                            html.H4(str(failed), className="text-danger"),
-                        ],
-                        className="col-12 col-md-3",
+                        className="col-12 col-md-6",
                     ),
                     html.Div(
                         [
@@ -1023,7 +980,7 @@ def _build_progress_stats(records: list[dict]) -> html.Div:
                             html.H4(f"{best_score:.4f}", className="text-warning"),
                             html.Small(best_trial, className="text-muted"),
                         ],
-                        className="col-12 col-md-3",
+                        className="col-12 col-md-6",
                     ),
                 ],
                 className="row g-3",
@@ -1184,7 +1141,7 @@ def create_app() -> Dash:
     def update_progress(_):
         records, summaries = _load_data()
         current_records = _current_generation_records(records)
-        stats = _build_progress_stats(current_records)
+        stats = _build_progress_stats(current_records, records)
         grid = _build_progress_grid(current_records)
         return stats, grid
 

@@ -129,7 +129,7 @@ if not RUNSOFA_EXE:
 # ─────────────────────────────────────────────
 # CMA-ES Optimizer Settings
 # ─────────────────────────────────────────────
-N_PARALLEL = 10  # number of parallel SOFA instances (and thus trials) per generation
+N_PARALLEL = 5  # number of parallel SOFA instances (and thus trials) per generation
 if N_PARALLEL < 4:
     raise ValueError("N_PARALLEL must be at least 4 for CMA-ES to remain valid.")
 N_REPEATS = len(RUN_PLAN)
@@ -149,10 +149,10 @@ MAX_ACTIVE_SOFA_PROCS = int(
     os.environ.get("MAX_ACTIVE_SOFA_PROCS", "12")
 )  # throttle to avoid starving geometry export
 CMAES_STARTUP_TRIALS = int(
-    os.environ.get("CMAES_STARTUP_TRIALS", "50")
+    os.environ.get("CMAES_STARTUP_TRIALS", "100")
 )  # random warm-up before CMA-ES adaptation
 CMAES_SIGMA0 = float(
-    os.environ.get("CMAES_SIGMA0", "0.5")
+    os.environ.get("CMAES_SIGMA0", "1.0")
 )  # initial global step size (exploration pressure)
 HARD_FAIL_SCORE = float(
     os.environ.get("HARD_FAIL_SCORE", "-3.0")
