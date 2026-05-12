@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 
-DT = 0.01
+from core.timing_config import DT_DIRECT as DT
 
 
 def make_playback_controller(SofaController):

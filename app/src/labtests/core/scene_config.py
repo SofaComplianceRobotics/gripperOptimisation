@@ -116,7 +116,7 @@ class PlaybackConfig:
             pickup_above_spawn_tol=float(
                 os.environ.get("SHAPEOPT_PICKUP_ABOVE_SPAWN_TOL", "1.0")
             ),
-            early_stop_sim_time=float(os.environ.get("EARLY_STOP_SIM_TIME", "1.0")),
+            early_stop_sim_time=float(os.environ.get("EARLY_STOP_SIM_TIME", "2.0")),
             floor_y_threshold=float(os.environ.get("FLOOR_Y_THRESHOLD", "-235.0")),
             floor_y_buffer=float(os.environ.get("FLOOR_Y_BUFFER", "5.0")),
             pickup_y_threshold=float(os.environ.get("PICKUP_Y_THRESHOLD", "-215.0")),

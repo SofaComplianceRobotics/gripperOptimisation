@@ -30,10 +30,11 @@ from labtests.core.scene_paths import ensure_scene_paths
 
 SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
 
+from core.timing_config import DT_DIRECT as DT
+
 RECORD_FILE = str(
     LAB_ROOT / "runtime" / "recordings" / "random_cube_pick" / "motor_recording.json"
 )
-DT = 0.01
 
 # Size cycles over 3 runs, indexed by OPTUNA_RUN_SLOT
 _CUBE_SIZE_CYCLE = ([5, 5, 5], [8, 8, 8], [20, 20, 20])

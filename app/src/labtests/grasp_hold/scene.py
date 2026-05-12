@@ -24,10 +24,11 @@ from labtests.core.scene_paths import ensure_scene_paths
 
 SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
 
+from core.timing_config import DT_DIRECT as DT
+
 RECORD_FILE = str(
     LAB_ROOT / "runtime" / "recordings" / "grasp_hold" / "motor_recording.json"
 )
-DT = 0.01
 
 
 def createScene(rootnode):
