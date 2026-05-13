@@ -18,6 +18,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from core.params import ModelParams
+from core.timing_config import DT_DIRECT
 from labtests.registry import get_default_test_names, get_test_spec, parse_test_names
 
 # ─────────────────────────────────────────────
@@ -129,7 +130,7 @@ if not RUNSOFA_EXE:
 # ─────────────────────────────────────────────
 # CMA-ES Optimizer Settings
 # ─────────────────────────────────────────────
-N_PARALLEL = 10  # number of parallel SOFA instances (and thus trials) per generation
+N_PARALLEL = 5  # number of parallel SOFA instances (and thus trials) per generation
 if N_PARALLEL < 4:
     raise ValueError("N_PARALLEL must be at least 4 for CMA-ES to remain valid.")
 N_REPEATS = len(RUN_PLAN)
@@ -149,10 +150,10 @@ MAX_ACTIVE_SOFA_PROCS = int(
     os.environ.get("MAX_ACTIVE_SOFA_PROCS", "12")
 )  # throttle to avoid starving geometry export
 CMAES_STARTUP_TRIALS = int(
-    os.environ.get("CMAES_STARTUP_TRIALS", "50")
+    os.environ.get("CMAES_STARTUP_TRIALS", "100")
 )  # random warm-up before CMA-ES adaptation
 CMAES_SIGMA0 = float(
-    os.environ.get("CMAES_SIGMA0", "0.5")
+    os.environ.get("CMAES_SIGMA0", "1.0")
 )  # initial global step size (exploration pressure)
 HARD_FAIL_SCORE = float(
     os.environ.get("HARD_FAIL_SCORE", "-3.0")
@@ -192,9 +193,7 @@ PARAM_SPECS: list[dict] = _param_specs_from_metadata(BASE_PARAMS)
 # ─────────────────────────────────────────────
 # Simulation Scoring & Early Stop Parameters
 # ─────────────────────────────────────────────
-EARLY_STOP_SIM_TIME = (
-    1.0  # seconds of sim time before checking if cube is still on floor
-)
+EARLY_STOP_SIM_TIME = 2.0 * (DT_DIRECT / 0.02)  # scaled so gate fires after the same number of recorded frames regardless of DT_DIRECT
 FLOOR_Y_THRESHOLD = -235.0  # cube Y below this = on the floor / never picked up
 FLOOR_Y_BUFFER = 5.0  # how far above threshold counts as "still on floor"
 PICKUP_Y_THRESHOLD = -215.0  # cube Y above this = considered picked up

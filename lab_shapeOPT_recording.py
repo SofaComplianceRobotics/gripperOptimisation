@@ -27,6 +27,8 @@ APP_SRC = LAB_ROOT / "app" / "src"
 if str(APP_SRC) not in sys.path:
     sys.path.insert(0, str(APP_SRC))
 
+from core.timing_config import DT_INVERSE
+
 
 def _pick_recording_target() -> str:
     """Resolve which test target should receive this recording."""
@@ -150,7 +152,7 @@ def createScene(rootnode):
     settings, modelling, simulation = addHeader(rootnode, inverse=True)
     addSolvers(simulation)
 
-    rootnode.dt = 0.05
+    rootnode.dt = DT_INVERSE
     rootnode.gravity = [0.0, -9810.0, 0.0]
     rootnode.VisualStyle.displayFlags.value = ["hideBehavior", "hideWireframe"]
 

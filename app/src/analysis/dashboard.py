@@ -58,10 +58,14 @@ from analyze_plotting import (
     C_AVG,
     C_BEST,
 )
-from analyze_config import CENTERED_AVG_HALF_WINDOW
+from analyze_config import CENTERED_AVG_HALF_WINDOW, LIVE_REFRESH_SECONDS
 
 # Cache MAX_SCORE per test so we don't re-import scoring modules on every update
 _MAX_SCORE_CACHE: dict[str, float] = {}
+
+# Simple in-memory cache to avoid re-parsing thousands of JSON files
+# on every interval tick or initial page load.
+_DATA_CACHE: dict = {"records": [], "summaries": [], "last_load": 0.0}
 
 
 def _get_test_max_score(test_name: str) -> float:
@@ -107,7 +111,7 @@ if not DASH_AVAILABLE:
 # ─────────────────────────────────────────────────────────────
 
 
-def build_performance_tab(records: list[dict], summaries: list[dict]) -> html.Div:
+def build_performance_tab() -> html.Div:
     """Build performance visualization tab with bars and score lines."""
     return html.Div(
         [
@@ -116,7 +120,11 @@ def build_performance_tab(records: list[dict], summaries: list[dict]) -> html.Di
             html.Div(id="trial-detail-panel", className="my-3"),
             html.Hr(),
             html.Div(id="leaderboard-table", className="mt-4"),
-            dcc.Interval(id="performance-interval", interval=1000, n_intervals=0),
+            dcc.Interval(
+                id="performance-interval",
+                interval=int(max(1.0, LIVE_REFRESH_SECONDS) * 1000),
+                n_intervals=0,
+            ),
         ],
         className="p-3",
     )
@@ -136,7 +144,11 @@ def build_param_bounds_tab() -> html.Div:
             # The parameter history is shown as a heatmap (last ~40 trials).
             # No fixed height — figure height adapts to parameter count; page scrolls naturally
             dcc.Graph(id="param-bounds-graph"),
-            dcc.Interval(id="bounds-interval", interval=1000, n_intervals=0),
+            dcc.Interval(
+                id="bounds-interval",
+                interval=int(max(1.0, LIVE_REFRESH_SECONDS) * 1000),
+                n_intervals=0,
+            ),
         ],
         className="p-3",
     )
@@ -152,10 +164,6 @@ def build_progress_tab() -> html.Div:
     return html.Div(
         [
             html.H3("Optimization Progress", className="mb-3"),
-            html.P(
-                "Only the current generation's trials are shown, one card per trial and one progress bar per run slot.",
-                className="text-muted mb-3",
-            ),
             html.Div(
                 [
                     html.Button(
@@ -163,10 +171,6 @@ def build_progress_tab() -> html.Div:
                         id="jump-running-trial",
                         n_clicks=0,
                         className="btn btn-primary btn-sm",
-                    ),
-                    html.Span(
-                        "Scrolls to the first trial that is not yet complete.",
-                        className="text-muted ms-3",
                     ),
                 ],
                 className="d-flex align-items-center gap-2 mb-3",
@@ -211,7 +215,11 @@ def build_progress_tab() -> html.Div:
                     "background": "#ffffff",
                 },
             ),
-            dcc.Interval(id="progress-interval", interval=1000, n_intervals=0),
+            dcc.Interval(
+                id="progress-interval",
+                interval=int(max(1.0, LIVE_REFRESH_SECONDS) * 1000),
+                n_intervals=0,
+            ),
         ],
         className="p-3",
     )
@@ -223,14 +231,33 @@ def build_progress_tab() -> html.Div:
 
 
 def _load_data():
-    """Load all trial data and summaries."""
+    """Load all trial data and summaries with a short in-memory cache.
+
+    This avoids re-parsing thousands of JSON files on every interval tick
+    or initial page render. The cache TTL is controlled by
+    `LIVE_REFRESH_SECONDS` in `analyze_config`.
+    """
     try:
+        now = time.time()
+        # Use cached values when recent
+        if _DATA_CACHE.get("records") and (
+            now - float(_DATA_CACHE.get("last_load", 0))
+        ) < max(0.5, float(LIVE_REFRESH_SECONDS)):
+            return _DATA_CACHE["records"], _DATA_CACHE["summaries"]
+
         records = load_all_trials()
         summaries = load_gen_summaries()
+        _DATA_CACHE["records"] = records
+        _DATA_CACHE["summaries"] = summaries
+        _DATA_CACHE["last_load"] = now
         return records, summaries
     except Exception as e:
         print(f"[warn] Error loading data: {e}")
-        return [], []
+        # Fall back to cached data when available
+        return (
+            _DATA_CACHE.get("records", []) or [],
+            _DATA_CACHE.get("summaries", []) or [],
+        )
 
 
 def _current_generation_records(records: list[dict]) -> list[dict]:
@@ -295,16 +322,9 @@ def _state_color(state: str) -> str:
         return "#0270ff"
     if state in {"failed", "error", "pruned", "skipped", "cancelled"}:
         return "#e03131"
+    if state in {"waiting", "pending", "queued"}:
+        return "#868e96"
     return "#868e96"
-
-
-def _format_run_label(run: dict) -> str:
-    label = run.get("run_label") or run.get("test_name") or "run"
-    idx = run.get("test_run_index")
-    total = run.get("test_run_total")
-    if label and idx and total:
-        return f"{label}"
-    return str(label)
 
 
 def _get_trial_actual_state(trial_record: dict) -> str:
@@ -313,7 +333,11 @@ def _get_trial_actual_state(trial_record: dict) -> str:
     This matches the logic in _build_progress_card to ensure consistency
     between what we display and what we check for completion.
     """
-    trial_state = _load_trial_state(trial_record) or {}
+    raw_state = _load_trial_state(trial_record)
+    # No state file and not complete → trial hasn't started yet
+    if raw_state is None and not trial_record.get("is_complete"):
+        return "waiting"
+    trial_state = raw_state or {}
     runs = trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
 
     # Start with explicit state or default based on is_complete flag
@@ -341,12 +365,9 @@ def _get_trial_actual_state(trial_record: dict) -> str:
 def _build_progress_card(trial_record: dict) -> html.Div:
     trial_state = _load_trial_state(trial_record) or {}
     runs = trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
-    trial_label = (
-        f"{trial_record.get('gen_name', '')} / {trial_record.get('trial_name', '')}"
-    )
+    trial_index = trial_record.get("trial_index", 0)
     final_score = trial_record.get("final_score")
 
-    # Use the shared state determination logic
     state = _get_trial_actual_state(trial_record)
 
     run_rows = []
@@ -357,8 +378,7 @@ def _build_progress_card(trial_record: dict) -> html.Div:
             run_state = str(run.get("state", "not-started")).lower()
             bar_color = _state_color(run_state)
 
-            # Normalize against MAX_SCORE for this test
-            test_name = run.get("test_name") or run.get("run_label") or ""
+            test_name = run.get("test_name") or run.get("run_label") or "run"
             max_score = _get_test_max_score(test_name)
 
             live_val, is_final = _get_live_score(run)
@@ -368,60 +388,51 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                     if max_score > 0
                     else 0.0
                 )
-                # Tilde prefix on live (non-final) values so the user knows it's in progress
                 score_label = f"{live_val:.3f}" if is_final else f"~{live_val:.3f}"
             else:
                 bar_pct = 0.0
                 score_label = "--"
 
+            run_idx = run.get("test_run_index")
+            run_total = run.get("test_run_total")
+            count_str = (
+                f" {run_idx}/{run_total} |"
+                if run_idx is not None and run_total is not None and run_total > 1
+                else ""
+            )
+            label_text = f"{test_name} | {count_str} {score_label} | {run_state}"
+
             run_rows.append(
                 html.Div(
                     [
-                        html.Div(
-                            [
-                                html.Span(
-                                    _format_run_label(run), className="fw-semibold"
-                                ),
-                                html.Span(" · ", className="text-muted"),
-                                html.Span(
-                                    score_label,
-                                    style={
-                                        "color": bar_color,
-                                        "fontWeight": 700,
-                                        "fontSize": "1rem",
-                                    },
-                                ),
-                                html.Span(
-                                    f"  {run_state}",
-                                    style={"color": bar_color, "fontSize": "0.8rem"},
-                                ),
-                            ],
-                            className="d-flex align-items-center gap-1 mb-1",
+                        html.Span(
+                            label_text,
+                            style={
+                                "width": "260px",
+                                "minWidth": "260px",
+                                "flexShrink": 0,
+                                "fontSize": "0.82rem",
+                                "color": bar_color,
+                                "fontWeight": 600,
+                                "whiteSpace": "nowrap",
+                                "overflow": "hidden",
+                                "textOverflow": "ellipsis",
+                            },
                         ),
                         html.Div(
-                            [
-                                html.Div(
-                                    score_label if bar_pct > 8 else "",
-                                    style={
-                                        "width": f"{bar_pct:.1f}%",
-                                        "height": "100%",
-                                        "background": bar_color,
-                                        "borderRadius": "999px",
-                                        "transition": "width 600ms ease",
-                                        "willChange": "width",
-                                        "display": "flex",
-                                        "alignItems": "center",
-                                        "paddingLeft": "8px",
-                                        "color": "#fff",
-                                        "fontSize": "0.72rem",
-                                        "fontWeight": 600,
-                                        "minWidth": "0",
-                                        "overflow": "hidden",
-                                        "whiteSpace": "nowrap",
-                                    },
-                                )
-                            ],
+                            html.Div(
+                                style={
+                                    "width": f"{bar_pct:.1f}%",
+                                    "height": "100%",
+                                    "background": bar_color,
+                                    "borderRadius": "999px",
+                                    "transition": "width 600ms ease",
+                                    "willChange": "width",
+                                    "minWidth": "0",
+                                }
+                            ),
                             style={
+                                "flexGrow": 1,
                                 "height": "20px",
                                 "background": "#e9ecef",
                                 "borderRadius": "999px",
@@ -429,7 +440,12 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                             },
                         ),
                     ],
-                    className="mb-2",
+                    style={
+                        "display": "flex",
+                        "alignItems": "center",
+                        "gap": "12px",
+                        "marginBottom": "6px",
+                    },
                 )
             )
 
@@ -440,9 +456,9 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                     html.Div(
                         [
                             html.Div("Trial", className="text-muted"),
-                            html.Div(trial_label, className="fw-semibold"),
+                            html.Div(str(trial_index), className="fw-semibold"),
                         ],
-                        className="col-12 col-md-5",
+                        className="col-12 col-md-4",
                     ),
                     html.Div(
                         [
@@ -452,11 +468,11 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                                 style={"color": _state_color(state), "fontWeight": 600},
                             ),
                         ],
-                        className="col-12 col-md-3",
+                        className="col-12 col-md-4",
                     ),
                     html.Div(
                         [
-                            html.Div("Final score", className="text-muted"),
+                            html.Div("Score", className="text-muted"),
                             html.Div(
                                 (
                                     f"{final_score:.4f}"
@@ -466,17 +482,7 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                                 className="fw-semibold",
                             ),
                         ],
-                        className="col-12 col-md-2",
-                    ),
-                    html.Div(
-                        [
-                            html.Div("Runs", className="text-muted"),
-                            html.Div(
-                                str(len(runs) or trial_record.get("n_runs", 0)),
-                                className="fw-semibold",
-                            ),
-                        ],
-                        className="col-12 col-md-2",
+                        className="col-12 col-md-4",
                     ),
                 ],
                 className="row g-3 mb-3",
@@ -520,8 +526,8 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
         max_s = float(info.get("max_score", 1.0) or 1.0)
         weight = float(info.get("weight_pct", 0.0) or 0.0)
         norm = min(agg / max_s, 1.0) if max_s > 0 else 0.0
-        contribution = norm * weight          # pts earned out of weight_pct max
-        success_pct = norm * 100             # % of the test's own maximum
+        contribution = norm * weight  # pts earned out of weight_pct max
+        success_pct = norm * 100  # % of the test's own maximum
         run_scores: list = info.get("run_scores") or []
         run_total = int(info.get("run_total", 1))
 
@@ -610,7 +616,11 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
                         className="mb-1",
                     ),
                     # Individual run scores (multi-run tests only)
-                    html.Div(run_cells, className="d-flex flex-wrap") if run_cells else html.Div(),
+                    (
+                        html.Div(run_cells, className="d-flex flex-wrap")
+                        if run_cells
+                        else html.Div()
+                    ),
                 ],
                 className="mb-3 pb-3",
                 style={"borderBottom": f"1px solid {C_BORDER}"},
@@ -934,15 +944,15 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         return go.Figure().add_annotation(text=f"Error: {e}")
 
 
-def _build_progress_stats(records: list[dict]) -> html.Div:
+def _build_progress_stats(
+    current_records: list[dict], all_records: list[dict]
+) -> html.Div:
     """Build progress statistics display."""
-    total = len(records)
-    failed = sum(1 for r in records if r.get("failed", False))
-    valid = total - failed
-    success_pct = (100 * valid / total) if total > 0 else 0
+    gen_index = current_records[0].get("gen_index", -1) if current_records else -1
+    gen_label = f"Gen {gen_index}" if gen_index >= 0 else "—"
 
     best_record = max(
-        [r for r in records if not r.get("failed", False)],
+        [r for r in all_records if not r.get("failed", False)],
         key=lambda x: x.get("final_score", 0),
         default=None,
     )
@@ -959,24 +969,10 @@ def _build_progress_stats(records: list[dict]) -> html.Div:
                 [
                     html.Div(
                         [
-                            html.H6("Total Trials", className="text-muted"),
-                            html.H4(str(total), className="text-info"),
+                            html.H6("Generation", className="text-muted"),
+                            html.H4(gen_label, className="text-info"),
                         ],
-                        className="col-12 col-md-3",
-                    ),
-                    html.Div(
-                        [
-                            html.H6("Success Rate", className="text-muted"),
-                            html.H4(f"{success_pct:.1f}%", className="text-success"),
-                        ],
-                        className="col-12 col-md-3",
-                    ),
-                    html.Div(
-                        [
-                            html.H6("Failed", className="text-muted"),
-                            html.H4(str(failed), className="text-danger"),
-                        ],
-                        className="col-12 col-md-3",
+                        className="col-12 col-md-6",
                     ),
                     html.Div(
                         [
@@ -984,7 +980,7 @@ def _build_progress_stats(records: list[dict]) -> html.Div:
                             html.H4(f"{best_score:.4f}", className="text-warning"),
                             html.Small(best_trial, className="text-muted"),
                         ],
-                        className="col-12 col-md-3",
+                        className="col-12 col-md-6",
                     ),
                 ],
                 className="row g-3",
@@ -1047,9 +1043,6 @@ def create_app() -> Dash:
         ],
     )
 
-    # Global data store
-    records, summaries = _load_data()
-
     app.layout = html.Div(
         [
             html.Div(
@@ -1071,7 +1064,7 @@ def create_app() -> Dash:
                     dcc.Tab(
                         label="📊 Performance & Leaderboard",
                         value="performance",
-                        children=build_performance_tab(records, summaries),
+                        children=build_performance_tab(),
                     ),
                     dcc.Tab(
                         label="📈 Progress Monitor",
@@ -1085,7 +1078,6 @@ def create_app() -> Dash:
                     ),
                 ],
             ),
-            dcc.Store(id="data-store", data={"records": records}),
         ],
         className="py-3",
     )
@@ -1109,7 +1101,9 @@ def create_app() -> Dash:
                 return html.Div()
             state = _read_json(TRIALS_DIR / gen_name / trial_name / "trial_state.json")
             if not state:
-                return html.Div("No detail available for this trial.", className="text-muted")
+                return html.Div(
+                    "No detail available for this trial.", className="text-muted"
+                )
             return _build_trial_detail(state, gen_name, trial_name)
         except Exception as e:
             return html.Div(f"Could not load trial: {e}", className="text-muted")
@@ -1147,7 +1141,7 @@ def create_app() -> Dash:
     def update_progress(_):
         records, summaries = _load_data()
         current_records = _current_generation_records(records)
-        stats = _build_progress_stats(current_records)
+        stats = _build_progress_stats(current_records, records)
         grid = _build_progress_grid(current_records)
         return stats, grid
 
@@ -1155,10 +1149,9 @@ def create_app() -> Dash:
         Output("jump-running-target-store", "data"),
         Input("jump-running-trial", "n_clicks"),
         Input("progress-interval", "n_intervals"),
-        State("data-store", "data"),
         State("jump-auto-enabled", "data"),
     )
-    def update_jump_target(_clicks, _intervals, data, auto_enabled):
+    def update_jump_target(_clicks, _intervals, auto_enabled):
         # Decide whether to emit a jump target: either user clicked the button
         # or auto-jump is enabled during an interval tick.
         try:
