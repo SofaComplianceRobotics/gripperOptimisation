@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 
-from core.timing_config import DT_DIRECT as DT
+from core.timing_config import DT_CONTACT, DT_DIRECT
 
 
 def make_playback_controller(SofaController):
@@ -57,9 +57,11 @@ def make_playback_controller(SofaController):
 
             self.finished = False
             self.frame = 0
+            self.sim_time = 0.0
             self.recorded_frames = len(playback.motor_positions)
-            self.overload_frames = max(0, int(cfg.overload_max_time / DT))
+            self.overload_frames = max(0, int(cfg.overload_max_time / DT_DIRECT))
             self.total_frames = self.recorded_frames + self.overload_frames
+            rootnode.dt.value = DT_CONTACT
             self.peak_y = float("-inf")
             self.was_picked_up = False
             self.dropped = False
@@ -77,6 +79,7 @@ def make_playback_controller(SofaController):
             self.pickup_y_threshold = None
             self.cube_has_spawned = False
             self.spawn_contact_check_frames = 0
+            self._post_spawn_slow_frames = 0
             self._set_cube_mass(self._initial_cube_mass())
             writer.write_status(
                 {
@@ -103,7 +106,7 @@ def make_playback_controller(SofaController):
             if self.frame < self.recorded_frames:
                 self._set_cube_mass(self.cfg.cube_mass_start)
                 return
-            overload_t = (self.frame - self.recorded_frames) * DT
+            overload_t = (self.frame - self.recorded_frames) * DT_DIRECT
             alpha = (
                 1.0
                 if self.cfg.cube_mass_ramp_time <= 0
@@ -265,7 +268,7 @@ def make_playback_controller(SofaController):
                 linewidth=0.8,
                 label=f"floor ({self.cfg.floor_y_threshold})",
             )
-            ax.set_xlim(0, len(self.playback.motor_positions) * DT)
+            ax.set_xlim(0, len(self.playback.motor_positions) * DT_DIRECT)
             ax.set_ylim(-320, -10)
             ax.set_xlabel("Simulation time (s)")
             ax.set_ylabel("Cube Y position")
@@ -283,7 +286,7 @@ def make_playback_controller(SofaController):
             if self.writer.finished:
                 return
 
-            sim_time = self.frame * DT
+            sim_time = self.sim_time
             self._update_overload_mass()
 
             # ── Cube spawn teleport ────────────────────────────────────────────
@@ -296,6 +299,7 @@ def make_playback_controller(SofaController):
                 cube_mo.velocity.value = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
                 self.cube_has_spawned = True
                 self.spawn_contact_check_frames = 2
+                self._post_spawn_slow_frames = 2
                 cube_y = float(self.cube_handles.cube_spawn_y)
                 self._ensure_drop_threshold_initialized(cube_y)
                 print(f"[Spawn] cube spawned at t={sim_time:.2f}s")
@@ -361,7 +365,7 @@ def make_playback_controller(SofaController):
                 if sim_time >= self.cfg.early_stop_sim_time and cube_y > float(
                     self.pickup_y_threshold
                 ):
-                    self.hold_time += DT
+                    self.hold_time += DT_DIRECT
 
                 # Rule 1: cube through floor
                 if cube_y < self.cfg.floor_y_threshold:
@@ -427,13 +431,18 @@ def make_playback_controller(SofaController):
                     flush=True,
                 )
 
+            if self._post_spawn_slow_frames > 0:
+                self._post_spawn_slow_frames -= 1
+                if self._post_spawn_slow_frames == 0:
+                    self.rootnode.dt.value = DT_DIRECT
+
             self.frame += 1
+            self.sim_time += self.rootnode.dt.value
 
         def onAnimateEndEvent(self, event):
             """Run the spawn-contact check at the end of each simulation step."""
             if self.writer.finished:
                 return
-            sim_time = max(0.0, (self.frame - 1) * DT)
-            self._check_spawn_contact_window(sim_time)
+            self._check_spawn_contact_window(self.sim_time)
 
     return BasePlaybackController

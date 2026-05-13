@@ -18,6 +18,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from core.params import ModelParams
+from core.timing_config import DT_DIRECT
 from labtests.registry import get_default_test_names, get_test_spec, parse_test_names
 
 # ─────────────────────────────────────────────
@@ -192,7 +193,7 @@ PARAM_SPECS: list[dict] = _param_specs_from_metadata(BASE_PARAMS)
 # ─────────────────────────────────────────────
 # Simulation Scoring & Early Stop Parameters
 # ─────────────────────────────────────────────
-EARLY_STOP_SIM_TIME = 2  # seconds of sim time before checking if cube is still on floor
+EARLY_STOP_SIM_TIME = 2.0 * (DT_DIRECT / 0.02)  # scaled so gate fires after the same number of recorded frames regardless of DT_DIRECT
 FLOOR_Y_THRESHOLD = -235.0  # cube Y below this = on the floor / never picked up
 FLOOR_Y_BUFFER = 5.0  # how far above threshold counts as "still on floor"
 PICKUP_Y_THRESHOLD = -215.0  # cube Y above this = considered picked up
