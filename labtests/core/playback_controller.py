@@ -71,8 +71,7 @@ def make_playback_controller(SofaController):
                 if playback.motor_positions
                 else [0.0] * playback.num_motors
             )
-            self.cube_y_log = []
-            self.time_log = []
+           
             self.cube_gripper_contact_listener = None
             self.spawn_cube_y = None
             self.drop_y_threshold = None
@@ -246,38 +245,7 @@ def make_playback_controller(SofaController):
             """Return (score, reason_string) for writing to trial_state.json."""
             return self.hold_time, f"hold_time={self.hold_time:.2f}s"
 
-        def _save_cube_y_graph(self, score: float, reason: str) -> None:
-            """Plot and save cube Y vs time if show_cube_y_graph is enabled."""
-            if not self.cfg.show_cube_y_graph or not self.cube_y_log:
-                return
-            import matplotlib.pyplot as plt
-
-            fig, ax = plt.subplots(figsize=(12, 6))
-            ax.plot(self.time_log, self.cube_y_log, linewidth=0.8)
-            ax.axhline(
-                y=self.cfg.pickup_y_threshold,
-                color="green",
-                linestyle="--",
-                linewidth=0.8,
-                label=f"pickup ({self.cfg.pickup_y_threshold})",
-            )
-            ax.axhline(
-                y=self.cfg.floor_y_threshold,
-                color="red",
-                linestyle="--",
-                linewidth=0.8,
-                label=f"floor ({self.cfg.floor_y_threshold})",
-            )
-            ax.set_xlim(0, len(self.playback.motor_positions) * DT_DIRECT)
-            ax.set_ylim(-320, -10)
-            ax.set_xlabel("Simulation time (s)")
-            ax.set_ylabel("Cube Y position")
-            ax.set_title(f"Cube Y — {reason} | score: {score:.2f}")
-            ax.legend()
-            out = os.path.join(os.getcwd(), f"cube_y_{os.getpid()}.png")
-            fig.savefig(out, dpi=150)
-            print(f"[Graph] Saved to {out}")
-            plt.show()
+        
 
         # ── Main loop ─────────────────────────────────────────────────────────
 
@@ -337,9 +305,7 @@ def make_playback_controller(SofaController):
 
             # ── Scoring logic (only once cube has spawned) ─────────────────────
             if self.cube_has_spawned and cube_y is not None:
-                if self.cfg.show_cube_y_graph:
-                    self.cube_y_log.append(cube_y)
-                    self.time_log.append(sim_time)
+                
 
                 if cube_y > self.peak_y:
                     self.peak_y = cube_y
@@ -375,7 +341,6 @@ def make_playback_controller(SofaController):
                         )
                     else:
                         score, reason = self._compute_score()
-                        self._save_cube_y_graph(score, reason)
                         self.writer.write_score_and_stop(
                             score,
                             f"cube through floor t={sim_time:.2f}s — {reason}",
@@ -386,7 +351,6 @@ def make_playback_controller(SofaController):
                 if sim_time >= self.cfg.early_stop_sim_time and not self.was_picked_up:
                     score = self.cfg.no_pickup_penalty
                     reason = f"no_pickup_penalty={self.cfg.no_pickup_penalty:.2f} hold_time={self.hold_time:.2f}s"
-                    self._save_cube_y_graph(score, reason)
                     self.writer.write_score_and_stop(
                         score,
                         f"pickup gate failed t={sim_time:.2f}s — {reason}",
@@ -396,7 +360,6 @@ def make_playback_controller(SofaController):
                 # Rule 3: dropped after pickup
                 if self.was_picked_up and cube_y < float(self.drop_y_threshold):
                     score, reason = self._compute_score()
-                    self._save_cube_y_graph(score, reason)
                     self.writer.write_score_and_stop(
                         score,
                         f"dropped t={sim_time:.2f}s phase={self._current_phase()} "

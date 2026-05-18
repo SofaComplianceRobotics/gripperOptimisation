@@ -85,7 +85,7 @@ class PlaybackConfig:
     undercube_penalty: float
     undercube_margin: float
     enable_undercube_check: bool
-    show_cube_y_graph: bool
+
 
     @classmethod
     def from_env(cls, lab_root: Path) -> "PlaybackConfig":
@@ -139,5 +139,4 @@ class PlaybackConfig:
             undercube_penalty=float(os.environ.get("UNDERCUBE_PENALTY", "-0.2")),
             undercube_margin=float(os.environ.get("UNDERCUBE_MARGIN", "0.0")),
             enable_undercube_check=os.environ.get("ENABLE_UNDERCUBE_CHECK", "0") == "1",
-            show_cube_y_graph=os.environ.get("SHOW_CUBE_Y_GRAPH", "0") == "1",
         )
