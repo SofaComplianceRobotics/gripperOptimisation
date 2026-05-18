@@ -1,4 +1,0 @@
-dummy_test==0.1.3
-optuna
-pyvista
-cmaes

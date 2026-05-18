@@ -37,13 +37,13 @@ No registration needed. Create the files and the test appears in the UI.
 ## Step 1 — Create the folder
 
 ```
-app/src/labtests/my_new_test/
+labtests/my_new_test/
 ```
 
 Optionally add an empty `__init__.py` so editors treat it as a package:
 
 ```
-touch app/src/labtests/my_new_test/__init__.py
+touch labtests/my_new_test/__init__.py
 ```
 
 ---

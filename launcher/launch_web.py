@@ -14,7 +14,9 @@ for _key in ("PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE", "PYTHONEXECUTABLE"
     os.environ.pop(_key, None)
 
 # emiolabs SOFA — used for interactive scenes (ImGui + emiolabs plugins)
-_EMIOLABS_SOFA_BIN = r"C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa\bin"
+_EMIOLABS_SOFA_BIN = (
+    r"C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa\bin"
+)
 os.environ.setdefault(
     "EMIOLABS_RUNSOFA_EXE",
     os.path.join(_EMIOLABS_SOFA_BIN, "runSofa.exe"),
@@ -33,10 +35,13 @@ os.environ.setdefault(
     r"C:\dev\sofa\build\lib\python3\site-packages",
 )
 
-LAB_ROOT = Path(__file__).resolve().parents[3]
-SRC_ROOT = LAB_ROOT / "app" / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+LAB_ROOT = Path(__file__).resolve().parents[1]
+if str(LAB_ROOT) not in sys.path:
+    sys.path.insert(0, str(LAB_ROOT))
+
+from launcher.bootstrap import bootstrap_lab
+
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 from analysis.dashboard import launch_dashboard
 

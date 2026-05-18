@@ -36,7 +36,7 @@ pip install -r app/requirements.txt
 
 Generate and simulate one gripper from the active config:
 ```bash
-python app/src/generation/generate_gripper.py
+python generation/generate_gripper.py
 ```
 Then launch the SOFA scene through EmioLabs or via:
 ```bash
@@ -45,12 +45,12 @@ runSofa.exe -l SofaPython3 lab_shapeOPT.py
 
 Run the optimization loop:
 ```bash
-python app/src/launch/launch_optimize.py
+python optimization/optimize.py
 ```
 
 Analyze results after optimization:
 ```bash
-python app/src/analysis/analyze_results.py
+python analysis/analyze_results.py
 ```
 
 ---

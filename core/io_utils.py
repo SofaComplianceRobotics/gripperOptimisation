@@ -23,8 +23,8 @@ from core.params import ModelParams
 
 RETURN_GMSH_WARNING = 1  # 0=silent, 1=errors only, 5=full
 CORE_ROOT = Path(__file__).resolve().parent
-APP_ROOT = CORE_ROOT.parent.parent
-LAB_ROOT = APP_ROOT.parent
+LAB_ROOT = CORE_ROOT.parent
+APP_ROOT = LAB_ROOT
 
 
 def _axis_angle_to_quat(

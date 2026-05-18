@@ -24,12 +24,12 @@ from labtests.registry import get_default_test_names, get_test_spec, parse_test_
 # ─────────────────────────────────────────────
 # Paths
 # ─────────────────────────────────────────────
-APP_ROOT = SRC_ROOT.parent
-LAB_ROOT = APP_ROOT.parent
+LAB_ROOT = SRC_ROOT
+APP_ROOT = LAB_ROOT
 
 BASE_PARAMS = ModelParams()
 ASSETS_ROOT = str(LAB_ROOT.parent.parent)
-GENERATE_SCRIPT = str(APP_ROOT / "src" / "generation" / "generate_gripper.py")
+GENERATE_SCRIPT = str(LAB_ROOT / "generation" / "generate_gripper.py")
 
 SELECTED_TEST_NAMES = parse_test_names(os.environ.get("LAB_SHAPEOPT_TESTS"))
 if not SELECTED_TEST_NAMES:
@@ -193,7 +193,9 @@ PARAM_SPECS: list[dict] = _param_specs_from_metadata(BASE_PARAMS)
 # ─────────────────────────────────────────────
 # Simulation Scoring & Early Stop Parameters
 # ─────────────────────────────────────────────
-EARLY_STOP_SIM_TIME = 2.0 * (DT_DIRECT / 0.02)  # scaled so gate fires after the same number of recorded frames regardless of DT_DIRECT
+EARLY_STOP_SIM_TIME = 2.0 * (
+    DT_DIRECT / 0.02
+)  # scaled so gate fires after the same number of recorded frames regardless of DT_DIRECT
 FLOOR_Y_THRESHOLD = -235.0  # cube Y below this = on the floor / never picked up
 FLOOR_Y_BUFFER = 5.0  # how far above threshold counts as "still on floor"
 PICKUP_Y_THRESHOLD = -215.0  # cube Y above this = considered picked up

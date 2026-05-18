@@ -13,14 +13,14 @@ from dataclasses import fields, replace
 from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = SRC_ROOT.parent
-LAB_ROOT = APP_ROOT.parent
+LAB_ROOT = SRC_ROOT
+APP_ROOT = LAB_ROOT
 
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 LAB_SITE_PACKAGES = LAB_ROOT / "runtime" / "modules" / "site-packages"
-LAB_REQUIREMENTS = APP_ROOT / "requirements.txt"
+LAB_REQUIREMENTS = LAB_ROOT / "requirements.txt"
 
 
 def load_jsonc(path: Path) -> dict:

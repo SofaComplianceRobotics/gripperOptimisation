@@ -26,23 +26,25 @@ except ImportError:
     DASH_AVAILABLE = False
 
 # ── Paths ──────────────────────────────────────────────────────
-LAB_ROOT = Path(__file__).resolve().parents[3]
-SRC_ROOT = LAB_ROOT / "app" / "src"
+LAB_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = LAB_ROOT
 TRIALS_DIR = LAB_ROOT / "runtime" / "trials"
 CONFIG_FILE = LAB_ROOT / "config" / "lab_config.jsonc"
-OPTIMIZE_SCRIPT = LAB_ROOT / "app" / "src" / "optimization" / "optimize.py"
-GENERATE_SCRIPT = LAB_ROOT / "app" / "src" / "generation" / "generate_gripper.py"
-GENERATE_FINE_SCRIPT = LAB_ROOT / "app" / "src" / "generation" / "generate_gripper_fine.py"
-INVERSE_SCENE = LAB_ROOT / "lab_shapeOPT_inverse.py"
-RECORDING_SCENE = LAB_ROOT / "lab_shapeOPT_recording.py"
+OPTIMIZE_SCRIPT = LAB_ROOT / "optimization" / "optimize.py"
+GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper.py"
+GENERATE_FINE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper_fine.py"
+INVERSE_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_inverse.py"
+RECORDING_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_recording.py"
 SESSION_CONFIG_FILE = LAB_ROOT / "runtime" / "session_config.json"
 _LOG_DIR = LAB_ROOT / "runtime" / "logs"
 CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
 
 ANALYSIS_DIR = Path(__file__).resolve().parent
 
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+from launcher.bootstrap import bootstrap_lab
+
+# Ensure repo roots are on sys.path when running standalone
+SCRIPT_DIR, _SRC_ROOT, _APP_ROOT, _LAB_ROOT = bootstrap_lab(__file__)
 if str(ANALYSIS_DIR) not in sys.path:
     sys.path.insert(0, str(ANALYSIS_DIR))
 
@@ -329,7 +331,9 @@ def build_generate_tab() -> html.Div:
                     ),
                     html.Div(
                         [
-                            html.Small("Print mesh", className="d-block text-muted mb-1"),
+                            html.Small(
+                                "Print mesh", className="d-block text-muted mb-1"
+                            ),
                             html.Button(
                                 "Open STL",
                                 id="gen-open-fine-stl-btn",
@@ -417,8 +421,14 @@ def build_scenes_tab(catalog: dict) -> html.Div:
 # ─────────────────────────────────────────────────────────────
 
 _PIE_PALETTE = [
-    "#4c8bf5", "#e84393", "#34a853", "#fa7b17",
-    "#9c27b0", "#00bcd4", "#ff5722", "#8bc34a",
+    "#4c8bf5",
+    "#e84393",
+    "#34a853",
+    "#fa7b17",
+    "#9c27b0",
+    "#00bcd4",
+    "#ff5722",
+    "#8bc34a",
 ]
 
 
@@ -436,7 +446,8 @@ def build_optimise_tab(catalog: dict) -> html.Div:
     any_default = any(spec.default_selected for spec in catalog.values())
 
     selected_names = [
-        name for name, spec in catalog.items()
+        name
+        for name, spec in catalog.items()
         if spec.default_selected or not any_default
     ]
     weights = _equal_split(len(selected_names))
@@ -558,14 +569,14 @@ def build_optimise_tab(catalog: dict) -> html.Div:
 
 
 # ─────────────────────────────────────────────────────────────
-# Tab: Performance & Leaderboard
+# Tab: Performance
 # ─────────────────────────────────────────────────────────────
 
 
 def build_performance_tab() -> html.Div:
     return html.Div(
         [
-            html.H3("Performance & Leaderboard", className="mb-3"),
+            html.H3("Performance", className="mb-3"),
             dcc.Graph(id="performance-graph", style={"height": "600px"}),
             html.Div(id="trial-detail-panel", className="my-3"),
             html.Hr(),
@@ -1127,7 +1138,9 @@ def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.F
         bar_width = max(0.4, (max(xs) - min(xs) + 1) / len(xs) * 0.8) if xs else 0.8
 
         bar_traces = _build_bar_traces(records, plot_data, all_test_names)
-        hover_overlay = _build_hover_overlay(records, plot_data, all_test_names, bar_width)
+        hover_overlay = _build_hover_overlay(
+            records, plot_data, all_test_names, bar_width
+        )
         final_ticks = _build_final_ticks(plot_data, bar_width)
         avg_traces = _build_avg_traces(plot_data, all_test_names)
         all_traces = bar_traces + [hover_overlay, final_ticks] + avg_traces
@@ -1416,7 +1429,6 @@ def _find_earliest_not_done(records: list[dict]) -> str | None:
     return None
 
 
-
 # ─────────────────────────────────────────────────────────────
 # Main Dash App
 # ─────────────────────────────────────────────────────────────
@@ -1444,10 +1456,10 @@ def create_app() -> Dash:
         [
             html.Div(
                 [
-                    html.H1("ShapeOPT", className="text-center mb-2 mt-3"),
+                    html.H1("ShapeOPT", className="text-center mb-1 mt-1"),
                     html.P(
                         "Configure · Generate · Optimise · Analyse",
-                        className="text-center text-muted mb-4",
+                        className="text-center text-muted mb-2",
                     ),
                 ]
             ),
@@ -1456,37 +1468,37 @@ def create_app() -> Dash:
                 value="config",
                 children=[
                     dcc.Tab(
-                        label="⚙️ Config",
+                        label="Config",
                         value="config",
                         children=build_config_tab(),
                     ),
                     dcc.Tab(
-                        label="\U0001f527 Generate",
+                        label="Generate",
                         value="generate",
                         children=build_generate_tab(),
                     ),
                     dcc.Tab(
-                        label="\U0001f3ac Scenes",
+                        label="Scenes",
                         value="scenes",
                         children=build_scenes_tab(catalog),
                     ),
                     dcc.Tab(
-                        label="\U0001f680 Optimise",
+                        label="Optimise",
                         value="optimise",
                         children=build_optimise_tab(catalog),
                     ),
                     dcc.Tab(
-                        label="\U0001f4ca Performance & Leaderboard",
+                        label="Performance",
                         value="performance",
                         children=build_performance_tab(),
                     ),
                     dcc.Tab(
-                        label="\U0001f4c8 Progress Monitor",
+                        label="Progress",
                         value="progress",
                         children=build_progress_tab(),
                     ),
                     dcc.Tab(
-                        label="\U0001f39b️ Parameter Bounds",
+                        label="Parameter Bounds",
                         value="bounds",
                         children=build_param_bounds_tab(),
                     ),
@@ -2053,6 +2065,7 @@ def launch_dashboard(port: int = 8050, open_browser: bool = True) -> None:
     launch_url = f"http://localhost:{port}/?v={int(time.time())}"
 
     if open_browser:
+
         def open_browser_delayed():
             time.sleep(2)
             webbrowser.open_new_tab(launch_url)

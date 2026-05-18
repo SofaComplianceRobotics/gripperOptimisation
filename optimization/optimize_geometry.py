@@ -14,7 +14,7 @@ from pathlib import Path
 import pyvista as pv  # type: ignore
 
 from optimize_config import (
-    APP_ROOT,
+    LAB_ROOT,
     CENTERPARTS_DIR,
     GENERATE_SCRIPT,
     GEOMETRY_EXPORT_TIMEOUT,
@@ -143,7 +143,7 @@ def generate_stl_for_trial(trial_dir: Path, config: dict) -> tuple[Path, Path]:
     try:
         result = subprocess.run(
             [sys.executable, GENERATE_SCRIPT, "--config", str(config_path)],
-            cwd=str(APP_ROOT),
+            cwd=str(LAB_ROOT),
             capture_output=True,
             text=True,
             encoding="utf-8",

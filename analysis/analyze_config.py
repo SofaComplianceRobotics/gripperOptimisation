@@ -8,7 +8,7 @@ and scoring parameters.
 import os
 from pathlib import Path
 
-LAB_ROOT = Path(__file__).resolve().parents[3]
+LAB_ROOT = Path(__file__).resolve().parents[1]
 TRIALS_DIR = LAB_ROOT / "runtime" / "trials"
 
 TOP_X = 10  # Number of top trials to display in leaderboard

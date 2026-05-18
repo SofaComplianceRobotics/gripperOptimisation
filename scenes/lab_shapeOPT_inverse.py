@@ -8,12 +8,9 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../")
+from launcher.bootstrap import bootstrap_lab
 
-LAB_ROOT = Path(__file__).resolve().parent
-APP_SRC = LAB_ROOT / "app" / "src"
-if str(APP_SRC) not in sys.path:
-    sys.path.insert(0, str(APP_SRC))
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 from core.timing_config import DT_INVERSE
 

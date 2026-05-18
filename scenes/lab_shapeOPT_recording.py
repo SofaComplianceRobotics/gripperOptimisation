@@ -14,18 +14,14 @@ To record a new trajectory, rerun the scene; the previous file is overwritten.
 """
 
 import os
-import sys
 import json
 from pathlib import Path
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../")
+from launcher.bootstrap import bootstrap_lab
+
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 import Sofa.Core
-
-LAB_ROOT = Path(__file__).resolve().parent
-APP_SRC = LAB_ROOT / "app" / "src"
-if str(APP_SRC) not in sys.path:
-    sys.path.insert(0, str(APP_SRC))
 
 from core.timing_config import DT_INVERSE
 
@@ -56,7 +52,10 @@ def _pick_recording_target() -> str:
         return env_target
 
     if os.environ.get("LAB_SHAPEOPT_RECORDING_PICKER", "1").strip().lower() in (
-        "1", "true", "yes", "on",
+        "1",
+        "true",
+        "yes",
+        "on",
     ):
         try:
             from labtests.ui import prompt_for_tests

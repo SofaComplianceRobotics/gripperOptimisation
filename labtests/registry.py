@@ -8,11 +8,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 SRC_ROOT = SCRIPT_DIR.parent
-APP_ROOT = SRC_ROOT.parent
-LAB_ROOT = APP_ROOT.parent
+LAB_ROOT = SRC_ROOT
+APP_ROOT = LAB_ROOT
 
 
 def _load_max_score(scoring_file: Path) -> float:
