@@ -31,31 +31,45 @@ from core.timing_config import DT_INVERSE
 
 
 def _pick_recording_target() -> str:
-    """Resolve which test target should receive this recording."""
+    """Resolve which test target should receive this recording.
+
+    Priority:
+      1. runtime/session_config.json written by the web UI before launching this scene
+      2. LAB_SHAPEOPT_RECORDING_TARGET env var
+      3. Interactive PyQt6 picker (if available and not disabled)
+      4. Hard fallback: grasp_hold
+    """
+    # Web UI writes this file before launching the recording scene
+    session_cfg = LAB_ROOT / "runtime" / "session_config.json"
+    if session_cfg.exists():
+        try:
+            data = json.loads(session_cfg.read_text(encoding="utf-8"))
+            target = data.get("recording_test", "").strip()
+            if target:
+                print(f"[Recording] Using session config target: {target}")
+                return target
+        except Exception as exc:
+            print(f"[Recording] Could not read session config: {exc}")
+
     env_target = os.environ.get("LAB_SHAPEOPT_RECORDING_TARGET", "").strip()
-    if os.environ.get("LAB_SHAPEOPT_RECORDING_PICKER", "1").strip().lower() not in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        return "grasp_hold"
-
-    try:
-        from labtests.ui import prompt_for_tests
-
-        selected = prompt_for_tests(
-            title="Recording Target",
-            prompt="Choose which test to record this trajectory for:",
-            multi_select=False,
-        )
-        if selected:
-            return selected[0]
-    except Exception as exc:
-        print(f"[Recording] target picker unavailable: {exc}")
-
     if env_target:
         return env_target
+
+    if os.environ.get("LAB_SHAPEOPT_RECORDING_PICKER", "1").strip().lower() in (
+        "1", "true", "yes", "on",
+    ):
+        try:
+            from labtests.ui import prompt_for_tests
+
+            selected = prompt_for_tests(
+                title="Recording Target",
+                prompt="Choose which test to record this trajectory for:",
+                multi_select=False,
+            )
+            if selected:
+                return selected[0]
+        except Exception as exc:
+            print(f"[Recording] Picker unavailable: {exc}")
 
     return "grasp_hold"
 

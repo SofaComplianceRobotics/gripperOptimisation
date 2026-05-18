@@ -1,26 +1,23 @@
 """
-dashboard.py — Unified Plotly/Dash web dashboard with tabbed analysis views.
+dashboard.py — Unified web interface: configure, generate, optimise, and analyse.
 
-Consolidates all analysis tools (leaderboard, performance plots, parameter bounds,
-progress monitor) into a single browser window with interactive tabs.
-
-Features:
-- Multiple tabs for different analysis views
-- Real-time updates while optimization runs
-- Interactive charts with zoom/pan
-- Responsive layout
+All lab workflows are accessible from a single browser window.
+Tabs: Config | Generate | Scenes | Optimise | Performance | Progress | Parameter Bounds
 """
 
+import json
+import logging
 import os
+import re
+import subprocess
 import sys
 import threading
 import time
 import webbrowser
 from pathlib import Path
-import logging
 
 try:
-    from dash import Dash, dcc, html, callback, Input, Output, State
+    from dash import Dash, dcc, html, callback, Input, Output, State, ALL
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
@@ -28,15 +25,28 @@ try:
 except ImportError:
     DASH_AVAILABLE = False
 
-# Setup paths
+# ── Paths ──────────────────────────────────────────────────────
 LAB_ROOT = Path(__file__).resolve().parents[3]
 SRC_ROOT = LAB_ROOT / "app" / "src"
 TRIALS_DIR = LAB_ROOT / "runtime" / "trials"
+CONFIG_FILE = LAB_ROOT / "config" / "lab_config.jsonc"
+OPTIMIZE_SCRIPT = LAB_ROOT / "app" / "src" / "optimization" / "optimize.py"
+GENERATE_SCRIPT = LAB_ROOT / "app" / "src" / "generation" / "generate_gripper.py"
+GENERATE_FINE_SCRIPT = LAB_ROOT / "app" / "src" / "generation" / "generate_gripper_fine.py"
+INVERSE_SCENE = LAB_ROOT / "lab_shapeOPT_inverse.py"
+RECORDING_SCENE = LAB_ROOT / "lab_shapeOPT_recording.py"
+SESSION_CONFIG_FILE = LAB_ROOT / "runtime" / "session_config.json"
+_LOG_DIR = LAB_ROOT / "runtime" / "logs"
+CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
+
+ANALYSIS_DIR = Path(__file__).resolve().parent
 
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+if str(ANALYSIS_DIR) not in sys.path:
+    sys.path.insert(0, str(ANALYSIS_DIR))
 
-# Suppress logs
+# Suppress noisy server logs
 os.environ.pop("WERKZEUG_RUN_MAIN", None)
 os.environ.pop("WERKZEUG_SERVER_FD", None)
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -60,36 +70,19 @@ from analyze_plotting import (
 )
 from analyze_config import CENTERED_AVG_HALF_WINDOW, LIVE_REFRESH_SECONDS
 
-# Cache MAX_SCORE per test so we don't re-import scoring modules on every update
+# ── Caches & module-level state ────────────────────────────────
 _MAX_SCORE_CACHE: dict[str, float] = {}
-
-# Simple in-memory cache to avoid re-parsing thousands of JSON files
-# on every interval tick or initial page load.
 _DATA_CACHE: dict = {"records": [], "summaries": [], "last_load": 0.0}
 
-
-def _get_test_max_score(test_name: str) -> float:
-    """Return the declared MAX_SCORE for a test, falling back to 1.0."""
-    if not test_name:
-        return 1.0
-    if test_name in _MAX_SCORE_CACHE:
-        return _MAX_SCORE_CACHE[test_name]
-    try:
-        from labtests.registry import get_test_catalog
-
-        catalog = get_test_catalog()
-        spec = catalog.get(test_name)
-        result = spec.max_score if spec else 1.0
-    except Exception:
-        result = 1.0
-    _MAX_SCORE_CACHE[test_name] = result
-    return result
+# Running subprocesses keyed by role ("optimize", "generate")
+_PROCS: dict[str, subprocess.Popen | None] = {
+    "optimize": None,
+    "generate": None,
+}
 
 
 def install_dependencies():
     """Auto-install missing dependencies."""
-    import subprocess
-
     packages = ["dash"]
     for pkg in packages:
         try:
@@ -101,9 +94,467 @@ def install_dependencies():
 
 if not DASH_AVAILABLE:
     install_dependencies()
-    from dash import Dash, dcc, html, callback, Input, Output, State
+    from dash import Dash, dcc, html, callback, Input, Output, State, ALL
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
+
+
+# ─────────────────────────────────────────────────────────────
+# Process management helpers
+# ─────────────────────────────────────────────────────────────
+
+
+def _proc_running(name: str) -> bool:
+    proc = _PROCS.get(name)
+    return proc is not None and proc.poll() is None
+
+
+def _start_proc(name: str, script: Path, env: dict | None = None) -> str:
+    if _proc_running(name):
+        return f"Already running (PID {_PROCS[name].pid})."
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = _LOG_DIR / f"{name}.log"
+        log_file = open(log_path, "w", encoding="utf-8")
+        run_env = env if env is not None else os.environ.copy()
+        # Force UTF-8 stdout in the subprocess so unicode characters don't crash on Windows
+        run_env["PYTHONIOENCODING"] = "utf-8"
+        proc = subprocess.Popen(
+            [sys.executable, str(script)],
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            cwd=str(script.parent),
+            env=run_env,
+        )
+        _PROCS[name] = proc
+        return f"Started (PID {proc.pid})."
+    except Exception as exc:
+        return f"Error starting process: {exc}"
+
+
+def _stop_proc(name: str) -> str:
+    proc = _PROCS.get(name)
+    if proc is None or proc.poll() is not None:
+        return "Not running."
+    try:
+        proc.kill()
+        _PROCS[name] = None
+        return "Stopped."
+    except Exception as exc:
+        return f"Error stopping process: {exc}"
+
+
+def _read_proc_log(name: str, tail: int = 150) -> str:
+    log_path = _LOG_DIR / f"{name}.log"
+    if not log_path.exists():
+        return ""
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
+        return "\n".join(lines[-tail:])
+    except Exception:
+        return ""
+
+
+def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
+    # Interactive scenes require the emiolabs SOFA (ImGui + emiolabs plugins).
+    # The custom batch SOFA used for optimisation does not have these.
+    runsofa = os.environ.get(
+        "EMIOLABS_RUNSOFA_EXE",
+        r"C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa\bin\runSofa.exe",
+    )
+    if not os.path.isfile(runsofa):
+        return f"runSofa.exe not found at: {runsofa}"
+
+    # Derive the emiolabs SOFA root from the executable path (bin/runSofa.exe → sofa/)
+    emiolabs_sofa_root = str(Path(runsofa).parents[1])
+    assets_root = str(LAB_ROOT.parent.parent)
+
+    env = os.environ.copy()
+
+    # Override SOFA_ROOT / SOFAPYTHON3_ROOT so the emiolabs runSofa.exe loads its own
+    # Python packages instead of the custom build's — prevents 'No module named Sofa.Helper'
+    env["SOFA_ROOT"] = emiolabs_sofa_root
+    env["SOFAPYTHON3_ROOT"] = emiolabs_sofa_root
+
+    # Drop vars that reference the custom Python 3.12 / batch-SOFA build
+    for _k in ("SOFA_SITE_PACKAGES", "SOFA_PYTHON_PATH", "RUNSOFA_EXE"):
+        env.pop(_k, None)
+
+    if extra_env:
+        env.update(extra_env)
+
+    try:
+        proc = subprocess.Popen(
+            [runsofa, "-l", "SofaPython3", "-g", "imgui", str(scene_file)],
+            env=env,
+            cwd=assets_root,
+        )
+        return f"Launched SOFA (PID {proc.pid})."
+    except Exception as exc:
+        return f"Failed to launch: {exc}"
+
+
+def _write_session_config(recording_test: str) -> None:
+    SESSION_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SESSION_CONFIG_FILE.write_text(
+        json.dumps({"recording_test": recording_test}, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _load_config_text() -> str:
+    try:
+        return CONFIG_FILE.read_text(encoding="utf-8")
+    except Exception:
+        return "{}"
+
+
+# ─────────────────────────────────────────────────────────────
+# Tab: Config
+# ─────────────────────────────────────────────────────────────
+
+_LOG_STYLE = {
+    "height": "420px",
+    "overflowY": "auto",
+    "background": "#1e1e1e",
+    "color": "#d4d4d4",
+    "padding": "12px",
+    "borderRadius": "6px",
+    "fontSize": "0.82rem",
+    "whiteSpace": "pre-wrap",
+    "wordBreak": "break-word",
+    "fontFamily": "monospace",
+}
+
+
+def build_config_tab() -> html.Div:
+    return html.Div(
+        [
+            html.H3("Gripper Configuration", className="mb-2"),
+            html.P(
+                "Edit lab_config.jsonc parameters. Click Save to write to disk.",
+                className="text-muted mb-3",
+            ),
+            dcc.Textarea(
+                id="config-textarea",
+                value=_load_config_text(),
+                style={
+                    "width": "100%",
+                    "height": "520px",
+                    "fontFamily": "monospace",
+                    "fontSize": "0.88rem",
+                    "border": "1px solid #ced4da",
+                    "borderRadius": "6px",
+                    "padding": "10px",
+                },
+            ),
+            html.Div(
+                [
+                    html.Button(
+                        "Save",
+                        id="config-save-btn",
+                        n_clicks=0,
+                        className="btn btn-primary me-3",
+                    ),
+                    html.Span(id="config-save-status", className="align-middle"),
+                ],
+                className="mt-2 d-flex align-items-center",
+            ),
+        ],
+        className="p-3",
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Tab: Generate
+# ─────────────────────────────────────────────────────────────
+
+
+def build_generate_tab() -> html.Div:
+    return html.Div(
+        [
+            html.H3("Generate 3D Model", className="mb-2"),
+            html.P(
+                "Generate STL/VTK/JSON files from the current lab_config.jsonc.",
+                className="text-muted mb-3",
+            ),
+            html.Div(
+                [
+                    html.Button(
+                        "Generate (sim mesh)",
+                        id="gen-btn",
+                        n_clicks=0,
+                        className="btn btn-primary me-2",
+                    ),
+                    html.Button(
+                        "Generate Fine (print mesh)",
+                        id="gen-fine-btn",
+                        n_clicks=0,
+                        className="btn btn-secondary me-2",
+                    ),
+                    html.Button(
+                        "Stop",
+                        id="gen-stop-btn",
+                        n_clicks=0,
+                        className="btn btn-danger",
+                    ),
+                ],
+                className="mb-3",
+            ),
+            html.Div(id="gen-status", className="mb-2 fw-semibold"),
+            html.Pre(id="gen-log", style=_LOG_STYLE),
+            dcc.Interval(id="gen-interval", interval=800, n_intervals=0),
+            html.Hr(className="mt-3"),
+            html.H6("Open generated files", className="mb-2 text-muted"),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Small("Sim mesh", className="d-block text-muted mb-1"),
+                            html.Button(
+                                "Open STL",
+                                id="gen-open-stl-btn",
+                                n_clicks=0,
+                                className="btn btn-outline-secondary btn-sm me-2",
+                            ),
+                            html.Button(
+                                "Open JSON",
+                                id="gen-open-json-btn",
+                                n_clicks=0,
+                                className="btn btn-outline-secondary btn-sm",
+                            ),
+                        ],
+                        className="me-4",
+                    ),
+                    html.Div(
+                        [
+                            html.Small("Print mesh", className="d-block text-muted mb-1"),
+                            html.Button(
+                                "Open STL",
+                                id="gen-open-fine-stl-btn",
+                                n_clicks=0,
+                                className="btn btn-outline-secondary btn-sm",
+                            ),
+                        ],
+                    ),
+                ],
+                className="d-flex align-items-start mb-2",
+            ),
+            html.Div(id="gen-open-status", className="small text-muted"),
+        ],
+        className="p-3",
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Tab: Scenes
+# ─────────────────────────────────────────────────────────────
+
+
+def build_scenes_tab(catalog: dict) -> html.Div:
+    test_options = [
+        {"label": spec.label, "value": name} for name, spec in catalog.items()
+    ]
+    default_test = next(iter(catalog), "")
+
+    return html.Div(
+        [
+            html.H3("SOFA Scenes", className="mb-3"),
+            html.Div(
+                [
+                    html.H5("Inverse Control"),
+                    html.P(
+                        "Interactive inverse-mode scene — drag the end-effector target to control the gripper.",
+                        className="text-muted",
+                    ),
+                    html.Button(
+                        "Launch Inverse Scene",
+                        id="scene-inverse-btn",
+                        n_clicks=0,
+                        className="btn btn-primary",
+                    ),
+                ],
+                className="p-3 mb-3 border rounded",
+            ),
+            html.Div(
+                [
+                    html.H5("Motor Recording"),
+                    html.P(
+                        "Record motor trajectories for a test target. The target is saved before launching.",
+                        className="text-muted",
+                    ),
+                    html.Div(
+                        [
+                            html.Label("Target test:", className="me-2 fw-semibold"),
+                            dcc.Dropdown(
+                                id="scene-recording-test",
+                                options=test_options,
+                                value=default_test,
+                                clearable=False,
+                                style={"width": "300px"},
+                            ),
+                        ],
+                        className="d-flex align-items-center mb-3",
+                    ),
+                    html.Button(
+                        "Set Target & Launch Recording Scene",
+                        id="scene-recording-btn",
+                        n_clicks=0,
+                        className="btn btn-primary",
+                    ),
+                ],
+                className="p-3 border rounded",
+            ),
+            html.Div(id="scene-status", className="mt-3 fw-semibold"),
+        ],
+        className="p-3",
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Tab: Optimise
+# ─────────────────────────────────────────────────────────────
+
+_PIE_PALETTE = [
+    "#4c8bf5", "#e84393", "#34a853", "#fa7b17",
+    "#9c27b0", "#00bcd4", "#ff5722", "#8bc34a",
+]
+
+
+def _equal_split(n: int) -> list[int]:
+    if n == 0:
+        return []
+    base = 100 // n
+    rem = 100 - base * n
+    return [base + (1 if i < rem else 0) for i in range(n)]
+
+
+def build_optimise_tab(catalog: dict) -> html.Div:
+    names = list(catalog.keys())
+    n = len(names)
+    any_default = any(spec.default_selected for spec in catalog.values())
+
+    selected_names = [
+        name for name, spec in catalog.items()
+        if spec.default_selected or not any_default
+    ]
+    weights = _equal_split(len(selected_names))
+    initial_store: dict[str, int] = {}
+    wi = 0
+    for name in names:
+        if name in selected_names:
+            initial_store[name] = weights[wi]
+            wi += 1
+        else:
+            initial_store[name] = 0
+
+    test_rows = []
+    for i, (name, spec) in enumerate(catalog.items()):
+        pre_selected = spec.default_selected or not any_default
+        test_rows.append(
+            html.Div(
+                [
+                    dcc.Checklist(
+                        id={"type": "test-check", "test": name},
+                        options=[{"label": f" {spec.label}", "value": name}],
+                        value=[name] if pre_selected else [],
+                        style={
+                            "display": "inline-flex",
+                            "alignItems": "center",
+                            "minWidth": "200px",
+                            "flexShrink": 0,
+                        },
+                        className="me-2",
+                    ),
+                    html.Div(
+                        dcc.Slider(
+                            id={"type": "weight-slider", "test": name},
+                            min=0,
+                            max=100,
+                            step=1,
+                            value=initial_store[name],
+                            marks=None,
+                            tooltip={"placement": "bottom", "always_visible": True},
+                            updatemode="drag",
+                        ),
+                        style={"flexGrow": 1},
+                    ),
+                ],
+                className="d-flex align-items-center mb-3",
+                style={"gap": "8px"},
+            )
+        )
+
+    return html.Div(
+        [
+            html.H3("Optimisation", className="mb-2"),
+            # Weights store — single source of truth, always sums to 100 across selected tests
+            dcc.Store(id="opt-weights-store", data=initial_store),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.P(
+                                "Drag a slider — the others adjust so the total stays at 100%.",
+                                className="text-muted mb-3",
+                            ),
+                            html.Div(test_rows, className="mb-2"),
+                            html.Div(
+                                [
+                                    html.Button(
+                                        "Equal split",
+                                        id="opt-equal-btn",
+                                        n_clicks=0,
+                                        className="btn btn-outline-secondary btn-sm me-2",
+                                    ),
+                                    html.Button(
+                                        "Normalize",
+                                        id="opt-normalize-btn",
+                                        n_clicks=0,
+                                        className="btn btn-outline-secondary btn-sm",
+                                    ),
+                                ],
+                                className="mb-3",
+                            ),
+                        ],
+                        className="col-12 col-md-7",
+                    ),
+                    html.Div(
+                        dcc.Graph(
+                            id="opt-pie",
+                            config={"displayModeBar": False},
+                            style={"height": "320px"},
+                        ),
+                        className="col-12 col-md-5",
+                    ),
+                ],
+                className="row g-3 mb-3",
+            ),
+            html.Div(id="opt-weight-status", className="mb-3"),
+            html.Div(
+                [
+                    html.Button(
+                        "Start Optimisation",
+                        id="opt-start-btn",
+                        n_clicks=0,
+                        className="btn btn-success me-2",
+                    ),
+                    html.Button(
+                        "Stop",
+                        id="opt-stop-btn",
+                        n_clicks=0,
+                        className="btn btn-danger",
+                    ),
+                ],
+                className="mb-3",
+            ),
+            html.Div(id="opt-status", className="mb-2 fw-semibold"),
+            html.Pre(id="opt-log", style=_LOG_STYLE),
+            dcc.Interval(id="opt-interval", interval=1000, n_intervals=0),
+        ],
+        className="p-3",
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -112,7 +563,6 @@ if not DASH_AVAILABLE:
 
 
 def build_performance_tab() -> html.Div:
-    """Build performance visualization tab with bars and score lines."""
     return html.Div(
         [
             html.H3("Performance & Leaderboard", className="mb-3"),
@@ -136,13 +586,10 @@ def build_performance_tab() -> html.Div:
 
 
 def build_param_bounds_tab() -> html.Div:
-    """Build parameter bounds visualization tab."""
     return html.Div(
         [
             html.H3("Parameter Bounds Monitor", className="mb-3"),
             html.P("Live tracking of parameter values within optimization bounds."),
-            # The parameter history is shown as a heatmap (last ~40 trials).
-            # No fixed height — figure height adapts to parameter count; page scrolls naturally
             dcc.Graph(id="param-bounds-graph"),
             dcc.Interval(
                 id="bounds-interval",
@@ -160,7 +607,6 @@ def build_param_bounds_tab() -> html.Div:
 
 
 def build_progress_tab() -> html.Div:
-    """Build progress monitoring tab."""
     return html.Div(
         [
             html.H3("Optimization Progress", className="mb-3"),
@@ -188,7 +634,6 @@ def build_progress_tab() -> html.Div:
             dcc.Store(id="jump-running-target-store"),
             html.Div(id="jump-running-target-output", style={"display": "none"}),
             html.Div(id="jump-top-output", style={"display": "none"}),
-            # Floating toolbar: back-to-top and auto-jump toggle (visible anywhere)
             html.Div(
                 [
                     html.Button(
@@ -230,16 +675,26 @@ def build_progress_tab() -> html.Div:
 # ─────────────────────────────────────────────────────────────
 
 
-def _load_data():
-    """Load all trial data and summaries with a short in-memory cache.
+def _get_test_max_score(test_name: str) -> float:
+    if not test_name:
+        return 1.0
+    if test_name in _MAX_SCORE_CACHE:
+        return _MAX_SCORE_CACHE[test_name]
+    try:
+        from labtests.registry import get_test_catalog
 
-    This avoids re-parsing thousands of JSON files on every interval tick
-    or initial page render. The cache TTL is controlled by
-    `LIVE_REFRESH_SECONDS` in `analyze_config`.
-    """
+        catalog = get_test_catalog()
+        spec = catalog.get(test_name)
+        result = spec.max_score if spec else 1.0
+    except Exception:
+        result = 1.0
+    _MAX_SCORE_CACHE[test_name] = result
+    return result
+
+
+def _load_data():
     try:
         now = time.time()
-        # Use cached values when recent
         if _DATA_CACHE.get("records") and (
             now - float(_DATA_CACHE.get("last_load", 0))
         ) < max(0.5, float(LIVE_REFRESH_SECONDS)):
@@ -251,9 +706,8 @@ def _load_data():
         _DATA_CACHE["summaries"] = summaries
         _DATA_CACHE["last_load"] = now
         return records, summaries
-    except Exception as e:
-        print(f"[warn] Error loading data: {e}")
-        # Fall back to cached data when available
+    except Exception as exc:
+        print(f"[warn] Error loading data: {exc}")
         return (
             _DATA_CACHE.get("records", []) or [],
             _DATA_CACHE.get("summaries", []) or [],
@@ -263,25 +717,18 @@ def _load_data():
 def _current_generation_records(records: list[dict]) -> list[dict]:
     if not records:
         return []
-
     current_gen = max(
         (record.get("gen_index", -1) for record in records),
         default=-1,
     )
     if current_gen < 0:
         return []
-
-    # Sort by trial_index to ensure consistent ordering across all callbacks
-    result = [
-        record for record in records if record.get("gen_index", -1) == current_gen
-    ]
+    result = [r for r in records if r.get("gen_index", -1) == current_gen]
     return sorted(result, key=lambda r: r.get("trial_index", 0))
 
 
 def _read_json(path: Path) -> dict | None:
     try:
-        import json
-
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
@@ -322,31 +769,21 @@ def _state_color(state: str) -> str:
         return "#0270ff"
     if state in {"failed", "error", "pruned", "skipped", "cancelled"}:
         return "#e03131"
-    if state in {"waiting", "pending", "queued"}:
-        return "#868e96"
     return "#868e96"
 
 
 def _get_trial_actual_state(trial_record: dict) -> str:
-    """Determine the actual state of a trial using the same logic as display.
-
-    This matches the logic in _build_progress_card to ensure consistency
-    between what we display and what we check for completion.
-    """
     raw_state = _load_trial_state(trial_record)
-    # No state file and not complete → trial hasn't started yet
     if raw_state is None and not trial_record.get("is_complete"):
         return "waiting"
     trial_state = raw_state or {}
     runs = trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
 
-    # Start with explicit state or default based on is_complete flag
     state = str(
         trial_state.get("state")
         or ("done" if trial_record.get("is_complete") else "running")
     ).lower()
 
-    # If state is not terminal but all individual runs ARE terminal, infer "done"
     terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
     if (
         state not in terminal
@@ -500,7 +937,6 @@ def _build_progress_card(trial_record: dict) -> html.Div:
 
 
 def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div:
-    """Build the per-trial detail panel shown when the user clicks a bar."""
     final_score = state.get("final_score", 0.0) or 0.0
     test_scores: dict = state.get("test_scores") or {}
 
@@ -526,14 +962,13 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
         max_s = float(info.get("max_score", 1.0) or 1.0)
         weight = float(info.get("weight_pct", 0.0) or 0.0)
         norm = min(agg / max_s, 1.0) if max_s > 0 else 0.0
-        contribution = norm * weight  # pts earned out of weight_pct max
-        success_pct = norm * 100  # % of the test's own maximum
+        contribution = norm * weight
+        success_pct = norm * 100
         run_scores: list = info.get("run_scores") or []
         run_total = int(info.get("run_total", 1))
 
         bar_pct = min(norm * 100, 100)
 
-        # Mini run-score table for multi-run tests
         run_cells = []
         if run_total > 1 and run_scores:
             for idx, rs in enumerate(run_scores):
@@ -559,7 +994,6 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
         rows.append(
             html.Div(
                 [
-                    # Test name + weight badge
                     html.Div(
                         [
                             html.Span(test_name, className="fw-semibold me-2"),
@@ -577,7 +1011,6 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
                         ],
                         className="d-flex align-items-center mb-1",
                     ),
-                    # Progress bar
                     html.Div(
                         html.Div(
                             style={
@@ -596,7 +1029,6 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
                             "marginBottom": "4px",
                         },
                     ),
-                    # Score line
                     html.Div(
                         [
                             html.Span(
@@ -615,7 +1047,6 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
                         style={"fontSize": "0.82rem"},
                         className="mb-1",
                     ),
-                    # Individual run scores (multi-run tests only)
                     (
                         html.Div(run_cells, className="d-flex flex-wrap")
                         if run_cells
@@ -639,7 +1070,6 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
 
 
 def _build_leaderboard_html(records: list[dict]) -> html.Div:
-    """Build HTML table for leaderboard display."""
     valid = [r for r in records if not r.get("failed", False)]
     sorted_records = sorted(valid, key=lambda r: r.get("final_score", 0), reverse=True)
 
@@ -686,7 +1116,6 @@ def _build_leaderboard_html(records: list[dict]) -> html.Div:
 
 
 def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.Figure:
-    """Build combined performance plot with bars and lines."""
     if not records:
         return go.Figure().add_annotation(text="No data available")
 
@@ -694,20 +1123,16 @@ def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.F
         all_test_names = _collect_all_test_names(records)
         plot_data = compute_plot_data(records, all_test_names)
 
-        # Compute bar width
         xs = plot_data["xs"]
         bar_width = max(0.4, (max(xs) - min(xs) + 1) / len(xs) * 0.8) if xs else 0.8
 
         bar_traces = _build_bar_traces(records, plot_data, all_test_names)
-        hover_overlay = _build_hover_overlay(
-            records, plot_data, all_test_names, bar_width
-        )
+        hover_overlay = _build_hover_overlay(records, plot_data, all_test_names, bar_width)
         final_ticks = _build_final_ticks(plot_data, bar_width)
         avg_traces = _build_avg_traces(plot_data, all_test_names)
         all_traces = bar_traces + [hover_overlay, final_ticks] + avg_traces
 
         fig = go.Figure(data=all_traces)
-
         fig.update_layout(
             title="Performance Overview: Per-Test Contributions & Score Trends",
             xaxis_title="Trial",
@@ -718,24 +1143,20 @@ def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.F
             margin={"l": 50, "r": 50, "t": 50, "b": 50},
             plot_bgcolor=C_BG,
             paper_bgcolor=C_BG,
-            # Keep zoom/pan/legend state across data refreshes
             uirevision="performance-graph",
         )
-        # Hint Plotly to animate updates smoothly when figures are replaced
         try:
             fig.layout.transition = dict(duration=600, easing="cubic-in-out")
         except Exception:
             pass
         return fig
-    except Exception as e:
-        print(f"[warn] Error building performance graph: {e}")
-        return go.Figure().add_annotation(text=f"Error: {e}")
+    except Exception as exc:
+        print(f"[warn] Error building performance graph: {exc}")
+        return go.Figure().add_annotation(text=f"Error: {exc}")
 
 
 def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
-    """Build parameter bounds visualization with optional history heatmap."""
     try:
-        import json, re
         from optimization.optimize_config import PARAM_SPECS
 
         active_specs = [p for p in PARAM_SPECS if p["min"] < p["max"]]
@@ -747,7 +1168,6 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
             clean = re.sub(r"//[^\n]*", "", text)
             return json.loads(clean)
 
-        # Collect trial configs in chronological order (cap at last 40)
         trial_config_paths = []
         try:
             for gen_dir in sorted(
@@ -779,17 +1199,8 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         param_names = [spec["name"] for spec in active_specs]
         fig = go.Figure()
 
-        # Build a per-parameter heatmap from the last N trial configs.
-        # X axis = trial index (older -> left), Y axis = parameter name.
         n_hist = len(trial_configs)
-        cyclical_cs = [
-            [0.0, "#FFEB3B"],
-            [0.5, "#F44336"],
-            [1.0, "#FFEB3B"],
-        ]
-
         if n_hist > 0:
-            # Build density histograms across the normalized parameter range for each spec.
             nbins = 64
             bin_centers = [(i + 0.5) / nbins for i in range(nbins)]
 
@@ -809,7 +1220,6 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
                         counts[idx] += 1
                         total += 1
 
-                # Normalize per-row so color shows relative density for that parameter.
                 if total > 0:
                     maxc = max(counts)
                     row = [c / maxc if maxc > 0 else 0.0 for c in counts]
@@ -817,7 +1227,6 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
                     row = [0.0 for _ in counts]
                 z_rows.append(row)
 
-            # Use a sequential colorscale for density (yellow->red).
             fig.add_trace(
                 go.Heatmap(
                     x=bin_centers,
@@ -831,7 +1240,6 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
                 )
             )
 
-        # Current value markers: support single numeric OR list of numerics
         for spec in active_specs:
             name = spec["name"]
             param_min, param_max = spec["min"], spec["max"]
@@ -845,14 +1253,11 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
                 if isinstance(v, (int, float)):
                     values = [float(v)]
                 elif isinstance(v, (list, tuple)):
-                    # filter numeric entries
                     values = [float(x) for x in v if isinstance(x, (int, float))]
 
-            # If no explicit current value, fall back to mid-point
             if not values:
                 values = [(param_min + param_max) / 2]
 
-            # Plot each current value as a white-ringed marker and collect text for side-list
             side_texts = []
             marker_xs = []
             for val in values:
@@ -881,7 +1286,6 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
                     )
                 )
 
-                # Add side annotation listing the present values similar to history representation
                 fig.add_annotation(
                     x=1.02,
                     y=name,
@@ -892,7 +1296,6 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
                     font=dict(size=11, color="#111"),
                 )
 
-        # Row height: taller when heatmap is on to give room for dots; extra room for min/max labels
         row_h = 70 if show_heatmap else 52
         fig.update_layout(
             title="Parameter Bounds Monitor (Latest Trial)",
@@ -902,7 +1305,6 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
                 fixedrange=True,
             ),
             yaxis=dict(
-                # Lock the category order so the axis never shifts on update
                 categoryorder="array",
                 categoryarray=list(reversed(param_names)),
                 fixedrange=True,
@@ -915,7 +1317,6 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
             paper_bgcolor=C_BG,
         )
 
-        # Min/max labels placed BELOW each bar row to avoid overlapping the y-axis param names
         for spec in active_specs:
             fig.add_annotation(
                 x=0.0,
@@ -939,15 +1340,14 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
             )
 
         return fig
-    except Exception as e:
-        print(f"[warn] Error building param bounds: {e}")
-        return go.Figure().add_annotation(text=f"Error: {e}")
+    except Exception as exc:
+        print(f"[warn] Error building param bounds: {exc}")
+        return go.Figure().add_annotation(text=f"Error: {exc}")
 
 
 def _build_progress_stats(
     current_records: list[dict], all_records: list[dict]
 ) -> html.Div:
-    """Build progress statistics display."""
     gen_index = current_records[0].get("gen_index", -1) if current_records else -1
     gen_label = f"Gen {gen_index}" if gen_index >= 0 else "—"
 
@@ -993,22 +1393,11 @@ def _build_progress_stats(
 def _build_progress_grid(records: list[dict]) -> html.Div:
     if not records:
         return html.Div("No trial data found.", className="text-muted")
-
-    rows = []
-    for record in records:
-        rows.append(_build_progress_card(record))
-
+    rows = [_build_progress_card(record) for record in records]
     return html.Div(rows, style={"display": "grid", "gap": "12px"})
 
 
 def _get_live_score(run: dict) -> tuple[float | None, bool]:
-    """Return (value, is_final) for the best available score from a run dict.
-
-    Priority:
-      1. run["score"]    — final score written by write_score_and_stop (is_final=True)
-      2. run["hold_time"]— live tally for pickup tests; equals the final score in progress
-      Returns (None, False) when nothing meaningful is available yet.
-    """
     score = run.get("score")
     if isinstance(score, (int, float)):
         return float(score), True
@@ -1019,14 +1408,13 @@ def _get_live_score(run: dict) -> tuple[float | None, bool]:
 
 
 def _find_earliest_not_done(records: list[dict]) -> str | None:
-    """Return the card ID of the first trial that is not yet in a terminal state."""
     terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
     for record in records:
-        # Use the same state determination as the display
         state = _get_trial_actual_state(record)
         if state not in terminal:
             return f"trial-card-{record.get('gen_index', 0):04d}-{record.get('trial_index', 0):04d}"
     return None
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1035,7 +1423,16 @@ def _find_earliest_not_done(records: list[dict]) -> str | None:
 
 
 def create_app() -> Dash:
-    """Create and configure the Dash application."""
+    from labtests.registry import get_test_catalog
+
+    try:
+        catalog = get_test_catalog()
+    except Exception as exc:
+        print(f"[warn] Could not load test catalog: {exc}")
+        catalog = {}
+
+    all_test_names_ordered = list(catalog.keys())
+
     app = Dash(
         __name__,
         external_stylesheets=[
@@ -1047,32 +1444,49 @@ def create_app() -> Dash:
         [
             html.Div(
                 [
-                    html.H1(
-                        "ShapeOPT Analysis Dashboard",
-                        className="text-center mb-3 mt-3",
-                    ),
+                    html.H1("ShapeOPT", className="text-center mb-2 mt-3"),
                     html.P(
-                        "Unified visualization of optimization performance, parameters, and progress",
+                        "Configure · Generate · Optimise · Analyse",
                         className="text-center text-muted mb-4",
                     ),
                 ]
             ),
             dcc.Tabs(
                 id="tabs",
-                value="performance",
+                value="config",
                 children=[
                     dcc.Tab(
-                        label="📊 Performance & Leaderboard",
+                        label="⚙️ Config",
+                        value="config",
+                        children=build_config_tab(),
+                    ),
+                    dcc.Tab(
+                        label="\U0001f527 Generate",
+                        value="generate",
+                        children=build_generate_tab(),
+                    ),
+                    dcc.Tab(
+                        label="\U0001f3ac Scenes",
+                        value="scenes",
+                        children=build_scenes_tab(catalog),
+                    ),
+                    dcc.Tab(
+                        label="\U0001f680 Optimise",
+                        value="optimise",
+                        children=build_optimise_tab(catalog),
+                    ),
+                    dcc.Tab(
+                        label="\U0001f4ca Performance & Leaderboard",
                         value="performance",
                         children=build_performance_tab(),
                     ),
                     dcc.Tab(
-                        label="📈 Progress Monitor",
+                        label="\U0001f4c8 Progress Monitor",
                         value="progress",
                         children=build_progress_tab(),
                     ),
                     dcc.Tab(
-                        label="🎛️ Parameter Bounds",
+                        label="\U0001f39b️ Parameter Bounds",
                         value="bounds",
                         children=build_param_bounds_tab(),
                     ),
@@ -1082,7 +1496,376 @@ def create_app() -> Dash:
         className="py-3",
     )
 
-    # Callbacks
+    # ── Config callbacks ──────────────────────────────────────
+
+    @callback(
+        Output("config-save-status", "children"),
+        Input("config-save-btn", "n_clicks"),
+        State("config-textarea", "value"),
+        prevent_initial_call=True,
+    )
+    def save_config(_, text):
+        if not text:
+            return "Nothing to save."
+        try:
+            clean = re.sub(r"//[^\n]*", "", text)
+            data = json.loads(clean)
+            CONFIG_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            return html.Span("Saved.", style={"color": "#2f9e44"})
+        except json.JSONDecodeError as exc:
+            return html.Span(f"Invalid JSON: {exc}", style={"color": "#e03131"})
+        except Exception as exc:
+            return html.Span(f"Error: {exc}", style={"color": "#e03131"})
+
+    # ── Generate callbacks ────────────────────────────────────
+
+    @callback(
+        Output("gen-status", "children"),
+        Input("gen-btn", "n_clicks"),
+        Input("gen-fine-btn", "n_clicks"),
+        Input("gen-stop-btn", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def handle_generate(_, __, ___):
+        from dash import ctx
+
+        tid = ctx.triggered_id
+        if tid == "gen-stop-btn":
+            return _stop_proc("generate")
+        elif tid == "gen-fine-btn":
+            return _start_proc("generate", GENERATE_FINE_SCRIPT)
+        else:
+            return _start_proc("generate", GENERATE_SCRIPT)
+
+    @callback(
+        Output("gen-log", "children"),
+        Input("gen-interval", "n_intervals"),
+    )
+    def update_gen_log(_):
+        return _read_proc_log("generate")
+
+    @callback(
+        Output("gen-open-status", "children"),
+        Input("gen-open-stl-btn", "n_clicks"),
+        Input("gen-open-json-btn", "n_clicks"),
+        Input("gen-open-fine-stl-btn", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def handle_gen_open(_, __, ___):
+        from dash import ctx
+
+        file_map = {
+            "gen-open-stl-btn": CENTERPARTS_DIR / "new_gripper.stl",
+            "gen-open-json-btn": CENTERPARTS_DIR / "new_gripper.json",
+            "gen-open-fine-stl-btn": CENTERPARTS_DIR / "new_gripper_print.stl",
+        }
+        path = file_map.get(ctx.triggered_id)
+        if path is None:
+            return ""
+        if not path.exists():
+            return f"{path.name} not found — generate first."
+        try:
+            os.startfile(str(path))
+            return f"Opened {path.name}."
+        except Exception as exc:
+            return f"Could not open {path.name}: {exc}"
+
+    # ── Scenes callbacks ──────────────────────────────────────
+
+    @callback(
+        Output("scene-status", "children"),
+        Input("scene-inverse-btn", "n_clicks"),
+        Input("scene-recording-btn", "n_clicks"),
+        State("scene-recording-test", "value"),
+        prevent_initial_call=True,
+    )
+    def handle_scene(_, __, recording_test):
+        from dash import ctx
+
+        tid = ctx.triggered_id
+        if tid == "scene-inverse-btn":
+            return _launch_sofa_scene(INVERSE_SCENE)
+        if tid == "scene-recording-btn" and recording_test:
+            _write_session_config(recording_test)
+            return _launch_sofa_scene(RECORDING_SCENE)
+        return ""
+
+    # ── Optimise callbacks (clientside — zero server round-trips) ─────────
+    #
+    # Architecture: opt-weights-store is the single source of truth.
+    # All weight logic runs in the browser as JS → instant response on drag.
+    #
+    #   user drag slider ─┐
+    #   checkbox toggle  ─┤──► update_weights_store (JS) ──► opt-weights-store
+    #   equal / normalize ┘              │
+    #                                    ├──► sync_sliders_from_store (JS) ──► sliders
+    #                                    ├──► update_opt_pie (JS)           ──► pie chart
+    #                                    └──► update_opt_weight_status (JS) ──► status
+    #
+    # Loop break: programmatic slider sync sets values equal to the store;
+    # update_weights_store detects store[test] === newValue and returns no_update.
+
+    app.clientside_callback(
+        """
+        function(slider_vals, check_vals, eq_clicks, norm_clicks, slider_ids, store) {
+            var NO_UPDATE = window.dash_clientside.no_update;
+            var ctx = window.dash_clientside.callback_context;
+            if (!ctx || !ctx.triggered || ctx.triggered.length === 0) return NO_UPDATE;
+
+            // Parse triggered component id (object for pattern-match, string otherwise)
+            var prop_id = ctx.triggered[0].prop_id;
+            var dot = prop_id.lastIndexOf('.');
+            var id_part = prop_id.substring(0, dot);
+            var tid;
+            try { tid = JSON.parse(id_part); } catch(e) { tid = id_part; }
+
+            store = store ? Object.assign({}, store) : {};
+            var all_tests = slider_ids.map(function(s) { return s.test; });
+            var selected_tests = [];
+            slider_ids.forEach(function(s, i) {
+                if (check_vals[i] && check_vals[i].length > 0) selected_tests.push(s.test);
+            });
+
+            function equal_split(n) {
+                if (n === 0) return [];
+                var base = Math.floor(100 / n), rem = 100 - base * n;
+                return Array.from({length: n}, function(_, i) { return base + (i < rem ? 1 : 0); });
+            }
+
+            function normalize_selected() {
+                var total = selected_tests.reduce(function(s,t){ return s+(store[t]||0); }, 0);
+                all_tests.forEach(function(t){
+                    if (selected_tests.indexOf(t) < 0) store[t] = 0;
+                });
+                if (total === 0) {
+                    var w = equal_split(selected_tests.length);
+                    selected_tests.forEach(function(t,i){ store[t] = w[i]; });
+                } else {
+                    var scaled = selected_tests.map(function(t){
+                        return Math.round((store[t]||0) / total * 100);
+                    });
+                    var diff = 100 - scaled.reduce(function(a,b){return a+b;}, 0);
+                    if (diff) scaled[0] += diff;
+                    selected_tests.forEach(function(t,i){ store[t] = scaled[i]; });
+                }
+            }
+
+            // ── Equal split ──────────────────────────────────────────────
+            if (tid === 'opt-equal-btn') {
+                if (selected_tests.length === 0) return NO_UPDATE;
+                var w = equal_split(selected_tests.length);
+                all_tests.forEach(function(t){ store[t] = 0; });
+                selected_tests.forEach(function(t,i){ store[t] = w[i]; });
+                return store;
+            }
+
+            // ── Normalize ────────────────────────────────────────────────
+            if (tid === 'opt-normalize-btn') {
+                if (selected_tests.length === 0) return NO_UPDATE;
+                normalize_selected();
+                return store;
+            }
+
+            // ── Checkbox toggled ─────────────────────────────────────────
+            if (tid && typeof tid === 'object' && tid.type === 'test-check') {
+                if (selected_tests.length === 0) {
+                    all_tests.forEach(function(t){ store[t] = 0; });
+                    return store;
+                }
+                normalize_selected();
+                return store;
+            }
+
+            // ── Slider dragged ───────────────────────────────────────────
+            if (tid && typeof tid === 'object' && tid.type === 'weight-slider') {
+                var changed_test = tid.test;
+                var changed_value = null;
+                slider_ids.forEach(function(sid, i) {
+                    if (sid.test === changed_test) changed_value = slider_vals[i];
+                });
+                if (changed_value === null) return NO_UPDATE;
+
+                // Loop break: this was a programmatic sync, not a user drag
+                if (store[changed_test] === changed_value) return NO_UPDATE;
+                if (selected_tests.indexOf(changed_test) < 0) return NO_UPDATE;
+
+                var n_sel = selected_tests.length;
+                if (n_sel === 1) { store[changed_test] = 100; return store; }
+
+                var old_val = store[changed_test] || 0;
+                var new_val = Math.max(0, Math.min(100, Math.round(changed_value)));
+                var delta = new_val - old_val;
+                if (delta === 0) return NO_UPDATE;
+
+                store[changed_test] = new_val;
+                var idx = selected_tests.indexOf(changed_test);
+                var remaining = delta;
+
+                for (var step = 1; step < n_sel; step++) {
+                    var next_test = selected_tests[(idx + step) % n_sel];
+                    var cur = store[next_test] || 0;
+                    if (remaining > 0) {
+                        var take = Math.min(remaining, cur);
+                        store[next_test] = cur - take;
+                        remaining -= take;
+                    } else {
+                        var give = Math.min(-remaining, 100 - cur);
+                        store[next_test] = cur + give;
+                        remaining += give;
+                    }
+                    if (remaining === 0) break;
+                }
+                if (remaining !== 0) store[changed_test] = new_val - remaining;
+
+                all_tests.forEach(function(t) {
+                    if (selected_tests.indexOf(t) < 0) store[t] = 0;
+                });
+                return store;
+            }
+
+            return NO_UPDATE;
+        }
+        """,
+        Output("opt-weights-store", "data"),
+        Input({"type": "weight-slider", "test": ALL}, "value"),
+        Input({"type": "test-check", "test": ALL}, "value"),
+        Input("opt-equal-btn", "n_clicks"),
+        Input("opt-normalize-btn", "n_clicks"),
+        State({"type": "weight-slider", "test": ALL}, "id"),
+        State("opt-weights-store", "data"),
+        prevent_initial_call=True,
+    )
+
+    app.clientside_callback(
+        """
+        function(store, slider_ids) {
+            if (!store) return slider_ids.map(function() { return 0; });
+            return slider_ids.map(function(sid) { return store[sid.test] || 0; });
+        }
+        """,
+        Output({"type": "weight-slider", "test": ALL}, "value"),
+        Input("opt-weights-store", "data"),
+        State({"type": "weight-slider", "test": ALL}, "id"),
+    )
+
+    app.clientside_callback(
+        """
+        function(store, slider_ids, check_vals) {
+            var palette = ["#4c8bf5","#e84393","#34a853","#fa7b17",
+                           "#9c27b0","#00bcd4","#ff5722","#8bc34a"];
+            store = store || {};
+            var labels = [], values = [], colors = [];
+            slider_ids.forEach(function(sid, i) {
+                var w = store[sid.test] || 0;
+                if (check_vals[i] && check_vals[i].length > 0 && w > 0) {
+                    labels.push(sid.test);
+                    values.push(w);
+                    colors.push(palette[i % palette.length]);
+                }
+            });
+            var layout = {
+                margin: {l:10, r:10, t:30, b:10},
+                showlegend: false,
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            };
+            if (labels.length === 0) {
+                return {
+                    data: [{type:'pie', labels:['none'], values:[1],
+                            marker:{colors:['#dee2e6']}, textinfo:'none', hoverinfo:'none'}],
+                    layout: layout
+                };
+            }
+            return {
+                data: [{
+                    type: 'pie', labels: labels, values: values,
+                    marker: {colors: colors}, textinfo: 'label+percent',
+                    hovertemplate: '%{label}: %{value}%<extra></extra>', hole: 0.35
+                }],
+                layout: layout
+            };
+        }
+        """,
+        Output("opt-pie", "figure"),
+        Input("opt-weights-store", "data"),
+        State({"type": "weight-slider", "test": ALL}, "id"),
+        State({"type": "test-check", "test": ALL}, "value"),
+    )
+
+    app.clientside_callback(
+        """
+        function(store, check_vals, slider_ids) {
+            store = store || {};
+            var selected_count = check_vals.filter(function(v) {
+                return v && v.length > 0;
+            }).length;
+            var total = 0;
+            slider_ids.forEach(function(sid, i) {
+                if (check_vals[i] && check_vals[i].length > 0) total += (store[sid.test] || 0);
+            });
+            var mk = function(txt, cls) {
+                return {type:'Span', namespace:'dash_html_components',
+                        props:{children: txt, className: cls}};
+            };
+            if (selected_count === 0)
+                return mk('Select at least one test.', 'text-warning');
+            if (total !== 100)
+                return mk('Selected weights sum to ' + total + '% — must equal 100%.',
+                          'text-danger fw-semibold');
+            return mk(selected_count + ' test(s) selected · weights OK (total 100%).',
+                      'text-success fw-semibold');
+        }
+        """,
+        Output("opt-weight-status", "children"),
+        Input("opt-weights-store", "data"),
+        Input({"type": "test-check", "test": ALL}, "value"),
+        State({"type": "weight-slider", "test": ALL}, "id"),
+    )
+
+    @callback(
+        Output("opt-status", "children"),
+        Input("opt-start-btn", "n_clicks"),
+        Input("opt-stop-btn", "n_clicks"),
+        State({"type": "test-check", "test": ALL}, "value"),
+        State({"type": "test-check", "test": ALL}, "id"),
+        State("opt-weights-store", "data"),
+        prevent_initial_call=True,
+    )
+    def handle_optimise(_, __, check_vals, check_ids, store):
+        from dash import ctx
+
+        if ctx.triggered_id == "opt-stop-btn":
+            return _stop_proc("optimize")
+
+        store = store or {}
+        test_names: list[str] = []
+        test_weights: dict[str, int] = {}
+        for checks, cid in zip(check_vals, check_ids):
+            if checks:
+                name = cid["test"]
+                test_names.append(name)
+                test_weights[name] = int(store.get(name, 0))
+
+        if not test_names:
+            return "No tests selected."
+
+        total = sum(test_weights.values())
+        if total != 100:
+            return f"Weights must sum to 100% (currently {total}%)."
+
+        env = os.environ.copy()
+        env["LAB_SHAPEOPT_TESTS"] = ",".join(test_names)
+        env["LAB_SHAPEOPT_TEST_WEIGHTS"] = json.dumps(test_weights)
+        return _start_proc("optimize", OPTIMIZE_SCRIPT, env)
+
+    @callback(
+        Output("opt-log", "children"),
+        Input("opt-interval", "n_intervals"),
+    )
+    def update_opt_log(_):
+        return _read_proc_log("optimize")
+
+    # ── Performance callbacks ─────────────────────────────────
+
     @callback(
         Output("trial-detail-panel", "children"),
         Input("performance-graph", "clickData"),
@@ -1093,7 +1876,6 @@ def create_app() -> Dash:
         try:
             point = click_data["points"][0]
             cd = point.get("customdata")
-            # customdata layout: [hover_html, gen_name, trial_name]
             if not cd or len(cd) < 3:
                 return html.Div()
             gen_name, trial_name = cd[1], cd[2]
@@ -1105,8 +1887,8 @@ def create_app() -> Dash:
                     "No detail available for this trial.", className="text-muted"
                 )
             return _build_trial_detail(state, gen_name, trial_name)
-        except Exception as e:
-            return html.Div(f"Could not load trial: {e}", className="text-muted")
+        except Exception as exc:
+            return html.Div(f"Could not load trial: {exc}", className="text-muted")
 
     @callback(
         [
@@ -1117,7 +1899,6 @@ def create_app() -> Dash:
         Input("performance-interval", "n_intervals"),
     )
     def update_performance(tab, _):
-        # Always update data, but only render if on the performance tab
         records, summaries = _load_data()
         if tab != "performance":
             return go.Figure(), html.Div()
@@ -1131,8 +1912,6 @@ def create_app() -> Dash:
     )
     def update_bounds(_):
         return _build_param_bounds_graph(show_heatmap=True)
-
-    # History is always rendered as a heatmap; removed manual toggle.
 
     @callback(
         [Output("progress-stats", "children"), Output("progress-grid", "children")],
@@ -1152,8 +1931,6 @@ def create_app() -> Dash:
         State("jump-auto-enabled", "data"),
     )
     def update_jump_target(_clicks, _intervals, auto_enabled):
-        # Decide whether to emit a jump target: either user clicked the button
-        # or auto-jump is enabled during an interval tick.
         try:
             from dash import ctx
         except Exception:
@@ -1165,7 +1942,6 @@ def create_app() -> Dash:
 
         is_auto = triggered == "progress-interval"
 
-        # If this was an interval tick and auto-jump is disabled, do nothing
         if is_auto and not bool(auto_enabled):
             return {"target_id": None, "auto": True}
 
@@ -1179,11 +1955,6 @@ def create_app() -> Dash:
             if (!target || !target.target_id) {
                 return window.dash_clientside.no_update;
             }
-            // For auto-jumps, re-check the store at execution time.
-            // The scroll-detection clientside callback (fast) has already updated
-            // the store by the time this fires (after the slower server round-trip),
-            // so this catches the race where the server emitted a target before
-            // learning the user had scrolled.
             if (target.auto && !auto_enabled) {
                 return window.dash_clientside.no_update;
             }
@@ -1199,10 +1970,6 @@ def create_app() -> Dash:
         State("jump-auto-enabled", "data"),
     )
 
-    # Detect USER-initiated scroll (wheel / touch / keyboard) via event listeners.
-    # Polling window.pageYOffset does NOT work here because the auto-jump itself calls
-    # scrollIntoView which moves the page and would immediately disable auto-jump.
-    # Using event listeners we only catch real user gestures.
     app.clientside_callback(
         """
         function(n_intervals, auto_enabled) {
@@ -1235,7 +2002,6 @@ def create_app() -> Dash:
         prevent_initial_call=True,
     )
 
-    # "Top" button: scroll to top and disable auto-jump
     app.clientside_callback(
         """
         function(n) {
@@ -1249,14 +2015,12 @@ def create_app() -> Dash:
         prevent_initial_call=True,
     )
 
-    # jump-top-output is unused but kept to satisfy the existing layout element
     app.clientside_callback(
         "function(n) { return window.dash_clientside.no_update; }",
         Output("jump-top-output", "children"),
         Input("jump-top-button", "n_clicks"),
     )
 
-    # Auto-jump toggle — clientside so the button responds instantly without a server round-trip
     app.clientside_callback(
         "function(n, cur) { if (!n) return window.dash_clientside.no_update; return !cur; }",
         Output("jump-auto-enabled", "data", allow_duplicate=True),
@@ -1264,7 +2028,7 @@ def create_app() -> Dash:
         State("jump-auto-enabled", "data"),
         prevent_initial_call=True,
     )
-    # Label always mirrors the store — updated by ANY source that changes the store
+
     app.clientside_callback(
         'function(on) { return on ? "Auto-jump: On" : "Auto-jump: Off"; }',
         Output("jump-auto-toggle", "children"),
@@ -1280,8 +2044,7 @@ def create_app() -> Dash:
 
 
 def launch_dashboard(port: int = 8050, open_browser: bool = True) -> None:
-    """Launch the Dash dashboard server."""
-    print(f"[info] Starting ShapeOPT Dashboard on http://localhost:{port}")
+    print(f"[info] Starting ShapeOPT on http://localhost:{port}")
 
     os.environ["WERKZEUG_RUN_MAIN"] = "false"
     os.environ.pop("WERKZEUG_SERVER_FD", None)
@@ -1290,7 +2053,6 @@ def launch_dashboard(port: int = 8050, open_browser: bool = True) -> None:
     launch_url = f"http://localhost:{port}/?v={int(time.time())}"
 
     if open_browser:
-        # Open browser after a short delay to let server start
         def open_browser_delayed():
             time.sleep(2)
             webbrowser.open_new_tab(launch_url)
