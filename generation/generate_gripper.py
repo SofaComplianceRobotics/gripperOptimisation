@@ -25,11 +25,14 @@ from core.params import ModelParams  # noqa: E402
 
 
 def main() -> None:
+    """Read parameters from lab_config.jsonc and run the mesh export pipeline.
+
+    This function parses CLI arguments, loads the JSONC configuration, builds
+    model parameters and runs the export pipeline producing STL/JSON/VTK files.
+    """
     import sys
 
     print(sys.executable)
-
-    """Read parameters from lab_config.jsonc and run the mesh export pipeline."""
     parser = argparse.ArgumentParser(
         description="Generate gripper meshes from a JSONC config."
     )

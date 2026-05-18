@@ -13,6 +13,14 @@ from typing import Tuple
 
 
 def bootstrap_lab(script_file: str) -> Tuple[Path, Path, Path, Path]:
+    """Locate the lab root from a script path and ensure repo paths are on sys.path.
+
+    Args:
+        script_file: Path to the calling script (typically __file__).
+
+    Returns:
+        A tuple (script_dir, src_root, app_root, lab_root).
+    """
     script_dir = Path(script_file).resolve().parent
     lab_root = next(
         (

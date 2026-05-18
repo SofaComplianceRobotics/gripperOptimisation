@@ -36,6 +36,10 @@ def make_playback_controller(SofaController):
     """
 
     class BasePlaybackController(SofaController):
+        # Main controller for motor-playback tests.
+        # Handles: deterministic cube spawn, scoring logic (pickup/drop/floor),
+        # and replay of recorded motor positions. The hooks above
+        # allow specific tests to override behavior.
         def __init__(
             self,
             *args,
@@ -71,7 +75,12 @@ def make_playback_controller(SofaController):
                 if playback.motor_positions
                 else [0.0] * playback.num_motors
             )
-           
+            # Runtime state notes:
+            # - `finished`: run finished (writer.finished controls the actual stop)
+            # - `frame`, `sim_time`: time progression
+            # - `spawn_cube_y`, `pickup_y_threshold`, `drop_y_threshold`: initialized at spawn
+            # These values drive the scoring rules below.
+
             self.cube_gripper_contact_listener = None
             self.spawn_cube_y = None
             self.drop_y_threshold = None
@@ -127,6 +136,9 @@ def make_playback_controller(SofaController):
             return float(
                 self.rootnode.Simulation.Cube.getMechanicalState().position.value[0][1]
             )
+
+        # Keep Y-related helpers isolated so scoring can switch between the
+        # cube center of mass and collision-vertex checks when needed.
 
         def _set_cube_mass(self, value: float) -> None:
             """Set the cube's total mass, clamped to a minimum to avoid physics instability."""
@@ -245,8 +257,6 @@ def make_playback_controller(SofaController):
             """Return (score, reason_string) for writing to trial_state.json."""
             return self.hold_time, f"hold_time={self.hold_time:.2f}s"
 
-        
-
         # ── Main loop ─────────────────────────────────────────────────────────
 
         def onAnimateBeginEvent(self, event):
@@ -258,6 +268,9 @@ def make_playback_controller(SofaController):
             self._update_overload_mass()
 
             # ── Cube spawn teleport ────────────────────────────────────────────
+            # The cube is teleported at `cube_spawn_time` to ensure a reproducible
+            # initial state (position + zero velocity). Before spawn it is kept out
+            # of the workspace via `cube_prespawn_offset`.
             cube_y = None
             if not self.cube_has_spawned and sim_time >= self.cfg.cube_spawn_time:
                 cube_mo = self.rootnode.Simulation.Cube.getMechanicalState()
@@ -305,7 +318,11 @@ def make_playback_controller(SofaController):
 
             # ── Scoring logic (only once cube has spawned) ─────────────────────
             if self.cube_has_spawned and cube_y is not None:
-                
+                # Key metrics:
+                # - `peak_y`: maximum height reached (useful diagnostic)
+                # - `was_picked_up`: True if cube exceeded `pickup_y_threshold`
+                # - `dropped`: True if cube falls below `drop_y_threshold` after pickup
+                # - `hold_time`: accumulated time spent above the pickup threshold
 
                 if cube_y > self.peak_y:
                     self.peak_y = cube_y
@@ -335,6 +352,8 @@ def make_playback_controller(SofaController):
 
                 # Rule 1: cube through floor
                 if cube_y < self.cfg.floor_y_threshold:
+                    # If the cube goes below the floor plane, it's either a failure (if picked up)
+                    # or a prune; we write the score and stop the simulation immediately.
                     if self.was_picked_up:
                         self.writer.write_pruned_and_stop(
                             f"cube glitched through floor after pickup t={sim_time:.2f}s"
@@ -373,6 +392,8 @@ def make_playback_controller(SofaController):
                 return
 
             # ── Motor replay ───────────────────────────────────────────────────
+            # Replay recorded motor positions. After the recorded frames,
+            # maintain the last known positions (`last_positions`) during the "overload" phase.
             positions = (
                 self.playback.motor_positions[self.frame]
                 if self.frame < self.recorded_frames

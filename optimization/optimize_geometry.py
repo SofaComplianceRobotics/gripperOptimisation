@@ -27,6 +27,14 @@ FLOAT_SUGGEST_STEP = 0.1
 
 
 def _round_float(value: float) -> float:
+    """Round a numeric value to 3 decimal places and return as float.
+
+    Args:
+        value: Numeric input to round.
+
+    Returns:
+        The value rounded to 3 decimal places.
+    """
     return round(float(value), 3)
 
 

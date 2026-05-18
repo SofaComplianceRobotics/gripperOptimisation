@@ -22,7 +22,7 @@ def _normalized_weighted_score(test_scores: dict) -> float:
     Formula: Σ min(aggregate_score_i / max_score_i, 1.0) * weight_pct_i
 
     Falls back gracefully when max_score or weight_pct is missing so that
-    older trial_state.json files (written before this change) still load.
+    older trial_state.json files still load.
 
     Args:
         test_scores: The test_scores dict from trial_state.json, keyed by test

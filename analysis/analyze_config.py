@@ -4,7 +4,6 @@ analyze_config.py — Configuration and constants for results analysis.
 Centralizes all analysis-related configuration including paths, UI constants,
 and scoring parameters.
 """
-
 import os
 from pathlib import Path
 

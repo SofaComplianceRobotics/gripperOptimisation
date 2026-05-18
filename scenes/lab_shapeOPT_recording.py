@@ -85,6 +85,11 @@ ASSEMBLY_SKIP_TIME = 0.0
 
 
 class RecordingController(Sofa.Core.Controller):
+    """Controller that captures motor trajectories and autosaves recordings.
+
+    The controller collects motor positions and timestamps during simulation
+    and writes them to `runtime/recordings/<test>/motor_recording.json`.
+    """
     def __init__(self, root, emio):
         """Initialize recording state and periodic autosave settings."""
         Sofa.Core.Controller.__init__(self)

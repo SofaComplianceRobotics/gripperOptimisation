@@ -90,6 +90,11 @@ def _quat_rotate_vector(
     rotated = _quat_mul(_quat_mul(q, v_quat), _quat_conjugate(q))
     return (rotated[0], rotated[1], rotated[2])
 
+# The quaternion functions above are simple utilities used to transform between
+# frames (CadQuery Z-up ↔ SOFA frame) and to apply small local rotations when
+# exporting attachment points. Keeping these operations explicit helps reason
+# about leg-attachment orientations and exported mesh consistency.
+
 
 def _export_frame_quat() -> tuple[float, float, float, float]:
     """Return the mesh export frame rotation from CadQuery Z-up to SOFA frame."""
@@ -164,6 +169,12 @@ def _leg_attachment_pose(
     # Per-leg Y-axis correction to align the attachment frame with the SOFA leg orientation.
     q4 = _axis_angle_to_quat((0.0, 1.0, 0.0), y_rotations[leg_index])
     q = _normalize_quat(_quat_mul(q4, q))
+
+    # Summary of the steps above:
+    # 1) compute radial position of an attachment on the ring
+    # 2) transform this position into the export frame (SOFA)
+    # 3) compose rotations to orient the anchor according to the leg index
+    # The result is a pose [x,y,z,qx,qy,qz,qw] ready for use in SOFA.
 
     return [x, y, z, q[0], q[1], q[2], q[3]]
 

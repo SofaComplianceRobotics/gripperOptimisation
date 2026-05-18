@@ -107,11 +107,29 @@ if not DASH_AVAILABLE:
 
 
 def _proc_running(name: str) -> bool:
+    """Return True if a subprocess for the given role is currently running.
+
+    Args:
+        name: Role name of the subprocess (e.g. 'optimize', 'generate').
+
+    Returns:
+        True if the subprocess exists and has not exited.
+    """
     proc = _PROCS.get(name)
     return proc is not None and proc.poll() is None
 
 
 def _start_proc(name: str, script: Path, env: dict | None = None) -> str:
+    """Start a background subprocess for a given role and script.
+
+    Args:
+        name: Role name to associate with the subprocess.
+        script: Path to the Python script to execute.
+        env: Optional environment overrides for the subprocess.
+
+    Returns:
+        Human-readable status string (started/already running/error).
+    """
     if _proc_running(name):
         return f"Already running (PID {_PROCS[name].pid})."
     try:
@@ -135,6 +153,14 @@ def _start_proc(name: str, script: Path, env: dict | None = None) -> str:
 
 
 def _stop_proc(name: str) -> str:
+    """Terminate a running subprocess by role name.
+
+    Args:
+        name: Role name of the subprocess to stop.
+
+    Returns:
+        Status string indicating result.
+    """
     proc = _PROCS.get(name)
     if proc is None or proc.poll() is not None:
         return "Not running."
@@ -147,6 +173,15 @@ def _stop_proc(name: str) -> str:
 
 
 def _read_proc_log(name: str, tail: int = 150) -> str:
+    """Read the last lines from a subprocess log file.
+
+    Args:
+        name: Role name whose log to read.
+        tail: Number of trailing lines to return.
+
+    Returns:
+        The tail of the log as a single string, or empty string on error.
+    """
     log_path = _LOG_DIR / f"{name}.log"
     if not log_path.exists():
         return ""
@@ -159,6 +194,15 @@ def _read_proc_log(name: str, tail: int = 150) -> str:
 
 
 def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
+    """Launch a SOFA scene using the emiolabs runSofa executable.
+
+    Args:
+        scene_file: Path to the SOFA scene script to launch.
+        extra_env: Optional environment variables to merge.
+
+    Returns:
+        A status string describing the launch outcome.
+    """
     # Interactive scenes require the emiolabs SOFA (ImGui + emiolabs plugins).
     # The custom batch SOFA used for optimisation does not have these.
     runsofa = os.environ.get(
@@ -198,6 +242,11 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
 
 
 def _write_session_config(recording_test: str) -> None:
+    """Write the chosen recording test into the session config file.
+
+    Args:
+        recording_test: Name of the test to save for the recording scene.
+    """
     SESSION_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     SESSION_CONFIG_FILE.write_text(
         json.dumps({"recording_test": recording_test}, indent=2),
@@ -206,6 +255,11 @@ def _write_session_config(recording_test: str) -> None:
 
 
 def _load_config_text() -> str:
+    """Return the contents of the lab configuration file as text.
+
+    Returns:
+        The configuration file contents, or an empty JSON object string on error.
+    """
     try:
         return CONFIG_FILE.read_text(encoding="utf-8")
     except Exception:
@@ -231,6 +285,11 @@ _LOG_STYLE = {
 
 
 def build_config_tab() -> html.Div:
+    """Build and return the Config tab layout for the dashboard.
+
+    Returns:
+        A Dash HTML `Div` containing configuration editor and save controls.
+    """
     return html.Div(
         [
             html.H3("Gripper Configuration", className="mb-2"),
@@ -274,6 +333,11 @@ def build_config_tab() -> html.Div:
 
 
 def build_generate_tab() -> html.Div:
+    """Build and return the Generate tab layout for the dashboard.
+
+    Returns:
+        A Dash HTML `Div` containing generation controls and logs.
+    """
     return html.Div(
         [
             html.H3("Generate 3D Model", className="mb-2"),
@@ -357,6 +421,14 @@ def build_generate_tab() -> html.Div:
 
 
 def build_scenes_tab(catalog: dict) -> html.Div:
+    """Build and return the Scenes tab layout.
+
+    Args:
+        catalog: Mapping of test names to their scene specifications.
+
+    Returns:
+        A Dash HTML `Div` for launching SOFA scenes and recordings.
+    """
     test_options = [
         {"label": spec.label, "value": name} for name, spec in catalog.items()
     ]
@@ -433,6 +505,14 @@ _PIE_PALETTE = [
 
 
 def _equal_split(n: int) -> list[int]:
+    """Split 100 into `n` integer parts as evenly as possible.
+
+    Args:
+        n: Number of parts.
+
+    Returns:
+        A list of integer percentages that sum to 100.
+    """
     if n == 0:
         return []
     base = 100 // n
@@ -441,6 +521,14 @@ def _equal_split(n: int) -> list[int]:
 
 
 def build_optimise_tab(catalog: dict) -> html.Div:
+    """Build and return the Optimise tab layout.
+
+    Args:
+        catalog: Mapping of test names to their scene specifications.
+
+    Returns:
+        A Dash HTML `Div` with optimisation controls and sliders.
+    """
     names = list(catalog.keys())
     n = len(names)
     any_default = any(spec.default_selected for spec in catalog.values())
@@ -574,6 +662,11 @@ def build_optimise_tab(catalog: dict) -> html.Div:
 
 
 def build_performance_tab() -> html.Div:
+    """Build the Performance tab layout.
+
+    Returns:
+        A Dash `Div` containing performance graphs and leaderboard area.
+    """
     return html.Div(
         [
             html.H3("Performance", className="mb-3"),
@@ -597,6 +690,11 @@ def build_performance_tab() -> html.Div:
 
 
 def build_param_bounds_tab() -> html.Div:
+    """Build the Parameter Bounds Monitor tab layout.
+
+    Returns:
+        A Dash `Div` with parameter bounds graphs and refresh interval.
+    """
     return html.Div(
         [
             html.H3("Parameter Bounds Monitor", className="mb-3"),
@@ -618,6 +716,11 @@ def build_param_bounds_tab() -> html.Div:
 
 
 def build_progress_tab() -> html.Div:
+    """Build the Optimization Progress tab layout.
+
+    Returns:
+        A Dash `Div` presenting progress controls and the progress grid.
+    """
     return html.Div(
         [
             html.H3("Optimization Progress", className="mb-3"),
@@ -687,6 +790,14 @@ def build_progress_tab() -> html.Div:
 
 
 def _get_test_max_score(test_name: str) -> float:
+    """Return the maximum score configured for a named test.
+
+    Args:
+        test_name: Name of the test to query.
+
+    Returns:
+        The configured maximum score (defaults to 1.0 on error).
+    """
     if not test_name:
         return 1.0
     if test_name in _MAX_SCORE_CACHE:
@@ -704,6 +815,12 @@ def _get_test_max_score(test_name: str) -> float:
 
 
 def _load_data():
+    """Load and cache trial records and generation summaries.
+
+    Returns:
+        Tuple of (records, summaries). Uses a short-lived cache to avoid
+        excessive disk reads.
+    """
     try:
         now = time.time()
         if _DATA_CACHE.get("records") and (
@@ -726,6 +843,14 @@ def _load_data():
 
 
 def _current_generation_records(records: list[dict]) -> list[dict]:
+    """Return records belonging to the most recent generation.
+
+    Args:
+        records: Full list of trial records.
+
+    Returns:
+        Filtered and sorted list for the current generation.
+    """
     if not records:
         return []
     current_gen = max(
@@ -739,6 +864,7 @@ def _current_generation_records(records: list[dict]) -> list[dict]:
 
 
 def _read_json(path: Path) -> dict | None:
+    """Safely read and parse a JSON file, returning None on error."""
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
@@ -746,6 +872,14 @@ def _read_json(path: Path) -> dict | None:
 
 
 def _load_trial_state(trial_record: dict) -> dict | None:
+    """Load the saved `trial_state.json` for a given trial record.
+
+    Args:
+        trial_record: Trial metadata record containing gen/trial names.
+
+    Returns:
+        Parsed trial state dict, or None if missing/unreadable.
+    """
     trial_path = (
         TRIALS_DIR
         / trial_record.get("gen_name", "")
@@ -758,6 +892,14 @@ def _load_trial_state(trial_record: dict) -> dict | None:
 
 
 def _run_progress_pct(run: dict) -> float:
+    """Compute a progress percentage for a run from current/total frames.
+
+    Args:
+        run: Run dict containing `current_frame` and `total_frames`.
+
+    Returns:
+        Percentage 0.0-100.0 estimating progress.
+    """
     state = str(run.get("state", "")).lower()
     if state in {"done", "failed", "error", "pruned", "skipped", "cancelled"}:
         return 100.0
@@ -773,6 +915,14 @@ def _run_progress_pct(run: dict) -> float:
 
 
 def _state_color(state: str) -> str:
+    """Return a color hex code representing a run/trial state.
+
+    Args:
+        state: State string (e.g. 'running', 'done', 'failed').
+
+    Returns:
+        Hex color string for UI display.
+    """
     state = state.lower()
     if state in {"done"}:
         return "#2f9e44"
@@ -784,6 +934,14 @@ def _state_color(state: str) -> str:
 
 
 def _get_trial_actual_state(trial_record: dict) -> str:
+    """Determine the canonical state for a trial, considering stored runs.
+
+    Args:
+        trial_record: Trial summary record from filesystem.
+
+    Returns:
+        Canonical state string (waiting/running/done/failed/etc.).
+    """
     raw_state = _load_trial_state(trial_record)
     if raw_state is None and not trial_record.get("is_complete"):
         return "waiting"
@@ -811,6 +969,14 @@ def _get_trial_actual_state(trial_record: dict) -> str:
 
 
 def _build_progress_card(trial_record: dict) -> html.Div:
+    """Build a compact progress card UI element for a single trial.
+
+    Args:
+        trial_record: Trial metadata record.
+
+    Returns:
+        A Dash `Div` representing the trial's progress and run bars.
+    """
     trial_state = _load_trial_state(trial_record) or {}
     runs = trial_state.get("runs") if isinstance(trial_state.get("runs"), list) else []
     trial_index = trial_record.get("trial_index", 0)
@@ -948,6 +1114,16 @@ def _build_progress_card(trial_record: dict) -> html.Div:
 
 
 def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div:
+    """Render detailed trial information including per-test contributions.
+
+    Args:
+        state: Parsed trial state dict.
+        gen_name: Generation directory name.
+        trial_name: Trial directory name.
+
+    Returns:
+        A Dash `Div` with detailed scoring breakdown.
+    """
     final_score = state.get("final_score", 0.0) or 0.0
     test_scores: dict = state.get("test_scores") or {}
 
@@ -1081,6 +1257,14 @@ def _build_trial_detail(state: dict, gen_name: str, trial_name: str) -> html.Div
 
 
 def _build_leaderboard_html(records: list[dict]) -> html.Div:
+    """Construct a leaderboard HTML `Div` showing top trials.
+
+    Args:
+        records: List of trial records.
+
+    Returns:
+        A Dash `Div` containing a table of top trials by score.
+    """
     valid = [r for r in records if not r.get("failed", False)]
     sorted_records = sorted(valid, key=lambda r: r.get("final_score", 0), reverse=True)
 
@@ -1127,6 +1311,15 @@ def _build_leaderboard_html(records: list[dict]) -> html.Div:
 
 
 def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.Figure:
+    """Create a Plotly figure summarising per-test performance over trials.
+
+    Args:
+        records: Trial records list.
+        summaries: Generation summaries list.
+
+    Returns:
+        A Plotly `Figure` ready for display.
+    """
     if not records:
         return go.Figure().add_annotation(text="No data available")
 
@@ -1169,6 +1362,14 @@ def _build_performance_graph(records: list[dict], summaries: list[dict]) -> go.F
 
 
 def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
+    """Build a parameter-bounds visualization, optionally with heatmap.
+
+    Args:
+        show_heatmap: If True, include a density heatmap of historic samples.
+
+    Returns:
+        A Plotly `Figure` visualizing parameter distributions and markers.
+    """
     try:
         from optimization.optimize_config import PARAM_SPECS
 
@@ -1361,6 +1562,15 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
 def _build_progress_stats(
     current_records: list[dict], all_records: list[dict]
 ) -> html.Div:
+    """Build a small stats panel for the current generation.
+
+    Args:
+        current_records: Records for the current generation.
+        all_records: All available records (for computing bests).
+
+    Returns:
+        A Dash `Div` summarising generation-level statistics.
+    """
     gen_index = current_records[0].get("gen_index", -1) if current_records else -1
     gen_label = f"Gen {gen_index}" if gen_index >= 0 else "—"
 
@@ -1404,6 +1614,14 @@ def _build_progress_stats(
 
 
 def _build_progress_grid(records: list[dict]) -> html.Div:
+    """Render the progress grid composed of multiple trial cards.
+
+    Args:
+        records: List of trial records for the grid.
+
+    Returns:
+        A Dash `Div` containing the grid of trial cards.
+    """
     if not records:
         return html.Div("No trial data found.", className="text-muted")
     rows = [_build_progress_card(record) for record in records]
@@ -1411,6 +1629,14 @@ def _build_progress_grid(records: list[dict]) -> html.Div:
 
 
 def _get_live_score(run: dict) -> tuple[float | None, bool]:
+    """Return a live score estimate for a run and whether it's final.
+
+    Args:
+        run: Run dict possibly containing `score` or `hold_time`.
+
+    Returns:
+        Tuple (value, is_final) where value is numeric or None.
+    """
     score = run.get("score")
     if isinstance(score, (int, float)):
         return float(score), True
@@ -1421,6 +1647,14 @@ def _get_live_score(run: dict) -> tuple[float | None, bool]:
 
 
 def _find_earliest_not_done(records: list[dict]) -> str | None:
+    """Return the DOM id for the earliest trial that is not in a terminal state.
+
+    Args:
+        records: List of trial records to search.
+
+    Returns:
+        The trial-card id string or None if none found.
+    """
     terminal = {"done", "failed", "error", "pruned", "skipped", "cancelled"}
     for record in records:
         state = _get_trial_actual_state(record)
@@ -1435,6 +1669,7 @@ def _find_earliest_not_done(records: list[dict]) -> str | None:
 
 
 def create_app() -> Dash:
+    """Construct and return the Dash application instance for ShapeOPT."""
     from labtests.registry import get_test_catalog
 
     try:
@@ -2056,6 +2291,12 @@ def create_app() -> Dash:
 
 
 def launch_dashboard(port: int = 8050, open_browser: bool = True) -> None:
+    """Start the ShapeOPT dashboard web server and optionally open a browser.
+
+    Args:
+        port: Port to bind the web server to.
+        open_browser: If True, open the dashboard in the default browser.
+    """
     print(f"[info] Starting ShapeOPT on http://localhost:{port}")
 
     os.environ["WERKZEUG_RUN_MAIN"] = "false"

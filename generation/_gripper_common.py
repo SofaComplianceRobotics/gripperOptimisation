@@ -38,6 +38,11 @@ def load_jsonc(path: Path) -> dict:
 
 
 def _bootstrap_lab_site_packages() -> None:
+    """Prepend the lab-local site-packages directory to sys.path if present.
+
+    This allows generated scripts to import dependencies installed into
+    `runtime/modules/site-packages`.
+    """
     if LAB_SITE_PACKAGES.exists():
         sys.path.insert(0, str(LAB_SITE_PACKAGES))
 
@@ -46,6 +51,11 @@ _bootstrap_lab_site_packages()
 
 
 def _has_required_runtime_packages() -> bool:
+    """Return True if the required runtime packages (e.g. CadQuery) are importable.
+
+    Returns:
+        True when CadQuery is available in the current Python environment.
+    """
     try:
         import cadquery  # noqa: F401
 
@@ -55,6 +65,11 @@ def _has_required_runtime_packages() -> bool:
 
 
 def _install_lab_dependencies_here() -> bool:
+    """Install lab requirements into the lab-local site-packages directory.
+
+    Returns:
+        True on successful installation, False otherwise.
+    """
     if not LAB_REQUIREMENTS.exists():
         return False
     LAB_SITE_PACKAGES.mkdir(parents=True, exist_ok=True)
@@ -173,6 +188,11 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     # Auto-apply any ModelParams scalar field annotated with opt metadata
     # that isn't already set explicitly above. This means adding a new
     # directly-mapped optimisable parameter only requires editing ModelParams.
+    #
+    # Explanation: `ModelParams` contains `opt` metadata on fields exposed to
+    # optimization. This block copies those fields from the JSON config if present,
+    # applying the correct type (int/bool/float). This avoids manual duplication
+    # of mappings when adding a new optimizable parameter.
     for _f in fields(base):
         if _f.name in kwargs:
             continue
