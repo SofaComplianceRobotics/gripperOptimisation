@@ -11,7 +11,7 @@ DT_INVERSE = 0.05
 
 # Timestep for direct simulation (optimization runs, playback)
 # Smaller step = more accurate physics, more compute
-DT_DIRECT = 0.07
+DT_DIRECT = 0.02
 
 # Safe timestep for the 2 contact-resolution frames right after cube spawn.
 # Switched to DT_DIRECT once contacts are settled.

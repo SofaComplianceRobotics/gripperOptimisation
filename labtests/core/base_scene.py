@@ -8,6 +8,7 @@ Nothing test-specific lives here.
 
 from __future__ import annotations
 
+import os
 from typing import NamedTuple
 from core.timing_config import DT_INVERSE, DT_DIRECT
 
@@ -52,7 +53,13 @@ def build_base_scene(rootnode, *, inverse: bool, friction: float = 0.6) -> Scene
 
     addSolvers(simulation)
 
-    rootnode.animate = not inverse  # inverse scenes start paused for GUI control
+    force_paused = os.environ.get("SHAPEOPT_FORCE_PAUSED", "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    rootnode.animate = False if force_paused else not inverse
     rootnode.dt = DT_INVERSE if inverse else DT_DIRECT
     rootnode.gravity = [0.0, -9810.0, 0.0]
     rootnode.VisualStyle.displayFlags.value = ["hideBehavior", "hideWireframe"]

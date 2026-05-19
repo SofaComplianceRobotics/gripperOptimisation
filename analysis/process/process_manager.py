@@ -140,6 +140,7 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
     # Python packages instead of the custom build's — prevents 'No module named Sofa.Helper'
     env["SOFA_ROOT"] = emiolabs_sofa_root
     env["SOFAPYTHON3_ROOT"] = emiolabs_sofa_root
+    env["SHAPEOPT_FORCE_PAUSED"] = "1"
 
     # Drop vars that reference the custom Python 3.12 / batch-SOFA build
     for _k in ("SOFA_SITE_PACKAGES", "SOFA_PYTHON_PATH", "RUNSOFA_EXE"):
