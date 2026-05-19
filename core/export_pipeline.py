@@ -15,15 +15,15 @@ if str(SRC_ROOT) not in sys.path:
 
 from core.assembly import assemble_model
 from core.gripper_parts import make_pincer_pair_world_collision
-from core.io_utils import (
+from core.io.export_mesh import (
     model_to_stl_collision,
-    export_leg_attachment_json,
-    make_versioned_export_path,
     model_to_stl,
     model_to_vtk,
-    rotate_model_to_export_frame,
     run_invariants,
 )
+from core.io.export_json import export_leg_attachment_json
+from core.io.paths import make_versioned_export_path
+from core.transforms.quaternion import rotate_model_to_export_frame
 from core.params import ModelParams, validate_params
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")

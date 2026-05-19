@@ -59,9 +59,10 @@ def createScene(rootnode):
     emio.addObject(assembly)
 
     tray = modelling.addChild("Tray")
+    tray_mesh_path = str((LAB_ROOT.parent.parent / "data" / "meshes" / "tray.stl").resolve())
     tray.addObject(
         "MeshSTLLoader",
-        filename=os.path.dirname(__file__) + "/../../data/meshes/tray.stl",
+        filename=tray_mesh_path,
         translation=[0, 10, 0],
     )
     tray.addObject(

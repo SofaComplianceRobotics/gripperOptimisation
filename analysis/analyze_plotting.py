@@ -1,15 +1,15 @@
 """
-analyze_plotting.py — Plotly interactive visualization with smooth interactivity.
+analyze_plotting.py — Main entry point for interactive Plotly visualization.
 
-Creates performance plots with per-test contribution bars (diverging stacked),
-rolling averages, and per-generation trends. Preserves zoom/pan during live updates.
+Entry point for plot_combined() which orchestrates live Dash updates of
+performance plots with per-test contribution bars, rolling averages, and trends.
+
+Implementation details in: plotting.compute (math) and plotting.traces (visualization)
 """
 
-# Auto-install plotly if not available
+# Auto-install dependencies
 try:
     import plotly.graph_objects as go
-    import plotly.io as pio
-    from plotly.subplots import make_subplots
 except ImportError:
     print("[info] Plotly not found. Installing...")
     import subprocess
@@ -17,12 +17,8 @@ except ImportError:
 
     subprocess.check_call([sys.executable, "-m", "pip", "install", "plotly", "-q"])
     import plotly.graph_objects as go
-    import plotly.io as pio
-    from plotly.subplots import make_subplots
 
-    print("[info] Plotly installed successfully.")
 try:
-    # Dash (for live web-based updates)
     from dash import Dash, dcc, html
     from dash.dependencies import Input, Output, State
 
@@ -51,433 +47,29 @@ import subprocess
 
 # Suppress Werkzeug and Dash logs
 os.environ.pop("WERKZEUG_RUN_MAIN", None)
-# Clear any leftover Werkzeug server FD environment variables
 os.environ.pop("WERKZEUG_SERVER_FD", None)
 os.environ.pop("WERKZEUG_SERVER_FD_DEF", None)
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 logging.getLogger("dash").setLevel(logging.ERROR)
 logging.getLogger("dash.dash").setLevel(logging.ERROR)
 
-from analyze_config import CENTERED_AVG_HALF_WINDOW, LIVE_REFRESH_SECONDS
+from analyze_config import LIVE_REFRESH_SECONDS
 from analyze_io import load_all_trials
-
-# ---------------------------------------------------------------------------
-# Colour palette — matches UI.py SLICE_COLORS
-# ---------------------------------------------------------------------------
-TEST_COLORS = [
-    "#404867",  # (matches C_BANNER in UI.py)
-    "#6b7aad",
-    "#9aa3cc",
-    "#2c3e6b",
-    "#c0392b",
-    "#2ecc71",
-    "#e67e22",
-    "#9b59b6",
-]
-
-NEG_ALPHA = 0.40  # alpha for negative-contribution segments
-NEG_HATCH = (
-    "////"  # hatch for negative segments (note: Plotly doesn't support hatching)
+from plotting.compute import (
+    _collect_all_test_names,
+    compute_plot_data,
+    _calculate_smart_ticks,
+    C_BANNER,
+    C_BG,
+    C_SECTION,
+    C_BORDER,
 )
-
-C_BANNER = "#404867"
-C_BG = "#ffffff"
-C_SECTION = "#fafbfc"
-C_BORDER = "#d0d3d8"
-C_FINAL = "#c0392b"  # final-score tick colour
-C_AVG = "#2ecc71"  # rolling average line
-C_BEST = "#e74c3c"  # best-so-far line
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _collect_all_test_names(records: list[dict]) -> list[str]:
-    """Return a stable ordered list of every unique test name seen across all records."""
-    seen: list[str] = []
-    for r in records:
-        for name in (r.get("test_scores") or {}).keys():
-            if name not in seen:
-                seen.append(name)
-    return seen
-
-
-def _test_color(test_name: str, name_order: list[str]) -> str:
-    """Return the hex color assigned to a test, consistent across the whole plot."""
-    try:
-        idx = name_order.index(test_name)
-    except ValueError:
-        idx = abs(hash(test_name)) % len(TEST_COLORS)
-    return TEST_COLORS[idx % len(TEST_COLORS)]
-
-
-def _compute_contributions(record: dict) -> dict[str, float]:
-    """Compute per-test weighted contribution for one trial record.
-
-    contribution_i = normalize(aggregate_score_i) * weight_pct_i
-
-    Falls back gracefully when test_scores is absent (legacy records).
-    """
-    test_scores: dict = record.get("test_scores") or {}
-
-    if not test_scores:
-        return {"score": float(record.get("final_score", record.get("score", 0.0)))}
-
-    contributions: dict[str, float] = {}
-    for test_name, test_info in test_scores.items():
-        if not isinstance(test_info, dict):
-            continue
-        agg = float(test_info.get("aggregate_score", 0.0) or 0.0)
-        raw_max = test_info.get("max_score")
-        # Treat missing/None as legacy (score already normalised); 0.0 means unknown.
-        max_score = float(raw_max) if raw_max is not None else 1.0
-        wpct = float(test_info.get("weight_pct", 0.0) or 0.0)
-        norm = min(agg / max_score, 1.0) if max_score > 0 else 0.0
-        contributions[test_name] = norm * wpct
-
-    return (
-        contributions
-        if contributions
-        else {"score": float(record.get("final_score", record.get("score", 0.0)))}
-    )
-
-
-# ---------------------------------------------------------------------------
-# Plot-data builder
-# ---------------------------------------------------------------------------
-
-
-def compute_plot_data(records: list[dict], all_test_names: list[str]) -> dict:
-    """Pre-compute all series needed for a full plot redraw.
-
-    Args:
-        records: Trial records from analyze_io.load_all_trials().
-        all_test_names: Ordered unique test names (from _collect_all_test_names).
-
-    Returns:
-        dict with keys: xs, final_scores, failed_mask, is_complete, contributions,
-        avg_x, avg_y, best_x, best_y, gen_tick_positions, gen_tick_labels.
-    """
-    xs = [r["chron"] for r in records]
-    contributions = [_compute_contributions(r) for r in records]
-    final_scores = [sum(c.values()) for c in contributions]
-    failed_mask = [bool(r.get("failed", False)) for r in records]
-    is_complete = [bool(r.get("is_complete", True)) for r in records]
-    contributions = [_compute_contributions(r) for r in records]
-
-    # Centred rolling average
-    avg_x, avg_y = [], []
-    for i, r in enumerate(records):
-        lo = max(0, i - CENTERED_AVG_HALF_WINDOW)
-        hi = min(len(records) - 1, i + CENTERED_AVG_HALF_WINDOW)
-        window = records[lo : hi + 1]
-        scores = [sum(_compute_contributions(w).values()) for w in window]
-        avg_x.append(r["chron"])
-        avg_y.append(sum(scores) / len(scores))
-
-    # Best-so-far
-    best_x, best_y = [], []
-    running_best = None
-    for i, r in enumerate(records):
-        if not failed_mask[i]:
-            fs = final_scores[i]
-            if running_best is None or fs > running_best:
-                running_best = fs
-        if running_best is not None:
-            best_x.append(r["chron"])
-            best_y.append(running_best)
-
-    # Per-test rolling averages
-    per_test_avg: dict[str, tuple[list, list]] = {}
-    for test_name in all_test_names:
-        avg_x_t, avg_y_t = [], []
-        for i, r in enumerate(records):
-            lo = max(0, i - CENTERED_AVG_HALF_WINDOW)
-            hi = min(len(records) - 1, i + CENTERED_AVG_HALF_WINDOW)
-            window_scores = [
-                _compute_contributions(records[k]).get(test_name, 0.0)
-                for k in range(lo, hi + 1)
-            ]
-            avg_x_t.append(r["chron"])
-            avg_y_t.append(sum(window_scores) / len(window_scores))
-        per_test_avg[test_name] = (avg_x_t, avg_y_t)
-
-    # Generation tick marks (one per unique generation boundary)
-    gen_tick_positions, gen_tick_labels = [], []
-    prev_gen = None
-    for r in records:
-        if r["gen_index"] != prev_gen:
-            gen_tick_positions.append(r["chron"])
-            gen_tick_labels.append(str(r["gen_index"]))
-        prev_gen = r["gen_index"]
-
-    return {
-        "xs": xs,
-        "final_scores": final_scores,
-        "failed_mask": failed_mask,
-        "is_complete": is_complete,
-        "contributions": contributions,
-        "avg_x": avg_x,
-        "avg_y": avg_y,
-        "best_x": best_x,
-        "best_y": best_y,
-        "per_test_avg": per_test_avg,
-        "gen_tick_positions": gen_tick_positions,
-        "gen_tick_labels": gen_tick_labels,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Plotly trace builders
-# ---------------------------------------------------------------------------
-
-
-def _calculate_smart_ticks(
-    gen_tick_positions: list, gen_tick_labels: list, visible_range: tuple = None
-) -> tuple[list, list]:
-    """Calculate smart generation ticks with stride to avoid crowding.
-
-    Args:
-        gen_tick_positions: X positions of generation boundaries
-        gen_tick_labels: Generation numbers as strings
-        visible_range: (x_min, x_max) of currently visible area. If None, uses full range.
-
-    Returns:
-        (filtered_positions, filtered_labels) for use in tickvals/ticktext
-    """
-    if not gen_tick_positions:
-        return [], []
-
-    if visible_range:
-        x_min, x_max = visible_range
-    else:
-        x_min = gen_tick_positions[0]
-        x_max = gen_tick_positions[-1]
-
-    # Find ticks within visible range
-    visible_indices = [
-        i for i, pos in enumerate(gen_tick_positions) if x_min <= pos <= x_max
-    ]
-
-    if not visible_indices:
-        return [], []
-
-    num_visible = len(visible_indices)
-    max_comfortable_labels = 15
-
-    if num_visible <= max_comfortable_labels:
-        stride = 1
-    else:
-        min_stride = num_visible / max_comfortable_labels
-        standard_intervals = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
-        stride = next(
-            (s for s in standard_intervals if s >= min_stride), standard_intervals[-1]
-        )
-
-    # Filter by stride, starting from first visible index
-    first_idx = visible_indices[0]
-    filtered_indices = [i for i in visible_indices if (i - first_idx) % stride == 0]
-
-    filtered_positions = [gen_tick_positions[i] for i in filtered_indices]
-    filtered_labels = [gen_tick_labels[i] for i in filtered_indices]
-
-    return filtered_positions, filtered_labels
-
-
-def _build_bar_traces(
-    records: list[dict],
-    plot_data: dict,
-    all_test_names: list[str],
-) -> list[go.Bar]:
-    """Build diverging stacked bar traces for Plotly."""
-    traces = []
-    xs = plot_data["xs"]
-    contributions = plot_data["contributions"]
-    failed_mask = plot_data["failed_mask"]
-    is_complete = plot_data["is_complete"]
-
-    # For each test, create a stacked bar trace (no hover on segments)
-    for test_name in all_test_names:
-        y_vals = []
-        colors_list = []
-        opacity_list = []
-
-        for i, (x, contrib, failed, complete) in enumerate(
-            zip(xs, contributions, failed_mask, is_complete)
-        ):
-            val = contrib.get(test_name, 0.0)
-            y_vals.append(val)
-
-            # Color and opacity based on state
-            color = _test_color(test_name, all_test_names)
-            colors_list.append(color)
-            alpha = 0.3 if failed else 1.0
-            alpha *= 0.5 if not complete else 1.0
-            opacity_list.append(alpha)
-
-        trace = go.Bar(
-            x=xs,
-            y=y_vals,
-            name=test_name,
-            uid=f"bar-{test_name}",
-            marker=dict(
-                color=colors_list,
-                opacity=opacity_list,
-                line=dict(color=_test_color(test_name, all_test_names), width=0.5),
-            ),
-            hoverinfo="skip",
-            showlegend=True,
-        )
-        traces.append(trace)
-
-    return traces
-
-
-def _build_hover_overlay(
-    records: list[dict],
-    plot_data: dict,
-    all_test_names: list[str],
-    bar_width: float,
-) -> go.Bar:
-    """Build an invisible bar overlay so hover works across the whole trial bar."""
-    xs = plot_data["xs"]
-    contributions = plot_data["contributions"]
-    hover_texts = []
-    y_vals = []
-
-    for i, contrib in enumerate(contributions):
-        r = records[i]
-        gen = r.get("gen_index", "?")
-        trial_id = r.get("trial_id", i)
-        final_score = sum(contrib.values())
-
-        detail_lines = [
-            f"<b>Gen {gen} | Trial {trial_id}</b>",
-            f"<b>Total Score: {final_score:.4f}</b>",
-            "─────────────────",
-        ]
-        for tn in all_test_names:
-            score = contrib.get(tn, 0.0)
-            detail_lines.append(f"{tn}: {score:.4f}")
-
-        hover_texts.append("<br>".join(detail_lines))
-        y_vals.append(final_score)
-
-    # customdata[0] = hover HTML, customdata[1] = gen_name, customdata[2] = trial_name
-    customdata = [
-        [hover_texts[i], records[i].get("gen_name", ""), records[i].get("trial_name", "")]
-        for i in range(len(records))
-    ]
-
-    trace = go.Bar(
-        x=xs,
-        y=y_vals,
-        base=0,
-        width=[bar_width] * len(xs),
-        marker=dict(color="rgba(0,0,0,0)", line=dict(width=0)),
-        customdata=customdata,
-        hovertemplate="%{customdata[0]}<extra></extra>",
-        hoverlabel=dict(
-            bgcolor="#d7ecff",
-            bordercolor="#9ec5fe",
-            font=dict(color="#16324f"),
-        ),
-        showlegend=False,
-        name="hover",
-        uid="hover-overlay",
-    )
-    return trace
-
-
-def _build_final_ticks(plot_data: dict, bar_width: float) -> go.Scatter:
-    """Build short horizontal tick segments (one per trial) showing final score.
-
-    Uses a single Scatter trace with NaN separators so segments are not connected.
-    """
-    xs = plot_data["xs"]
-    final_scores = plot_data["final_scores"]
-    x_segments = []
-    y_segments = []
-
-    halfw = bar_width / 2.0
-    for x, s in zip(xs, final_scores):
-        x_segments.extend([x - halfw, x + halfw, None])
-        y_segments.extend([s, s, None])
-
-    trace = go.Scatter(
-        x=x_segments,
-        y=y_segments,
-        mode="lines",
-        name="Final score",
-        uid="final-score",
-        line=dict(color=C_FINAL, width=2),
-        hoverinfo="skip",
-        showlegend=True,
-    )
-    return trace
-
-
-def _build_avg_traces(plot_data: dict, all_test_names: list[str]) -> list[go.Scatter]:
-    """Build rolling average and best-so-far traces."""
-    traces = []
-
-    # Rolling average
-    avg_x, avg_y = plot_data["avg_x"], plot_data["avg_y"]
-    if avg_x:
-        trace_avg = go.Scatter(
-            x=avg_x,
-            y=avg_y,
-            mode="lines",
-            name=f"Rolling avg (±{CENTERED_AVG_HALF_WINDOW})",
-            uid="rolling-avg",
-            line=dict(color=C_AVG, width=2, dash="dash"),
-            hoverinfo="skip",
-            showlegend=True,
-        )
-        traces.append(trace_avg)
-
-    # Best-so-far
-    best_x, best_y = plot_data["best_x"], plot_data["best_y"]
-    if best_x:
-        trace_best = go.Scatter(
-            x=best_x,
-            y=best_y,
-            mode="lines",
-            name="Best so far",
-            uid="best-so-far",
-            line=dict(color=C_BEST, width=2),
-            hoverinfo="skip",
-            showlegend=True,
-        )
-        traces.append(trace_best)
-
-    # Per-test rolling averages
-    per_test_avg = plot_data.get("per_test_avg", {})
-    for test_name in all_test_names:
-        if test_name in per_test_avg:
-            t_x, t_y = per_test_avg[test_name]
-            if t_x:
-                trace_t = go.Scatter(
-                    x=t_x,
-                    y=t_y,
-                    mode="lines",
-                    name=f"~{test_name} avg",
-                    uid=f"avg-{test_name}",
-                    line=dict(
-                        color=_test_color(test_name, all_test_names),
-                        width=1.5,
-                        dash="dashdot",
-                    ),
-                    hoverinfo="skip",
-                    visible="legendonly",  # Hidden by default
-                    showlegend=True,
-                )
-                traces.append(trace_t)
-
-    return traces
-
+from plotting.traces import (
+    _build_bar_traces,
+    _build_hover_overlay,
+    _build_final_ticks,
+    _build_avg_traces,
+)
 
 # ---------------------------------------------------------------------------
 # Main entry point
