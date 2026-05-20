@@ -37,7 +37,7 @@ RECORD_FILE = str(
 )
 
 # Size cycles over 3 runs, indexed by OPTUNA_RUN_SLOT
-_CUBE_SIZE_CYCLE = ([5, 5, 5], [8, 8, 8], [20, 20, 20])
+_CUBE_SIZE_CYCLE = ([8, 8, 8], [10, 10, 10], [20, 20, 20])
 
 
 def _resolve_cube_config(

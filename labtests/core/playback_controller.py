@@ -61,10 +61,13 @@ def make_playback_controller(SofaController):
 
             self.finished = False
             self.frame = 0
+            self.physics_step = 0
             self.sim_time = 0.0
             self.recorded_frames = len(playback.motor_positions)
+            self.recorded_duration = self.recorded_frames * DT_DIRECT
             self.overload_frames = max(0, int(cfg.overload_max_time / DT_DIRECT))
             self.total_frames = self.recorded_frames + self.overload_frames
+            self.total_duration = self.recorded_duration + cfg.overload_max_time
             rootnode.dt.value = DT_CONTACT
             self.peak_y = float("-inf")
             self.was_picked_up = False
@@ -111,10 +114,11 @@ def make_playback_controller(SofaController):
 
         def _update_overload_mass(self) -> None:
             """Ramp cube mass from start to max during the overload phase."""
-            if self.frame < self.recorded_frames:
+            loop_sim_time = getattr(self, "_loop_sim_time", self.sim_time)
+            if loop_sim_time < self.recorded_duration:
                 self._set_cube_mass(self.cfg.cube_mass_start)
                 return
-            overload_t = (self.frame - self.recorded_frames) * DT_DIRECT
+            overload_t = max(0.0, loop_sim_time - self.recorded_duration)
             alpha = (
                 1.0
                 if self.cfg.cube_mass_ramp_time <= 0
@@ -170,7 +174,19 @@ def make_playback_controller(SofaController):
 
         def _current_phase(self) -> str:
             """Return 'recorded' during motor playback or 'overload' after it ends."""
-            return "recorded" if self.frame < self.recorded_frames else "overload"
+            return "recorded" if self.sim_time < self.recorded_duration else "overload"
+
+        def _timeline_frame_at(self, sim_time: float) -> int:
+            """Map simulation time to the DT_DIRECT timeline frame index."""
+            if sim_time <= 0.0:
+                return 0
+            return min(self.total_frames, int(sim_time / DT_DIRECT))
+
+        def _playback_index_at(self, sim_time: float) -> int:
+            """Return the recorded playback frame matching the current simulation time."""
+            if self.recorded_frames <= 0:
+                return 0
+            return min(self.recorded_frames - 1, int(sim_time / DT_DIRECT))
 
         def _get_cube_gripper_contact_count(self) -> int:
             """Return the number of active contact points between cube and gripper."""
@@ -265,6 +281,9 @@ def make_playback_controller(SofaController):
                 return
 
             sim_time = self.sim_time
+            step_dt = float(self.rootnode.dt.value)
+            self._loop_sim_time = sim_time
+            self.frame = self._timeline_frame_at(sim_time)
             self._update_overload_mass()
 
             # ── Cube spawn teleport ────────────────────────────────────────────
@@ -348,7 +367,7 @@ def make_playback_controller(SofaController):
                 if sim_time >= self.cfg.early_stop_sim_time and cube_y > float(
                     self.pickup_y_threshold
                 ):
-                    self.hold_time += DT_DIRECT
+                    self.hold_time += step_dt
 
                 # Rule 1: cube through floor
                 if cube_y < self.cfg.floor_y_threshold:
@@ -387,7 +406,7 @@ def make_playback_controller(SofaController):
                     return
 
             # ── End of frames ──────────────────────────────────────────────────
-            if self.frame >= self.total_frames:
+            if sim_time >= self.total_duration:
                 self._on_horizon_complete(sim_time)
                 return
 
@@ -395,8 +414,8 @@ def make_playback_controller(SofaController):
             # Replay recorded motor positions. After the recorded frames,
             # maintain the last known positions (`last_positions`) during the "overload" phase.
             positions = (
-                self.playback.motor_positions[self.frame]
-                if self.frame < self.recorded_frames
+                self.playback.motor_positions[self._playback_index_at(sim_time)]
+                if sim_time < self.recorded_duration
                 else self.last_positions
             )
             for i, constraint in enumerate(self.playback.joint_constraints):
@@ -420,8 +439,8 @@ def make_playback_controller(SofaController):
                 if self._post_spawn_slow_frames == 0:
                     self.rootnode.dt.value = DT_DIRECT
 
-            self.frame += 1
-            self.sim_time += self.rootnode.dt.value
+            self.physics_step += 1
+            self.sim_time += step_dt
 
         def onAnimateEndEvent(self, event):
             """Run the spawn-contact check at the end of each simulation step."""

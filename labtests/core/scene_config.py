@@ -120,7 +120,7 @@ class PlaybackConfig:
             early_stop_sim_time=float(
                 os.environ.get("EARLY_STOP_SIM_TIME", str(2.0 * (DT_DIRECT / 0.02)))
             ),
-            floor_y_threshold=float(os.environ.get("FLOOR_Y_THRESHOLD", "-235.0")),
+            floor_y_threshold=float(os.environ.get("FLOOR_Y_THRESHOLD", "-245.0")),
             floor_y_buffer=float(os.environ.get("FLOOR_Y_BUFFER", "5.0")),
             pickup_y_threshold=float(os.environ.get("PICKUP_Y_THRESHOLD", "-215.0")),
             drop_penalty=float(os.environ.get("DROP_PENALTY", "50.0")),
