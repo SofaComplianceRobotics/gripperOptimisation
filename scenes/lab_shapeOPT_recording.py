@@ -74,12 +74,9 @@ def _pick_recording_target() -> str:
 
 
 RECORD_TARGET = _pick_recording_target()
-RECORD_FILE = os.path.join(
-    os.path.dirname(__file__),
-    "runtime",
-    "recordings",
-    RECORD_TARGET,
-    "motor_recording.json",
+# Use LAB_ROOT to write to the same location tests read from
+RECORD_FILE = str(
+    LAB_ROOT / "runtime" / "recordings" / RECORD_TARGET / "motor_recording.json"
 )
 ASSEMBLY_SKIP_TIME = 0.0
 

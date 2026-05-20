@@ -86,7 +86,6 @@ class PlaybackConfig:
     undercube_margin: float
     enable_undercube_check: bool
 
-
     @classmethod
     def from_env(cls, lab_root: Path) -> "PlaybackConfig":
         """Construct from environment variables, resolving paths relative to lab_root."""

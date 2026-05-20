@@ -26,7 +26,7 @@ def setup(
     *,
     cube_scale: list[float] | None = None,
     cube_mass: float = 0.10,
-    floor_center_y: float = -230.0,
+    floor_center_y: float = -220.0,
     cube_spawn_clearance: float = 10.0,
 ) -> CubeFloorHandles:
     """Add cube and floor rigid bodies to the simulation node.

@@ -95,7 +95,7 @@ class ModelParams:
     pincer_profile_samples: int = 4
     pincer_round_cap_segments: int = 3
     pincer_path_scale: float = field(
-        default=0.4, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=1, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
     )
     pincer_tilt_y_deg: float = field(
         default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
@@ -105,19 +105,19 @@ class ModelParams:
     )
     # Bézier spline in polar form — absolute XY computed by pincer_points property
     p0_hout_dist: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 80.0}}
+        default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 32.0}}
     )
     p0_hout_angle_deg: float = field(
         default=0.0, metadata={"opt": {"type": "float", "min": -90.0, "max": 90.0}}
     )
     p1_dist: float = field(
-        default=90.0, metadata={"opt": {"type": "float", "min": 80.0, "max": 120.0}}
+        default=40.0, metadata={"opt": {"type": "float", "min": 36, "max": 48}}
     )
     p1_angle_deg: float = field(
         default=-40.0, metadata={"opt": {"type": "float", "min": -90.0, "max": 45.0}}
     )
     p1_hin_dist: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 80.0}}
+        default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 32.0}}
     )
     p1_hin_angle_deg: float = field(
         default=0.0, metadata={"opt": {"type": "float", "min": -10.0, "max": 260.0}}
