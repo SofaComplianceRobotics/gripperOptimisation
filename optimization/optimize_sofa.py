@@ -206,13 +206,18 @@ def active_sofa_process_count(processes: list[tuple]) -> int:
     """Count currently running SOFA child processes.
 
     Args:
-        processes: List of (trial_index, trial, [(Popen, score_path, status_path), ...]).
+        processes: List of tuples where index 2 stores launched runs. Supports
+            both (trial_index, trial, runs) and
+            (trial_index, trial, runs, launched_run_plan_entries).
 
     Returns:
         Number of active SOFA processes.
     """
     active = 0
-    for _, _, runs in processes:
+    for entry in processes:
+        if len(entry) < 3:
+            continue
+        runs = entry[2]
         for p, _, _ in runs:
             if p.poll() is None:
                 active += 1

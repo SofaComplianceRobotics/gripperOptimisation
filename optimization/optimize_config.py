@@ -43,6 +43,25 @@ RUN_PLAN: tuple[tuple[str, int, int], ...] = tuple(
 )
 
 
+def _parse_gated_test_names(
+    raw: str | None, selected_test_names: list[str]
+) -> tuple[str, ...]:
+    """Parse LAB_SHAPEOPT_GATED_TESTS into a gated subset of selected tests."""
+    if not raw:
+        return ()
+
+    selected = set(selected_test_names)
+    resolved: list[str] = []
+    seen: set[str] = set()
+    for part in raw.split(","):
+        name = part.strip()
+        if not name or name in seen or name not in selected:
+            continue
+        resolved.append(name)
+        seen.add(name)
+    return tuple(resolved)
+
+
 # ─────────────────────────────────────────────
 # Per-test weights
 # ─────────────────────────────────────────────
@@ -84,6 +103,11 @@ def _parse_test_weights(raw: str | None, test_names: list[str]) -> dict[str, flo
 
 SELECTED_TEST_WEIGHTS: dict[str, float] = _parse_test_weights(
     os.environ.get("LAB_SHAPEOPT_TEST_WEIGHTS"),
+    list(SELECTED_TEST_NAMES),
+)
+
+GATED_TEST_NAMES: tuple[str, ...] = _parse_gated_test_names(
+    os.environ.get("LAB_SHAPEOPT_GATED_TESTS"),
     list(SELECTED_TEST_NAMES),
 )
 
@@ -150,7 +174,7 @@ MAX_ACTIVE_SOFA_PROCS = int(
     os.environ.get("MAX_ACTIVE_SOFA_PROCS", "12")
 )  # throttle to avoid starving geometry export
 CMAES_STARTUP_TRIALS = int(
-    os.environ.get("CMAES_STARTUP_TRIALS", "100")
+    os.environ.get("CMAES_STARTUP_TRIALS", "50")
 )  # random warm-up before CMA-ES adaptation
 CMAES_SIGMA0 = float(
     os.environ.get("CMAES_SIGMA0", "1.0")
@@ -297,4 +321,6 @@ def build_env() -> dict:
     env["LAB_SHAPEOPT_TEST_WEIGHTS"] = json.dumps(
         {name: round(frac * 100) for name, frac in SELECTED_TEST_WEIGHTS.items()}
     )
+    if GATED_TEST_NAMES:
+        env["LAB_SHAPEOPT_GATED_TESTS"] = ",".join(GATED_TEST_NAMES)
     return env

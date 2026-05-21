@@ -114,7 +114,7 @@ class ModelParams:
         default=40.0, metadata={"opt": {"type": "float", "min": 36, "max": 48}}
     )
     p1_angle_deg: float = field(
-        default=-40.0, metadata={"opt": {"type": "float", "min": -90.0, "max": 45.0}}
+        default=-40.0, metadata={"opt": {"type": "float", "min": -70.0, "max": 0}}
     )
     p1_hin_dist: float = field(
         default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 32.0}}

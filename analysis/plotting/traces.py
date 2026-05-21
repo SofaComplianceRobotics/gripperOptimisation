@@ -148,6 +148,7 @@ def _build_final_ticks(plot_data: dict, bar_width: float) -> go.Scatter:
         uid="final-score",
         line=dict(color=C_FINAL, width=2),
         hoverinfo="skip",
+        visible="legendonly",  # Hidden by default
         showlegend=True,
     )
     return trace

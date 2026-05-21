@@ -28,6 +28,7 @@ import optuna
 
 from optimization.optimize_config import (
     FAILED_PREVIEW_IMAGE_CANDIDATES,
+    GATED_TEST_NAMES,
     GEN_PROGRESS_POLL_INTERVAL,
     HARD_FAIL_SCORE,
     LAB_ROOT,
@@ -97,7 +98,14 @@ def generation_progress_fraction(trial_state_paths_by_trial: list[Path]) -> floa
                 state = str(data.get("state", "")).lower()
                 reason = str(data.get("reason", "")).lower()
 
-                if state in {"done", "skipped", "failed", "error", "cancelled", "pruned"}:
+                if state in {
+                    "done",
+                    "skipped",
+                    "failed",
+                    "error",
+                    "cancelled",
+                    "pruned",
+                }:
                     trial_total += 1.0
                     continue
 
@@ -164,7 +172,9 @@ def run_generation(
     gen_dir = TRIALS_DIR / f"gen_{gen_index:04d}"
     gen_dir.mkdir(parents=True, exist_ok=True)
 
-    processes: list[tuple] = []  # (trial_index, trial, [(Popen, path, run_slot), ...])
+    # (trial_index, trial, launched_runs, launched_run_plan_entries,
+    #  pending_gated_runs, trial_state_path, collision_stl)
+    processes: list[tuple] = []
     collision_stls_by_trial: dict[int, Path] = {}
     trial_state_paths_by_trial: list[Path] = []
 
@@ -200,6 +210,23 @@ def run_generation(
     except FileNotFoundError:
         pass
 
+    def _trial_has_ungated_positive_run(trial_state_path: Path) -> bool:
+        """Return True when any ungated run in this trial has score > 0."""
+        trial_state = read_trial_state(trial_state_path)
+        runs = trial_state.get("runs", []) if isinstance(trial_state, dict) else []
+        if not isinstance(runs, list):
+            return False
+        for run in runs:
+            if not isinstance(run, dict):
+                continue
+            test_name = str(run.get("test_name", ""))
+            if test_name in GATED_TEST_NAMES:
+                continue
+            raw = run.get("score")
+            if isinstance(raw, (int, float)) and float(raw) > 0.0:
+                return True
+        return False
+
     # --- Geometry generation and SOFA launch loop ---
     for i, trial in enumerate(trials):
         trial_index = i + 1
@@ -211,12 +238,36 @@ def run_generation(
         full_config = params_from_trial(trial)
 
         try:
-            collision_stl, visual_stl_copy = generate_stl_for_trial(trial_dir, full_config)
+            collision_stl, visual_stl_copy = generate_stl_for_trial(
+                trial_dir, full_config
+            )
             trial_state_path = trial_dir / "trial_state.json"
-            render_stl_preview(visual_stl_copy, trial_dir, gen_index, trial_index, failed_preview)
+            render_stl_preview(
+                visual_stl_copy, trial_dir, gen_index, trial_index, failed_preview
+            )
 
             runs = []
+            launched_run_plan_entries: list[tuple[str, int, int]] = []
+            pending_gated_runs: list[tuple[int, str, int, int]] = []
             for r, (test_name, test_run_index, test_run_total) in enumerate(RUN_PLAN):
+                if test_name in GATED_TEST_NAMES:
+                    pending_gated_runs.append(
+                        (r + 1, test_name, test_run_index, test_run_total)
+                    )
+                    update_trial_run(
+                        trial_state_path,
+                        r + 1,
+                        {
+                            "state": "pending",
+                            "current_frame": 0,
+                            "total_frames": None,
+                            "sim_time": 0.0,
+                            "score": None,
+                            "reason": "gated_test_waiting_for_ungated_success",
+                        },
+                    )
+                    continue
+
                 test_spec = get_test_spec(test_name)
                 update_trial_run(
                     trial_state_path,
@@ -248,9 +299,22 @@ def run_generation(
                     f"Run {r+1}/{N_REPEATS} [{test_name} {test_run_index}/{test_run_total}]"
                 )
                 runs.append((p, trial_state_path, r + 1))
+                launched_run_plan_entries.append(
+                    (test_name, test_run_index, test_run_total)
+                )
 
             collision_stls_by_trial[trial_index] = collision_stl
-            processes.append((trial_index, trial, runs))
+            processes.append(
+                (
+                    trial_index,
+                    trial,
+                    runs,
+                    launched_run_plan_entries,
+                    pending_gated_runs,
+                    trial_state_path,
+                    collision_stl,
+                )
+            )
 
         except (GeometryExportTimeoutError, GeometryExportFailureError) as e:
             if failed_preview:
@@ -268,7 +332,8 @@ def run_generation(
             trial_state_path = trial_dir / "trial_state.json"
             for r in range(len(RUN_PLAN)):
                 update_trial_run(
-                    trial_state_path, r + 1,
+                    trial_state_path,
+                    r + 1,
                     {"state": "failed", "score": None, "reason": str(e)},
                 )
             print(f"[error] Gen {gen_index:04d} Trial {trial_index:02d}: {e}")
@@ -290,7 +355,8 @@ def run_generation(
             trial_state_path = trial_dir / "trial_state.json"
             for r in range(len(RUN_PLAN)):
                 update_trial_run(
-                    trial_state_path, r + 1,
+                    trial_state_path,
+                    r + 1,
                     {"state": "failed", "score": None, "reason": str(e)},
                 )
             _save_trial_checkpoint(
@@ -308,27 +374,100 @@ def run_generation(
     try:
         finalized: set[int] = set()
         gen_scores = prelaunch_scores.copy()
-        total_runs = sum(len(runs) for _, _, runs in processes)
         bar_width = 28
         start_time = time.time()
         last_print = 0.0
 
         while len(finalized) < len(processes):
-            for trial_index, trial, runs in processes:
+            for (
+                trial_index,
+                trial,
+                runs,
+                launched_run_plan_entries,
+                pending_gated_runs,
+                trial_state_path,
+                collision_stl,
+            ) in processes:
                 if trial_index in finalized:
                     continue
                 if any(p.poll() is None for p, _, _ in runs):
                     continue
 
+                if pending_gated_runs:
+                    should_launch_gated_now = _trial_has_ungated_positive_run(
+                        trial_state_path
+                    )
+
+                    if should_launch_gated_now:
+                        print(
+                            f"[gate] Gen {gen_index:04d} Trial {trial_index:02d} ungated success detected; launching gated tests."
+                        )
+
+                        for run_slot, test_name, test_run_index, test_run_total in list(
+                            pending_gated_runs
+                        ):
+                            test_spec = get_test_spec(test_name)
+                            update_trial_run(
+                                trial_state_path,
+                                run_slot,
+                                {
+                                    "state": "launching",
+                                    "current_frame": 0,
+                                    "total_frames": None,
+                                    "sim_time": 0.0,
+                                    "score": None,
+                                    "reason": "",
+                                },
+                            )
+                            p = launch_sofa(
+                                test_spec.scene_file,
+                                test_name,
+                                test_run_index,
+                                test_run_total,
+                                collision_stl,
+                                trial_state_path,
+                                run_slot,
+                                gen_index,
+                                trial_index,
+                                run_slot,
+                                env,
+                            )
+                            print(
+                                f"[sofa] Gen {gen_index:04d} Trial {trial_index:02d} "
+                                f"Run {run_slot}/{N_REPEATS} [{test_name} {test_run_index}/{test_run_total}]"
+                            )
+                            runs.append((p, trial_state_path, run_slot))
+                            launched_run_plan_entries.append(
+                                (test_name, test_run_index, test_run_total)
+                            )
+                        pending_gated_runs.clear()
+                        continue
+
+                    for run_slot, _test_name, _test_run_index, _test_run_total in list(
+                        pending_gated_runs
+                    ):
+                        update_trial_run(
+                            trial_state_path,
+                            run_slot,
+                            {
+                                "state": "skipped",
+                                "current_frame": 0,
+                                "total_frames": None,
+                                "sim_time": 0.0,
+                                "score": None,
+                                "reason": "gated_test_skipped_until_ungated_success",
+                            },
+                        )
+                    pending_gated_runs.clear()
+
                 finalized.add(trial_index)
-                trial_state_path = gen_dir / f"trial_{trial_index:02d}" / "trial_state.json"
 
                 final_score = _finalize_trial_score(
                     trial_index=trial_index,
                     trial=trial,
                     runs=runs,
                     trial_state_path=trial_state_path,
-                    run_plan_entries=list(RUN_PLAN),
+                    run_plan_entries=launched_run_plan_entries,
                     study=study,
                     test_aggregations=state.test_aggregations,
                     test_max_scores=state.test_max_scores,
@@ -341,12 +480,17 @@ def run_generation(
 
             now = time.time()
             if now - last_print >= 0.5:
+                total_runs = sum(len(runs) for _, _, runs, _, _, _, _ in processes)
                 total_done = sum(
                     sum(1 for p, _, _ in runs if p.poll() is not None)
-                    for _, _, runs in processes
+                    for _, _, runs, _, _, _, _ in processes
                 )
                 pct = (100.0 * total_done / total_runs) if total_runs else 100.0
-                filled = int(bar_width * total_done / total_runs) if total_runs else bar_width
+                filled = (
+                    int(bar_width * total_done / total_runs)
+                    if total_runs
+                    else bar_width
+                )
                 bar = "#" * filled + "-" * (bar_width - filled)
                 elapsed = now - start_time
                 print(
@@ -361,6 +505,7 @@ def run_generation(
                 time.sleep(0.2)
 
         total_elapsed = time.time() - start_time
+        total_runs = sum(len(runs) for _, _, runs, _, _, _, _ in processes)
         print(
             f"\r[progress] Gen {gen_index:04d} SOFA [{'#' * bar_width}] "
             f"{total_runs}/{total_runs} (100.0%)  elapsed {total_elapsed:5.1f}s"

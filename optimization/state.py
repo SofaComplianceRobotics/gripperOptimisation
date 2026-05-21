@@ -24,6 +24,7 @@ class TrialState:
         self.best_score: float = float("-inf")
         self.best_gen: int = 0
         self.all_scores: list[float] = []
+        self.gated_tests_enabled: bool = False
         self._test_max_scores: dict[str, float] = {}
         self._test_aggregations: dict[str, str] = {}
 

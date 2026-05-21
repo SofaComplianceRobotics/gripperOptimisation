@@ -78,6 +78,18 @@ def build_optimise_tab(catalog: dict) -> html.Div:
                         },
                         className="me-2",
                     ),
+                    dcc.Checklist(
+                        id={"type": "gate-check", "test": name},
+                        options=[{"label": " Gate", "value": name}],
+                        value=[],
+                        style={
+                            "display": "inline-flex",
+                            "alignItems": "center",
+                            "minWidth": "90px",
+                            "flexShrink": 0,
+                        },
+                        className="me-2 text-muted",
+                    ),
                     html.Div(
                         dcc.Slider(
                             id={"type": "weight-slider", "test": name},
@@ -108,6 +120,10 @@ def build_optimise_tab(catalog: dict) -> html.Div:
                         [
                             html.P(
                                 "Drag a slider — the others adjust so the total stays at 100%.",
+                                className="text-muted mb-3",
+                            ),
+                            html.P(
+                                "Use Gate to delay a test until one of the ungated tests succeeds.",
                                 className="text-muted mb-3",
                             ),
                             html.Div(test_rows, className="mb-2"),

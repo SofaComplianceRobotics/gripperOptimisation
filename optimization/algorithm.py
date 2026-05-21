@@ -13,6 +13,7 @@ from optimization.optimize_config import (
     CMAES_SIGMA0,
     CMAES_STARTUP_TRIALS,
     HARD_FAIL_SCORE,
+    GATED_TEST_NAMES,
     N_PARALLEL,
     PARAM_SPECS,
 )
@@ -142,15 +143,23 @@ def _finalize_trial_score(
     for _p, _path, run_slot in runs:
         run_data = read_trial_run(trial_state_path, run_slot) or {}
         raw = run_data.get("score")
-        run_scores.append(float(raw) if isinstance(raw, (int, float)) else float("-inf"))
+        run_scores.append(
+            float(raw) if isinstance(raw, (int, float)) else float("-inf")
+        )
 
     if any(s == float("-inf") for s in run_scores):
         final_score = HARD_FAIL_SCORE
         study.tell(trial, final_score)
-        print(f"[score] trial_{trial_index:02d} → {final_score:.2f} (generation failure)")
+        print(
+            f"[score] trial_{trial_index:02d} → {final_score:.2f} (generation failure)"
+        )
         update_trial_summary(
             trial_state_path,
-            {"state": "failed", "final_score": final_score, "outcome": "generation failure"},
+            {
+                "state": "failed",
+                "final_score": final_score,
+                "outcome": "generation failure",
+            },
         )
         return final_score
 
@@ -160,7 +169,11 @@ def _finalize_trial_score(
         study.tell(trial, final_score)
         update_trial_summary(
             trial_state_path,
-            {"state": "failed", "final_score": final_score, "outcome": "no valid run scores"},
+            {
+                "state": "failed",
+                "final_score": final_score,
+                "outcome": "no valid run scores",
+            },
         )
         return final_score
 
@@ -205,16 +218,50 @@ def _finalize_trial_score(
         study.tell(trial, final_score)
         update_trial_summary(
             trial_state_path,
-            {"state": "failed", "final_score": final_score, "outcome": "no valid per-test scores"},
+            {
+                "state": "failed",
+                "final_score": final_score,
+                "outcome": "no valid per-test scores",
+            },
         )
         return final_score
 
-    # Combine per-test scores: Σ min(score_i / max_i, 1.0) * weight_pct_i → out of 100.
+    configured_gated_names = [name for name in test_names if name in GATED_TEST_NAMES]
+    gated_names = [name for name in test_names_in_order if name in GATED_TEST_NAMES]
+    ungated_names = [
+        name for name in test_names_in_order if name not in GATED_TEST_NAMES
+    ]
+    gate_open = not configured_gated_names or any(
+        per_test_details.get(name, {}).get("aggregate_score", 0.0) > 0.0
+        for name in ungated_names
+    )
+    counted_names = test_names_in_order if gate_open else ungated_names
+
+    if not counted_names:
+        counted_names = test_names_in_order
+
+    counted_weight_total = sum(test_weights.get(name, 0.0) for name in counted_names)
+    if counted_weight_total > 0:
+        counted_weights = {
+            name: test_weights.get(name, 0.0) / counted_weight_total
+            for name in counted_names
+        }
+    else:
+        counted_weights = {name: 1.0 / len(counted_names) for name in counted_names}
+
+    counted_scores = [
+        per_test_details[name]["aggregate_score"] for name in counted_names
+    ]
+    counted_max_scores = {
+        name: test_max_scores.get(name, 1.0) for name in counted_names
+    }
+
+    # Combine only the active tests. Gated tests are ignored until the gate opens.
     aggregate_score, _, final_score, median_score = aggregate_trial_scores(
-        per_test_scores,
-        weights=test_weights,
-        names=test_names_in_order,
-        max_scores=test_max_scores,
+        counted_scores,
+        weights=counted_weights,
+        names=counted_names,
+        max_scores=counted_max_scores,
     )
     study.tell(trial, final_score)
 
@@ -227,7 +274,16 @@ def _finalize_trial_score(
         "test_weights": {
             name: round(test_weights.get(name, 0.0) * 100, 1) for name in test_names
         },
-        "test_max_scores": {name: test_max_scores.get(name, 1.0) for name in test_names},
+        "gated_test_names": list(GATED_TEST_NAMES),
+        "gate_open": gate_open,
+        "active_test_names": list(counted_names),
+        "active_test_weights": {
+            name: round(counted_weights.get(name, 0.0) * 100, 1)
+            for name in counted_names
+        },
+        "test_max_scores": {
+            name: test_max_scores.get(name, 1.0) for name in test_names
+        },
         "run_test_names": [name for name, _, _ in run_plan_entries],
         "test_scores": per_test_details,
         "avg_score": round(sum(valid_scores) / len(valid_scores), 4),
@@ -242,6 +298,6 @@ def _finalize_trial_score(
 
     print(
         f"\n[score] trial_{trial_index:02d} → {final_score:.2f}/100 "
-        f"(weighted_normalized_agg: {aggregate_score:.2f})"
+        f"(weighted_normalized_agg: {aggregate_score:.2f}, gate={'open' if gate_open else 'closed'})"
     )
     return final_score

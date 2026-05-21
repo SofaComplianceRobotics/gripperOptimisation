@@ -507,10 +507,12 @@ def create_app() -> Dash:
         Input("opt-stop-btn", "n_clicks"),
         State({"type": "test-check", "test": ALL}, "value"),
         State({"type": "test-check", "test": ALL}, "id"),
+        State({"type": "gate-check", "test": ALL}, "value"),
+        State({"type": "gate-check", "test": ALL}, "id"),
         State("opt-weights-store", "data"),
         prevent_initial_call=True,
     )
-    def handle_optimise(_, __, check_vals, check_ids, store):
+    def handle_optimise(_, __, check_vals, check_ids, gate_vals, gate_ids, store):
         from dash import ctx
 
         if ctx.triggered_id == "opt-stop-btn":
@@ -525,8 +527,18 @@ def create_app() -> Dash:
                 test_names.append(name)
                 test_weights[name] = int(store.get(name, 0))
 
+        gated_names: list[str] = []
+        for checks, cid in zip(gate_vals, gate_ids):
+            if checks:
+                name = cid["test"]
+                if name in test_names:
+                    gated_names.append(name)
+
         if not test_names:
             return "No tests selected."
+
+        if len(gated_names) == len(test_names):
+            return "At least one selected test must stay ungated so the gate can open."
 
         total = sum(test_weights.values())
         if total != 100:
@@ -535,6 +547,8 @@ def create_app() -> Dash:
         env = os.environ.copy()
         env["LAB_SHAPEOPT_TESTS"] = ",".join(test_names)
         env["LAB_SHAPEOPT_TEST_WEIGHTS"] = json.dumps(test_weights)
+        if gated_names:
+            env["LAB_SHAPEOPT_GATED_TESTS"] = ",".join(gated_names)
         return _start_proc("optimize", OPTIMIZE_SCRIPT, env)
 
     @callback(

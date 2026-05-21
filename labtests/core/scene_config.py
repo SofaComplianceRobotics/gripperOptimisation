@@ -103,7 +103,7 @@ class PlaybackConfig:
                 ),
             ),
             friction_coef=float(os.environ.get("SHAPEOPT_FRICTION_COEF", "0.6")),
-            floor_center_y=float(os.environ.get("SHAPEOPT_FLOOR_CENTER_Y", "-240.0")),
+            floor_center_y=float(os.environ.get("SHAPEOPT_FLOOR_CENTER_Y", "-230.0")),
             cube_spawn_clearance=float(
                 os.environ.get("SHAPEOPT_CUBE_SPAWN_CLEARANCE", "10")
             ),
