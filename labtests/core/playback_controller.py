@@ -15,9 +15,10 @@ Usage inside createScene():
         def _on_horizon_complete(self, sim_time):
             ...
 
-Three override hooks:
+Four override hooks:
     _initial_cube_mass()         starting mass         (default: cfg.cube_mass_start)
     _update_overload_mass()      per-frame mass update (default: ramp to cfg.cube_mass_max)
+    _finish_run(score, reason)    stop logic for a completed probe/run
     _on_horizon_complete(t)      end-of-frames action  (default: write_pruned_and_stop)
 """
 
@@ -131,7 +132,16 @@ def make_playback_controller(SofaController):
 
         def _on_horizon_complete(self, sim_time: float) -> None:
             """Handle end-of-frames; default marks the run as pruned."""
-            self.writer.write_pruned_and_stop(f"horizon complete t={sim_time:.2f}s")
+            self._finish_run(None, f"horizon complete t={sim_time:.2f}s", pruned=True)
+
+        def _finish_run(
+            self, score: float | None, reason: str, *, pruned: bool = False
+        ) -> None:
+            """Finalize a completed run; subclasses can override probe semantics."""
+            if pruned or score is None:
+                self.writer.write_pruned_and_stop(reason)
+                return
+            self.writer.write_score_and_stop(score, reason)
 
         # ── Internal helpers ──────────────────────────────────────────────────
 
@@ -351,7 +361,7 @@ def make_playback_controller(SofaController):
                     gripper_min_y = self._get_gripper_collision_min_y()
                     if cube_min_y is not None and gripper_min_y is not None:
                         if gripper_min_y < (cube_min_y - self.cfg.undercube_margin):
-                            self.writer.write_score_and_stop(
+                            self._finish_run(
                                 self.cfg.undercube_penalty,
                                 f"undercube geometry t={sim_time:.2f}s "
                                 f"gripper_min_y={gripper_min_y:.2f} < cube_min_y={cube_min_y:.2f}",
@@ -374,33 +384,32 @@ def make_playback_controller(SofaController):
                     # If the cube goes below the floor plane, it's either a failure (if picked up)
                     # or a prune; we write the score and stop the simulation immediately.
                     if self.was_picked_up:
-                        self.writer.write_pruned_and_stop(
-                            f"cube glitched through floor after pickup t={sim_time:.2f}s"
+                        self._finish_run(
+                            None,
+                            f"cube glitched through floor after pickup t={sim_time:.2f}s",
+                            pruned=True,
                         )
                     else:
-                        score, reason = self._compute_score()
-                        self.writer.write_score_and_stop(
-                            score,
-                            f"cube through floor t={sim_time:.2f}s — {reason}",
+                        self._finish_run(
+                            self.cfg.no_pickup_penalty,
+                            f"cube through floor t={sim_time:.2f}s — no_pickup_penalty={self.cfg.no_pickup_penalty:.2f} hold_time={self.hold_time:.2f}s",
                         )
                     return
 
                 # Rule 2: pickup gate failed
                 if sim_time >= self.cfg.early_stop_sim_time and not self.was_picked_up:
-                    score = self.cfg.no_pickup_penalty
-                    reason = f"no_pickup_penalty={self.cfg.no_pickup_penalty:.2f} hold_time={self.hold_time:.2f}s"
-                    self.writer.write_score_and_stop(
-                        score,
-                        f"pickup gate failed t={sim_time:.2f}s — {reason}",
+                    self._finish_run(
+                        self.cfg.no_pickup_penalty,
+                        f"pickup gate failed t={sim_time:.2f}s — no_pickup_penalty={self.cfg.no_pickup_penalty:.2f} hold_time={self.hold_time:.2f}s",
                     )
                     return
 
                 # Rule 3: dropped after pickup
                 if self.was_picked_up and cube_y < float(self.drop_y_threshold):
                     score, reason = self._compute_score()
-                    self.writer.write_score_and_stop(
+                    self._finish_run(
                         score,
-                        f"dropped t={sim_time:.2f}s phase={self._current_phase()} "
+                        f"probe_success: dropped t={sim_time:.2f}s phase={self._current_phase()} "
                         f"cube_y={cube_y:.2f} < drop_y={float(self.drop_y_threshold):.2f} — {reason}",
                     )
                     return

@@ -50,6 +50,24 @@ def _state_color(state: str) -> str:
     return "#868e96"
 
 
+def _weight_segment_style(segment: dict) -> dict:
+    """Return inline styles for one ladder segment."""
+    state = str(segment.get("state", "unknown")).lower()
+    color = str(segment.get("color") or "#dee2e6")
+    border = str(segment.get("border_color") or color)
+    text = (
+        "#ffffff"
+        if state in {"tested_success", "tested_failure", "pending"}
+        else "#343a40"
+    )
+    return {
+        "background": color,
+        "border": f"1px solid {border}",
+        "color": text,
+        "fontWeight": 700,
+    }
+
+
 def _run_progress_pct(run: dict) -> float:
     """Compute a progress percentage for a run from current/total frames.
 

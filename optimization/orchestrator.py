@@ -17,6 +17,7 @@ import shutil
 import sys
 import threading
 import time
+from statistics import median_low
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -55,6 +56,7 @@ from optimization.optimize_geometry import (
 from optimization.optimize_scoring import (
     cleanup_generation_status_files,
     init_trial_state,
+    read_trial_run,
     read_trial_state,
     update_trial_run,
     write_gen_summary,
@@ -70,6 +72,7 @@ from optimization.optimize_utils import (
 )
 from optimization.algorithm import _finalize_trial_score, build_cmaes_study
 from optimization.state import TrialState, _save_trial_checkpoint
+from labtests.random_cube_pick.carryover import save_seed_indices
 
 
 def generation_progress_fraction(trial_state_paths_by_trial: list[Path]) -> float:
@@ -107,6 +110,9 @@ def generation_progress_fraction(trial_state_paths_by_trial: list[Path]) -> floa
                     "pruned",
                 }:
                     trial_total += 1.0
+                    continue
+
+                if data.get("probe_finished") and data.get("score") is None:
                     continue
 
                 cur = float(data.get("current_frame", 0))
@@ -226,6 +232,67 @@ def run_generation(
             if isinstance(raw, (int, float)) and float(raw) > 0.0:
                 return True
         return False
+
+    def _compute_random_cube_pick_seed_indices() -> dict[int, int]:
+        # determine which run slots in the RUN_PLAN correspond to random_cube_pick
+        slots_for_test: list[int] = [
+            (i + 1)
+            for i, (test_name, _, _) in enumerate(RUN_PLAN)
+            if str(test_name) == "random_cube_pick"
+        ]
+        # initialize accumulator lists for each relevant slot
+        slot_values: dict[int, list[int]] = {slot: [] for slot in slots_for_test}
+        for trial_state_path in trial_state_paths_by_trial:
+            ladder_state_path = trial_state_path.with_name(
+                "random_cube_pick_weight_search.json"
+            )
+            seen_slots: set[int] = set()
+            try:
+                ladder_state = read_trial_state(ladder_state_path)
+            except Exception:
+                ladder_state = {}
+
+            slots = (
+                ladder_state.get("slots", {}) if isinstance(ladder_state, dict) else {}
+            )
+            if isinstance(slots, dict):
+                for slot_key, slot_state in slots.items():
+                    try:
+                        slot = int(slot_key)
+                    except Exception:
+                        continue
+                    if slot not in slot_values or not isinstance(slot_state, dict):
+                        continue
+                    raw_index = slot_state.get("last_index")
+                    if isinstance(raw_index, int):
+                        slot_values[slot].append(int(raw_index))
+                        seen_slots.add(slot)
+
+            trial_state = read_trial_state(trial_state_path)
+            runs = trial_state.get("runs", []) if isinstance(trial_state, dict) else []
+            if not isinstance(runs, list):
+                continue
+            for run in runs:
+                if not isinstance(run, dict):
+                    continue
+                if str(run.get("test_name", "")) != "random_cube_pick":
+                    continue
+                run_slot = int(run.get("run", 0) or 0)
+                if run_slot not in slot_values or run_slot in seen_slots:
+                    continue
+                raw_index = run.get("weight_selected_index")
+                if not isinstance(raw_index, int):
+                    raw_index = run.get("weight_index")
+                if isinstance(raw_index, int):
+                    slot_values[run_slot].append(int(raw_index))
+
+        seeds: dict[int, int] = {}
+        for slot, values in slot_values.items():
+            if values:
+                seeds[slot] = int(median_low(sorted(values)))
+        return seeds
+
+    pass
 
     # --- Geometry generation and SOFA launch loop ---
     for i, trial in enumerate(trials):
@@ -378,6 +445,15 @@ def run_generation(
         start_time = time.time()
         last_print = 0.0
 
+        terminal_run_states = {
+            "done",
+            "failed",
+            "error",
+            "pruned",
+            "skipped",
+            "cancelled",
+        }
+
         while len(finalized) < len(processes):
             for (
                 trial_index,
@@ -390,7 +466,57 @@ def run_generation(
             ) in processes:
                 if trial_index in finalized:
                     continue
-                if any(p.poll() is None for p, _, _ in runs):
+
+                trial_has_active_run = False
+                for run_idx, (proc, _path, run_slot) in enumerate(list(runs)):
+                    if proc.poll() is None:
+                        trial_has_active_run = True
+                        continue
+
+                    run_data = read_trial_run(trial_state_path, run_slot) or {}
+                    run_state = str(run_data.get("state", "")).lower()
+                    test_name = str(run_data.get("test_name", ""))
+
+                    if (
+                        test_name == "random_cube_pick"
+                        and run_state not in terminal_run_states
+                    ):
+                        test_run_index = int(run_data.get("test_run_index", run_slot))
+                        test_run_total = int(run_data.get("test_run_total", 3))
+                        test_spec = get_test_spec(test_name)
+                        update_trial_run(
+                            trial_state_path,
+                            run_slot,
+                            {
+                                "state": "launching",
+                                "current_frame": 0,
+                                "total_frames": None,
+                                "sim_time": 0.0,
+                                "score": None,
+                                "reason": "probe complete, relaunching ladder probe",
+                            },
+                        )
+                        proc = launch_sofa(
+                            test_spec.scene_file,
+                            test_name,
+                            test_run_index,
+                            test_run_total,
+                            collision_stl,
+                            trial_state_path,
+                            run_slot,
+                            gen_index,
+                            trial_index,
+                            run_slot,
+                            env,
+                        )
+                        runs[run_idx] = (proc, trial_state_path, run_slot)
+                        trial_has_active_run = True
+                        print(
+                            f"[sofa] Gen {gen_index:04d} Trial {trial_index:02d} "
+                            f"Run {run_slot}/{N_REPEATS} [{test_name} {test_run_index}/{test_run_total}] relaunch"
+                        )
+
+                if trial_has_active_run:
                     continue
 
                 if pending_gated_runs:
@@ -511,6 +637,9 @@ def run_generation(
             f"{total_runs}/{total_runs} (100.0%)  elapsed {total_elapsed:5.1f}s"
         )
 
+        # compute and persist seed indices for next generation
+        seeds = _compute_random_cube_pick_seed_indices()
+        save_seed_indices(LAB_ROOT, seeds)
         write_gen_summary(gen_dir, gen_index, gen_scores)
         cleanup_generation_status_files(gen_dir)
 

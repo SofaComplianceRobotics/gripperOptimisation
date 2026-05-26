@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Cesar\\\\emio-labs\\\\v25.12.00\\\\assets\\\\labs\\\\lab_shapeOPT\" -Directory)",
+      "Bash(Select-Object Name)"
+    ]
+  }
+}
