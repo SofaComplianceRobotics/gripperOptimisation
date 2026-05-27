@@ -47,9 +47,6 @@ def _bootstrap_lab_site_packages() -> None:
         sys.path.insert(0, str(LAB_SITE_PACKAGES))
 
 
-_bootstrap_lab_site_packages()
-
-
 def _has_required_runtime_packages() -> bool:
     """Return True if the required runtime packages (e.g. CadQuery) are importable.
 
@@ -60,7 +57,7 @@ def _has_required_runtime_packages() -> bool:
         import cadquery  # noqa: F401
 
         return True
-    except ModuleNotFoundError:
+    except (ImportError, ModuleNotFoundError):
         return False
 
 
@@ -100,6 +97,9 @@ def ensure_cadquery_runtime() -> None:
     Raises:
         RuntimeError: If CadQuery cannot be used after the auto-install attempt.
     """
+    if _has_required_runtime_packages():
+        return
+    _bootstrap_lab_site_packages()
     if _has_required_runtime_packages():
         return
     if _install_lab_dependencies_here() and _has_required_runtime_packages():
@@ -209,7 +209,7 @@ def params_from_config(cfg: dict, base, fine: bool = False):
             kwargs[_f.name] = float(_raw)
 
     if fine:
-        kwargs["mesh_size_max_stl"] = 2.0
+        kwargs["mesh_size_max_stl"] = 2
         kwargs["mesh_size_min_stl"] = 0.8
         kwargs["export_stem"] = "new_gripper_print"
         kwargs["ring_ramp_samples"] = max(
@@ -218,6 +218,6 @@ def params_from_config(cfg: dict, base, fine: bool = False):
         current_samples = kwargs.get(
             "pincer_profile_samples", base.pincer_profile_samples
         )
-        kwargs["pincer_profile_samples"] = current_samples * 10
+        kwargs["pincer_profile_samples"] = current_samples * 2
 
     return replace(base, **kwargs)

@@ -224,3 +224,5 @@ runtime/trials/
 runtime/gripper_opt.db
 runtime/exports/
 notion_pages/
+runtime/random_cube_pick_seed_weights.json
+runtime/random_cube_pick_weight_search.json
