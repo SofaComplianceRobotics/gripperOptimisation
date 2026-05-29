@@ -42,7 +42,7 @@ class ModelParams:
 
     # Ring
     cylinder_radius: float = field(
-        default=26.5, metadata={"opt": {"type": "float", "min": 24, "max": 28}}
+        default=26.5, metadata={"opt": {"type": "float", "min": 26, "max": 28}}
     )
     cylinder_hole_thickness: float = field(
         default=3.0, metadata={"opt": {"type": "float", "min": 1, "max": 5}}
@@ -80,7 +80,7 @@ class ModelParams:
     # Assembly
     leg_attachement_inward_offset: float = 3.0
     leg_attachement_tilt_angle: float = field(
-        default=-15.0, metadata={"opt": {"type": "float", "min": -30.0, "max": 30.0}}
+        default=-15.0, metadata={"opt": {"type": "float", "min": 0, "max": 30.0}}
     )
     leg_attachement_lift: float = 2.5
     leg_attachement_drop_overlap: float = 0.15
@@ -193,7 +193,7 @@ class ModelParams:
     mesh_collision_size: float = field(
         default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
     )
-    mesh_collision_tail_fraction: float = 1.0 / 2.0
+    mesh_collision_tail_fraction: float = 1.0
     mesh_angle_smooth: float = field(
         default=20.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
     )
