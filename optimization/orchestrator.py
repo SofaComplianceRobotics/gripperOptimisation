@@ -41,6 +41,7 @@ from optimization.optimize_config import (
     RUN_PLAN,
     SELECTED_TEST_NAMES,
     SELECTED_TEST_WEIGHTS,
+    SOFA_REALTIME_TIMEOUT,
     TRIALS_DIR,
     build_env,
 )
@@ -59,6 +60,7 @@ from optimization.optimize_scoring import (
     read_trial_run,
     read_trial_state,
     update_trial_run,
+    update_trial_summary,
     write_gen_summary,
     write_progress,
 )
@@ -179,7 +181,7 @@ def run_generation(
     gen_dir.mkdir(parents=True, exist_ok=True)
 
     # (trial_index, trial, launched_runs, launched_run_plan_entries,
-    #  pending_gated_runs, trial_state_path, collision_stl)
+    #  pending_gated_runs, trial_state_path, collision_stl, launch_times_by_slot)
     processes: list[tuple] = []
     collision_stls_by_trial: dict[int, Path] = {}
     trial_state_paths_by_trial: list[Path] = []
@@ -292,6 +294,45 @@ def run_generation(
                 seeds[slot] = int(median_low(sorted(values)))
         return seeds
 
+    def _prune_trial(
+        trial_state_path: Path,
+        trial_index: int,
+        runs: list[tuple],
+        reason: str,
+    ) -> None:
+        """Mark the whole gripper as pruned and stop any active SOFA runs."""
+        for proc, _path, _run_slot in runs:
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
+        for run_slot in range(1, len(RUN_PLAN) + 1):
+            update_trial_run(
+                trial_state_path,
+                run_slot,
+                {
+                    "state": "pruned",
+                    "current_frame": 0,
+                    "total_frames": None,
+                    "sim_time": 0.0,
+                    "score": None,
+                    "reason": reason,
+                },
+            )
+
+        update_trial_summary(
+            trial_state_path,
+            {
+                "state": "pruned",
+                "outcome": reason,
+                "final_score": None,
+            },
+        )
+
+        print(f"[prune] Gen {gen_index:04d} Trial {trial_index:02d}: {reason}")
+
     pass
 
     # --- Geometry generation and SOFA launch loop ---
@@ -316,6 +357,7 @@ def run_generation(
             runs = []
             launched_run_plan_entries: list[tuple[str, int, int]] = []
             pending_gated_runs: list[tuple[int, str, int, int]] = []
+            launch_times_by_slot: dict[int, float] = {}
             for r, (test_name, test_run_index, test_run_total) in enumerate(RUN_PLAN):
                 if test_name in GATED_TEST_NAMES:
                     pending_gated_runs.append(
@@ -361,6 +403,7 @@ def run_generation(
                     r + 1,
                     env,
                 )
+                launch_times_by_slot[r + 1] = time.time()
                 print(
                     f"[sofa] Gen {gen_index:04d} Trial {trial_index:02d} "
                     f"Run {r+1}/{N_REPEATS} [{test_name} {test_run_index}/{test_run_total}]"
@@ -380,6 +423,7 @@ def run_generation(
                     pending_gated_runs,
                     trial_state_path,
                     collision_stl,
+                    launch_times_by_slot,
                 )
             )
 
@@ -463,13 +507,29 @@ def run_generation(
                 pending_gated_runs,
                 trial_state_path,
                 collision_stl,
+                launch_times_by_slot,
             ) in processes:
                 if trial_index in finalized:
                     continue
 
                 trial_has_active_run = False
+                now = time.time()
                 for run_idx, (proc, _path, run_slot) in enumerate(list(runs)):
                     if proc.poll() is None:
+                        launch_ts = launch_times_by_slot.get(run_slot)
+                        if (
+                            launch_ts is not None
+                            and now - launch_ts > SOFA_REALTIME_TIMEOUT
+                        ):
+                            _prune_trial(
+                                trial_state_path,
+                                trial_index,
+                                runs,
+                                f"SOFA wall-clock timeout after {SOFA_REALTIME_TIMEOUT:.0f}s",
+                            )
+                            trial_has_active_run = True
+                            break
+
                         trial_has_active_run = True
                         continue
 
@@ -509,6 +569,7 @@ def run_generation(
                             run_slot,
                             env,
                         )
+                        launch_times_by_slot[run_slot] = time.time()
                         runs[run_idx] = (proc, trial_state_path, run_slot)
                         trial_has_active_run = True
                         print(
@@ -517,6 +578,27 @@ def run_generation(
                         )
 
                 if trial_has_active_run:
+                    continue
+
+                trial_state = read_trial_state(trial_state_path)
+                if str(trial_state.get("state", "")).lower() == "pruned":
+                    finalized.add(trial_index)
+
+                    final_score = _finalize_trial_score(
+                        trial_index=trial_index,
+                        trial=trial,
+                        runs=runs,
+                        trial_state_path=trial_state_path,
+                        run_plan_entries=launched_run_plan_entries,
+                        study=study,
+                        test_aggregations=state.test_aggregations,
+                        test_max_scores=state.test_max_scores,
+                        test_weights=SELECTED_TEST_WEIGHTS,
+                        test_names=list(SELECTED_TEST_NAMES),
+                        gen_index=gen_index,
+                    )
+                    gen_scores.append(final_score)
+                    state.record_score(final_score)
                     continue
 
                 if pending_gated_runs:
@@ -563,6 +645,7 @@ def run_generation(
                                 f"Run {run_slot}/{N_REPEATS} [{test_name} {test_run_index}/{test_run_total}]"
                             )
                             runs.append((p, trial_state_path, run_slot))
+                            launch_times_by_slot[run_slot] = time.time()
                             launched_run_plan_entries.append(
                                 (test_name, test_run_index, test_run_total)
                             )
@@ -606,10 +689,10 @@ def run_generation(
 
             now = time.time()
             if now - last_print >= 0.5:
-                total_runs = sum(len(runs) for _, _, runs, _, _, _, _ in processes)
+                total_runs = sum(len(runs) for _, _, runs, _, _, _, _, _ in processes)
                 total_done = sum(
                     sum(1 for p, _, _ in runs if p.poll() is not None)
-                    for _, _, runs, _, _, _, _ in processes
+                    for _, _, runs, _, _, _, _, _ in processes
                 )
                 pct = (100.0 * total_done / total_runs) if total_runs else 100.0
                 filled = (
@@ -631,7 +714,7 @@ def run_generation(
                 time.sleep(0.2)
 
         total_elapsed = time.time() - start_time
-        total_runs = sum(len(runs) for _, _, runs, _, _, _, _ in processes)
+        total_runs = sum(len(runs) for _, _, runs, _, _, _, _, _ in processes)
         print(
             f"\r[progress] Gen {gen_index:04d} SOFA [{'#' * bar_width}] "
             f"{total_runs}/{total_runs} (100.0%)  elapsed {total_elapsed:5.1f}s"

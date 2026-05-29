@@ -139,6 +139,26 @@ def _finalize_trial_score(
     Returns:
         Final trial score out of 100, or HARD_FAIL_SCORE on any failure.
     """
+    trial_state = read_trial_state(trial_state_path)
+    if not isinstance(trial_state, dict):
+        trial_state = {}
+
+    if str(trial_state.get("state", "")).lower() == "pruned" or any(
+        isinstance(run, dict) and str(run.get("state", "")).lower() == "pruned"
+        for run in trial_state.get("runs", [])
+    ):
+        study.tell(trial, state=optuna.trial.TrialState.PRUNED)
+        update_trial_summary(
+            trial_state_path,
+            {
+                "state": "pruned",
+                "final_score": None,
+                "outcome": trial_state.get("outcome", "pruned"),
+            },
+        )
+        print(f"[score] trial_{trial_index:02d} → pruned (generation pruned)")
+        return float("-inf")
+
     run_scores = []
     for _p, _path, run_slot in runs:
         run_data = read_trial_run(trial_state_path, run_slot) or {}

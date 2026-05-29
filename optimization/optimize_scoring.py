@@ -272,6 +272,8 @@ def write_progress(
     trials_done_in_gen = max(0.0, min(float(N_PARALLEL), float(trials_done_in_gen)))
     total_done = (gen_index - 1) * N_PARALLEL + trials_done_in_gen
     total = N_GENERATIONS * N_PARALLEL
+    valid_scores = [s for s in all_scores if s not in (float("-inf"), None)]
+
     payload = {
         "gen_current": gen_index,
         "gen_total": N_GENERATIONS,
@@ -295,9 +297,9 @@ def write_progress(
         "trial_current": total_done,
         "trial_total": total,
         "pct": round(100 * total_done / total, 1),
-        "best_score": round(max(all_scores), 4) if all_scores else None,
+        "best_score": round(max(valid_scores), 4) if valid_scores else None,
         "avg_score": (
-            round(sum(all_scores) / len(all_scores), 4) if all_scores else None
+            round(sum(valid_scores) / len(valid_scores), 4) if valid_scores else None
         ),
         "started_at": 0.0,  # Will be overridden by caller in main loop
         "updated_at": time.time(),

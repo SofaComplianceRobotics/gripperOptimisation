@@ -228,6 +228,9 @@ DROP_PENALTY = (
 )
 
 OVERLOAD_MAX_TIME = 5.0  # seconds of post-recording overload simulation
+SOFA_REALTIME_TIMEOUT = float(
+    os.environ.get("SOFA_REALTIME_TIMEOUT", "200")
+)  # wall-clock seconds before any SOFA run prunes the whole gripper
 CUBE_MASS_START = 0.005  # kg, should match scene cube initial mass
 CUBE_MASS_MAX = 1.0  # kg reached by the end of the overload ramp
 CUBE_MASS_RAMP_TIME = 8.0  # seconds to ramp from start mass to max mass
