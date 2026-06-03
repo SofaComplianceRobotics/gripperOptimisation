@@ -17,12 +17,12 @@ from optimization.optimize_config import (
     N_PARALLEL,
     PARAM_SPECS,
 )
-from optimization.optimize_scoring import (
-    aggregate_trial_scores,
+from optimization._trial_state import (
     read_trial_run,
     read_trial_state,
     update_trial_summary,
 )
+from optimization.optimize_scoring import aggregate_trial_scores
 
 
 def build_cmaes_study(db_path: Path) -> optuna.Study:

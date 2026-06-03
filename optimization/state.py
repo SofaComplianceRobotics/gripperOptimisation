@@ -7,7 +7,7 @@ _SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from optimization.optimize_scoring import (
+from optimization._trial_state import (
     read_trial_run,
     read_trial_state,
     update_trial_summary,

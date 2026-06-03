@@ -10,7 +10,8 @@ import threading
 from pathlib import Path
 
 from optimization.optimize_config import GEN_PROGRESS_POLL_INTERVAL, N_PARALLEL
-from optimization.optimize_scoring import read_trial_state, write_progress
+from optimization._trial_state import read_trial_state
+from optimization.optimize_scoring import write_progress
 
 
 def generation_progress_fraction(trial_state_paths_by_trial: list[Path]) -> float:

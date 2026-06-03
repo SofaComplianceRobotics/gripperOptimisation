@@ -10,7 +10,7 @@ from pathlib import Path
 from statistics import median_low
 
 from optimization.optimize_config import GATED_TEST_NAMES, RUN_PLAN
-from optimization.optimize_scoring import (
+from optimization._trial_state import (
     read_trial_state,
     update_trial_run,
     update_trial_summary,

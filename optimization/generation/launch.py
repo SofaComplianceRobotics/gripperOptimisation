@@ -32,7 +32,7 @@ from optimization.optimize_geometry import (
     render_stl_preview,
     resolve_failed_preview_image,
 )
-from optimization.optimize_scoring import update_trial_run
+from optimization._trial_state import update_trial_run
 from optimization.optimize_sofa import launch_sofa, wait_for_geometry_slot
 from optimization.state import TrialState, _save_trial_checkpoint
 

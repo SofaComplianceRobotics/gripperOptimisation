@@ -20,7 +20,7 @@ from optimization.optimize_config import (
     SELECTED_TEST_WEIGHTS,
     TRIALS_DIR,
 )
-from optimization.optimize_scoring import init_trial_state
+from optimization._trial_state import init_trial_state
 from optimization.state import TrialState
 
 

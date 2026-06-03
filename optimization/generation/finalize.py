@@ -28,11 +28,13 @@ from optimization.optimize_config import (
     SELECTED_TEST_WEIGHTS,
     SOFA_REALTIME_TIMEOUT,
 )
-from optimization.optimize_scoring import (
-    cleanup_generation_status_files,
+from optimization._trial_state import (
     read_trial_run,
     read_trial_state,
     update_trial_run,
+)
+from optimization.optimize_scoring import (
+    cleanup_generation_status_files,
     write_gen_summary,
 )
 from optimization.optimize_utils import cleanup_collision_stls
