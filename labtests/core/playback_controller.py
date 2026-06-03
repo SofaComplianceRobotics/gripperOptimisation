@@ -16,31 +16,42 @@ Usage inside createScene():
             ...
 
 Four override hooks:
-    _initial_cube_mass()         starting mass         (default: cfg.cube_mass_start)
-    _update_overload_mass()      per-frame mass update (default: ramp to cfg.cube_mass_max)
-    _finish_run(score, reason)    stop logic for a completed probe/run
-    _on_horizon_complete(t)      end-of-frames action  (default: write_pruned_and_stop)
+    _initial_cube_mass()            starting mass          (default: cfg.cube_mass_start)
+    _update_overload_mass()         per-frame mass update  (default: ramp to cfg.cube_mass_max)
+    _finish_run(score, reason)      stop logic             (default: write score or pruned)
+    _on_horizon_complete(t)         end-of-frames action   (default: write_pruned_and_stop)
 """
 
 from __future__ import annotations
 
-import os
-
 from core.timing_config import DT_CONTACT, DT_DIRECT
+
+from labtests.core._loop_phases import (
+    apply_scoring_rules,
+    check_spawn_contact_window,
+    current_phase,
+    ensure_drop_threshold_initialized,
+    handle_cube_spawn,
+    playback_index_at,
+    timeline_frame_at,
+)
+from labtests.core._sim_query import get_cube_y, set_cube_mass
 
 
 def make_playback_controller(SofaController):
     """Return BasePlaybackController bound to a live Sofa.Core.Controller class.
 
-    Call once inside createScene() after `import Sofa.Core`, passing
-    Sofa.Core.Controller as the argument.
+    ``Sofa.Core.Controller`` only exists inside an active SOFA session, so the
+    class is created here at call time rather than at module import time.
+
+    Args:
+        SofaController: ``Sofa.Core.Controller`` class from the active session.
+
+    Returns:
+        BasePlaybackController class ready to be instantiated in createScene().
     """
 
     class BasePlaybackController(SofaController):
-        # Main controller for motor-playback tests.
-        # Handles: deterministic cube spawn, scoring logic (pickup/drop/floor),
-        # and replay of recorded motor positions. The hooks above
-        # allow specific tests to override behavior.
         def __init__(
             self,
             *args,
@@ -69,6 +80,8 @@ def make_playback_controller(SofaController):
             self.overload_frames = max(0, int(cfg.overload_max_time / DT_DIRECT))
             self.total_frames = self.recorded_frames + self.overload_frames
             self.total_duration = self.recorded_duration + cfg.overload_max_time
+            # Start at contact timestep so the gripper settles before the cube appears;
+            # switched back to DT_DIRECT after the post-spawn slow frames elapse
             rootnode.dt.value = DT_CONTACT
             self.peak_y = float("-inf")
             self.was_picked_up = False
@@ -79,20 +92,15 @@ def make_playback_controller(SofaController):
                 if playback.motor_positions
                 else [0.0] * playback.num_motors
             )
-            # Runtime state notes:
-            # - `finished`: run finished (writer.finished controls the actual stop)
-            # - `frame`, `sim_time`: time progression
-            # - `spawn_cube_y`, `pickup_y_threshold`, `drop_y_threshold`: initialized at spawn
-            # These values drive the scoring rules below.
-
-            self.cube_gripper_contact_listener = None
+            # spawn_cube_y, pickup_y_threshold, drop_y_threshold are set on the
+            # first frame after the cube teleports in
             self.spawn_cube_y = None
             self.drop_y_threshold = None
             self.pickup_y_threshold = None
             self.cube_has_spawned = False
             self.spawn_contact_check_frames = 0
             self._post_spawn_slow_frames = 0
-            self._set_cube_mass(self._initial_cube_mass())
+            set_cube_mass(rootnode, self._initial_cube_mass())
             writer.write_status(
                 {
                     "state": "running",
@@ -104,20 +112,25 @@ def make_playback_controller(SofaController):
             )
             print(
                 f"[Playback] {self.recorded_frames} recorded + {self.overload_frames} overload frames\n"
-                f"[Scoring] hold-time after {cfg.early_stop_sim_time:.2f}s, pickup threshold: {cfg.pickup_y_threshold}"
+                f"[Scoring] hold-time after {cfg.early_stop_sim_time:.2f}s, "
+                f"pickup threshold: {cfg.pickup_y_threshold}"
             )
 
         # ── Override hooks ────────────────────────────────────────────────────
 
         def _initial_cube_mass(self) -> float:
-            """Return the cube mass for the first frame of the simulation."""
+            """Return the cube mass to use on the first simulation frame.
+
+            Returns:
+                Starting cube mass from config.
+            """
             return self.cfg.cube_mass_start
 
         def _update_overload_mass(self) -> None:
             """Ramp cube mass from start to max during the overload phase."""
             loop_sim_time = getattr(self, "_loop_sim_time", self.sim_time)
             if loop_sim_time < self.recorded_duration:
-                self._set_cube_mass(self.cfg.cube_mass_start)
+                set_cube_mass(self.rootnode, self.cfg.cube_mass_start)
                 return
             overload_t = max(0.0, loop_sim_time - self.recorded_duration)
             alpha = (
@@ -125,165 +138,44 @@ def make_playback_controller(SofaController):
                 if self.cfg.cube_mass_ramp_time <= 0
                 else max(0.0, min(1.0, overload_t / self.cfg.cube_mass_ramp_time))
             )
-            self._set_cube_mass(
+            set_cube_mass(
+                self.rootnode,
                 self.cfg.cube_mass_start
-                + (self.cfg.cube_mass_max - self.cfg.cube_mass_start) * alpha
+                + (self.cfg.cube_mass_max - self.cfg.cube_mass_start) * alpha,
             )
 
         def _on_horizon_complete(self, sim_time: float) -> None:
-            """Handle end-of-frames; default marks the run as pruned."""
+            """Handle end-of-frames; default writes a pruned result.
+
+            Args:
+                sim_time: Simulation time when the horizon was reached.
+            """
             self._finish_run(None, f"horizon complete t={sim_time:.2f}s", pruned=True)
 
         def _finish_run(
             self, score: float | None, reason: str, *, pruned: bool = False
         ) -> None:
-            """Finalize a completed run; subclasses can override probe semantics."""
+            """Finalize the run by writing either a score or a pruned marker.
+
+            Args:
+                score: Final score, or None to force a pruned result.
+                reason: Human-readable stop reason written to trial_state.json.
+                pruned: If True, write pruned state regardless of score.
+            """
             if pruned or score is None:
                 self.writer.write_pruned_and_stop(reason)
                 return
             self.writer.write_score_and_stop(score, reason)
 
-        # ── Internal helpers ──────────────────────────────────────────────────
-
-        def _get_cube_y(self):
-            """Return the current Y position of the cube centre of mass."""
-            return float(
-                self.rootnode.Simulation.Cube.getMechanicalState().position.value[0][1]
-            )
-
-        # Keep Y-related helpers isolated so scoring can switch between the
-        # cube center of mass and collision-vertex checks when needed.
-
-        def _set_cube_mass(self, value: float) -> None:
-            """Set the cube's total mass, clamped to a minimum to avoid physics instability."""
-            mass = max(0.0001, float(value))
-            try:
-                self.rootnode.Simulation.Cube.cube_mass.totalMass.value = mass
-            except Exception:
-                pass
-
-        def _get_cube_collision_min_y(self) -> float | None:
-            """Return the minimum Y of all cube collision mesh points, or None on error."""
-            try:
-                points = (
-                    self.rootnode.Simulation.Cube.collision.getMechanicalState().position.value
-                )
-                ys = [float(p[1]) for p in points if len(p) >= 2]
-                return min(ys) if ys else None
-            except Exception:
-                return None
-
-        def _get_gripper_collision_min_y(self) -> float | None:
-            """Return the minimum Y of all gripper collision mesh points, or None on error."""
-            try:
-                points = self.gripper_collision.getMechanicalState().position.value
-                ys = [float(p[1]) for p in points if len(p) >= 2]
-                return min(ys) if ys else None
-            except Exception:
-                return None
-
-        def _current_phase(self) -> str:
-            """Return 'recorded' during motor playback or 'overload' after it ends."""
-            return "recorded" if self.sim_time < self.recorded_duration else "overload"
-
-        def _timeline_frame_at(self, sim_time: float) -> int:
-            """Map simulation time to the DT_DIRECT timeline frame index."""
-            if sim_time <= 0.0:
-                return 0
-            return min(self.total_frames, int(sim_time / DT_DIRECT))
-
-        def _playback_index_at(self, sim_time: float) -> int:
-            """Return the recorded playback frame matching the current simulation time."""
-            if self.recorded_frames <= 0:
-                return 0
-            return min(self.recorded_frames - 1, int(sim_time / DT_DIRECT))
-
-        def _get_cube_gripper_contact_count(self) -> int:
-            """Return the number of active contact points between cube and gripper."""
-            if self.cube_gripper_contact_listener is None:
-                try:
-                    self.cube_gripper_contact_listener = (
-                        self.rootnode.Simulation.getObject("cubeGripperContactListener")
-                    )
-                except Exception:
-                    pass
-            if self.cube_gripper_contact_listener is None:
-                return 0
-            try:
-                return int(self.cube_gripper_contact_listener.getNumberOfContacts())
-            except Exception:
-                return 0
-
-        def _has_cube_gripper_contact(self) -> bool:
-            """Return True if any contact exists between the cube and gripper."""
-            return self._get_cube_gripper_contact_count() > 0
-
-        def _collision_aabb(self, collision_node):
-            """Return the axis-aligned bounding box of a collision node as (xmin, xmax, ymin, ymax, zmin, zmax)."""
-            try:
-                points = collision_node.getMechanicalState().position.value
-            except Exception:
-                return None
-            if not len(points):
-                return None
-            xs = [float(p[0]) for p in points if len(p) >= 3]
-            ys = [float(p[1]) for p in points if len(p) >= 3]
-            zs = [float(p[2]) for p in points if len(p) >= 3]
-            if not xs:
-                return None
-            return min(xs), max(xs), min(ys), max(ys), min(zs), max(zs)
-
-        def _spawn_overlap_detected(self) -> bool:
-            """Return True if the cube overlaps the gripper at spawn time."""
-            if self._get_cube_gripper_contact_count() > 0:
-                return True
-            cube_aabb = self._collision_aabb(self.rootnode.Simulation.Cube.collision)
-            gripper_aabb = self._collision_aabb(self.gripper_collision)
-            if cube_aabb is None or gripper_aabb is None:
-                return False
-            cx0, cx1, cy0, cy1, cz0, cz1 = cube_aabb
-            gx0, gx1, gy0, gy1, gz0, gz1 = gripper_aabb
-            return (
-                cx0 <= gx1
-                and cx1 >= gx0
-                and cy0 <= gy1
-                and cy1 >= gy0
-                and cz0 <= gz1
-                and cz1 >= gz0
-            )
-
-        def _ensure_drop_threshold_initialized(self, cube_y: float) -> None:
-            """Set spawn_y and derived pick/drop thresholds on the first spawn frame."""
-            if self.spawn_cube_y is not None:
-                return
-            self.spawn_cube_y = float(cube_y)
-            self.drop_y_threshold = self.spawn_cube_y - self.cfg.drop_below_spawn_tol
-            self.pickup_y_threshold = (
-                self.spawn_cube_y + self.cfg.pickup_above_spawn_tol
-            )
-            print(
-                f"[Scoring] spawn_y={self.spawn_cube_y:.2f} | "
-                f"pickup>={self.pickup_y_threshold:.2f} | "
-                f"drop<{self.drop_y_threshold:.2f}"
-            )
-
-        def _check_spawn_contact_window(self, sim_time: float) -> None:
-            """Penalise a run if the cube contacts the gripper within the spawn window."""
-            if self.spawn_contact_check_frames <= 0 or self.writer.finished:
-                return
-            if self._spawn_overlap_detected():
-                self.writer.write_score_and_stop(
-                    self.cfg.early_contact_penalty,
-                    f"cube touched gripper at spawn window t={sim_time:.2f}s",
-                )
-                return
-            self.spawn_contact_check_frames -= 1
+        # ─────────────────────────────────────────────────────────────────────
 
         def _compute_score(self) -> tuple[float, str]:
-            """Return (score, reason_string) for writing to trial_state.json."""
-            return self.hold_time, f"hold_time={self.hold_time:.2f}s"
+            """Return the final (score, reason) for this run.
 
-        # ── Main loop ─────────────────────────────────────────────────────────
+            Returns:
+                Tuple of (hold_time, reason_string).
+            """
+            return self.hold_time, f"hold_time={self.hold_time:.2f}s"
 
         def onAnimateBeginEvent(self, event):
             """Run scoring logic and motor replay at the start of each simulation step."""
@@ -293,45 +185,13 @@ def make_playback_controller(SofaController):
             sim_time = self.sim_time
             step_dt = float(self.rootnode.dt.value)
             self._loop_sim_time = sim_time
-            self.frame = self._timeline_frame_at(sim_time)
+            self.frame = timeline_frame_at(sim_time, self.total_frames)
             self._update_overload_mass()
 
-            # ── Cube spawn teleport ────────────────────────────────────────────
-            # The cube is teleported at `cube_spawn_time` to ensure a reproducible
-            # initial state (position + zero velocity). Before spawn it is kept out
-            # of the workspace via `cube_prespawn_offset`.
-            cube_y = None
-            if not self.cube_has_spawned and sim_time >= self.cfg.cube_spawn_time:
-                cube_mo = self.rootnode.Simulation.Cube.getMechanicalState()
-                cube_mo.position.value = [
-                    [0.0, self.cube_handles.cube_spawn_y, 0.0, 0.0, 0.0, 0.0, 1.0]
-                ]
-                cube_mo.velocity.value = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
-                self.cube_has_spawned = True
-                self.spawn_contact_check_frames = 2
-                self._post_spawn_slow_frames = 2
-                cube_y = float(self.cube_handles.cube_spawn_y)
-                self._ensure_drop_threshold_initialized(cube_y)
-                print(f"[Spawn] cube spawned at t={sim_time:.2f}s")
-                self._check_spawn_contact_window(sim_time)
-            elif not self.cube_has_spawned:
-                cube_mo = self.rootnode.Simulation.Cube.getMechanicalState()
-                cube_mo.position.value = [
-                    [
-                        0.0,
-                        self.cube_handles.cube_spawn_y + self.cfg.cube_prespawn_offset,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0,
-                    ]
-                ]
-                cube_mo.velocity.value = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
-
+            cube_y = handle_cube_spawn(self, sim_time)
             if self.cube_has_spawned and cube_y is None:
-                cube_y = self._get_cube_y()
-                self._ensure_drop_threshold_initialized(cube_y)
+                cube_y = get_cube_y(self.rootnode)
+                ensure_drop_threshold_initialized(self, cube_y)
 
             self.writer.write_status(
                 {
@@ -340,90 +200,22 @@ def make_playback_controller(SofaController):
                     "total_frames": self.total_frames,
                     "sim_time": sim_time,
                     "cube_y": cube_y,
-                    "phase": self._current_phase(),
+                    "phase": current_phase(sim_time, self.recorded_duration),
                     "hold_time": self.hold_time,
                 }
             )
 
-            # ── Scoring logic (only once cube has spawned) ─────────────────────
             if self.cube_has_spawned and cube_y is not None:
-                # Key metrics:
-                # - `peak_y`: maximum height reached (useful diagnostic)
-                # - `was_picked_up`: True if cube exceeded `pickup_y_threshold`
-                # - `dropped`: True if cube falls below `drop_y_threshold` after pickup
-                # - `hold_time`: accumulated time spent above the pickup threshold
-
-                if cube_y > self.peak_y:
-                    self.peak_y = cube_y
-
-                if self.cfg.enable_undercube_check:
-                    cube_min_y = self._get_cube_collision_min_y()
-                    gripper_min_y = self._get_gripper_collision_min_y()
-                    if cube_min_y is not None and gripper_min_y is not None:
-                        if gripper_min_y < (cube_min_y - self.cfg.undercube_margin):
-                            self._finish_run(
-                                self.cfg.undercube_penalty,
-                                f"undercube geometry t={sim_time:.2f}s "
-                                f"gripper_min_y={gripper_min_y:.2f} < cube_min_y={cube_min_y:.2f}",
-                            )
-                            return
-
-                if cube_y > float(self.pickup_y_threshold):
-                    self.was_picked_up = True
-
-                if self.was_picked_up and cube_y < float(self.drop_y_threshold):
-                    self.dropped = True
-
-                if sim_time >= self.cfg.early_stop_sim_time and cube_y > float(
-                    self.pickup_y_threshold
-                ):
-                    self.hold_time += step_dt
-
-                # Rule 1: cube through floor
-                if cube_y < self.cfg.floor_y_threshold:
-                    # If the cube goes below the floor plane, it's either a failure (if picked up)
-                    # or a prune; we write the score and stop the simulation immediately.
-                    if self.was_picked_up:
-                        self._finish_run(
-                            None,
-                            f"cube glitched through floor after pickup t={sim_time:.2f}s",
-                            pruned=True,
-                        )
-                    else:
-                        self._finish_run(
-                            self.cfg.no_pickup_penalty,
-                            f"cube through floor t={sim_time:.2f}s — no_pickup_penalty={self.cfg.no_pickup_penalty:.2f} hold_time={self.hold_time:.2f}s",
-                        )
+                if apply_scoring_rules(self, sim_time, cube_y, step_dt):
                     return
 
-                # Rule 2: pickup gate failed
-                if sim_time >= self.cfg.early_stop_sim_time and not self.was_picked_up:
-                    self._finish_run(
-                        self.cfg.no_pickup_penalty,
-                        f"pickup gate failed t={sim_time:.2f}s — no_pickup_penalty={self.cfg.no_pickup_penalty:.2f} hold_time={self.hold_time:.2f}s",
-                    )
-                    return
-
-                # Rule 3: dropped after pickup
-                if self.was_picked_up and cube_y < float(self.drop_y_threshold):
-                    score, reason = self._compute_score()
-                    self._finish_run(
-                        score,
-                        f"probe_success: dropped t={sim_time:.2f}s phase={self._current_phase()} "
-                        f"cube_y={cube_y:.2f} < drop_y={float(self.drop_y_threshold):.2f} — {reason}",
-                    )
-                    return
-
-            # ── End of frames ──────────────────────────────────────────────────
             if sim_time >= self.total_duration:
                 self._on_horizon_complete(sim_time)
                 return
 
-            # ── Motor replay ───────────────────────────────────────────────────
-            # Replay recorded motor positions. After the recorded frames,
-            # maintain the last known positions (`last_positions`) during the "overload" phase.
+            # Replay recorded motor positions; hold the last frame during overload
             positions = (
-                self.playback.motor_positions[self._playback_index_at(sim_time)]
+                self.playback.motor_positions[playback_index_at(sim_time, self.recorded_frames)]
                 if sim_time < self.recorded_duration
                 else self.last_positions
             )
@@ -436,7 +228,7 @@ def make_playback_controller(SofaController):
                 print(
                     f"[Playback] frame {self.frame}/{self.total_frames - 1}"
                     f"  t={sim_time:.2f}s  cube_Y={cube_y_text}"
-                    f"  phase={self._current_phase()}"
+                    f"  phase={current_phase(sim_time, self.recorded_duration)}"
                     f"  peak={self.peak_y:.2f}"
                     f"  hold={self.hold_time:.2f}s"
                     f"  picked={self.was_picked_up}",
@@ -455,6 +247,6 @@ def make_playback_controller(SofaController):
             """Run the spawn-contact check at the end of each simulation step."""
             if self.writer.finished:
                 return
-            self._check_spawn_contact_window(self.sim_time)
+            check_spawn_contact_window(self, self.sim_time)
 
     return BasePlaybackController
