@@ -13,7 +13,7 @@ from pathlib import Path
 import optuna
 
 from labtests.registry import get_test_spec
-from optimization.optimize_config import (
+from optimization.config import (
     FAILED_PREVIEW_IMAGE_CANDIDATES,
     GATED_TEST_NAMES,
     HARD_FAIL_SCORE,
@@ -24,7 +24,7 @@ from optimization.optimize_config import (
     SELECTED_TEST_NAMES,
     SELECTED_TEST_WEIGHTS,
 )
-from optimization.optimize_geometry import (
+from optimization.geometry import (
     GeometryExportFailureError,
     GeometryExportTimeoutError,
     generate_stl_for_trial,
@@ -33,7 +33,7 @@ from optimization.optimize_geometry import (
     resolve_failed_preview_image,
 )
 from optimization._trial_state import update_trial_run
-from optimization.optimize_sofa import launch_sofa, wait_for_geometry_slot
+from optimization.sofa import launch_sofa, wait_for_geometry_slot
 from optimization.state import TrialState, _save_trial_checkpoint
 
 

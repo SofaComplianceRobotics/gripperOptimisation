@@ -9,7 +9,7 @@ if str(_SRC_ROOT) not in sys.path:
 
 import optuna
 
-from optimization.optimize_config import (
+from optimization.config import (
     CMAES_SIGMA0,
     CMAES_STARTUP_TRIALS,
     HARD_FAIL_SCORE,
@@ -22,7 +22,7 @@ from optimization._trial_state import (
     read_trial_state,
     update_trial_summary,
 )
-from optimization.optimize_scoring import aggregate_trial_scores
+from optimization.scoring import aggregate_trial_scores
 
 
 def build_cmaes_study(db_path: Path) -> optuna.Study:

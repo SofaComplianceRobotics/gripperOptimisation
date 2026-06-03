@@ -10,8 +10,6 @@ Entry point: `python analysis/app.py`
 
 **`app.py`** — Dash app factory and launch. Builds the full layout, registers all callbacks, opens the browser, and starts the Flask dev server. This is what `launcher/launch_web.py` calls.
 
-**`dashboard.py`** — Thin backwards-compatibility shim. Re-exports `create_app` and `launch_dashboard` from `app.py`. Ignore it.
-
 **`analyze_config.py`** — Constants shared across the analysis package: paths, `TOP_X` (leaderboard size), rolling window size, live refresh interval, score aggregation mode.
 
 **`analyze_io.py`** — Loads `trial_state.json` files from `runtime/trials/` and aggregates them into trial records. Core data pipeline for all views.
@@ -36,8 +34,10 @@ Entry point: `python analysis/app.py`
 **`process/`** — Subprocess management.
 - `process_manager.py` — Starts and stops the generation and optimization subprocesses from the dashboard UI (the "Run" buttons).
 
-**`ui/`** — Dash layout and callback components, split by tab.
-- `ui/tabs/` — One file per dashboard tab: `performance.py`, `progress.py`, `config.py`, `generate.py`, `optimise.py`, `scenes.py`. Each exports a layout builder and its callbacks.
+**`callbacks/`** — `@app.callback` registration only, no HTML. One `register_*_callbacks(app)` function per tab. `app.py` calls these after building the layout.
+
+**`ui/`** — Dash layout builders only, no callbacks.
+- `ui/tabs/` — One `build_*_tab()` function per tab. Each tab has a matching file in `callbacks/` that wires its interactivity.
 - `ui/tabs/styles.py` — Shared inline CSS constants.
 - `ui/progress/` — Progress bar component: helpers that read `progress.json` and builders that turn it into Dash HTML.
 

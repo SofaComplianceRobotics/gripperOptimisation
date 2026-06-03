@@ -10,7 +10,7 @@ import os
 import time
 from pathlib import Path
 
-from .weight_search_common import STATE_FILE_NAME
+from .common import STATE_FILE_NAME
 
 
 def _state_path(lab_root: Path) -> Path:

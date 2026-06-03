@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from statistics import median_low
 
-from optimization.optimize_config import GATED_TEST_NAMES, RUN_PLAN
+from optimization.config import GATED_TEST_NAMES, RUN_PLAN
 from optimization._trial_state import (
     read_trial_state,
     update_trial_run,

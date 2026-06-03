@@ -1,5 +1,5 @@
 """
-optimize_config.py — Configuration, constants, and environment setup for gripper optimization.
+config.py — Configuration, constants, and environment setup for gripper optimization.
 
 Centralizes all hardcoded defaults, paths, and tuning parameters to minimize
 configuration scatter across the codebase.

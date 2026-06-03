@@ -1,5 +1,5 @@
 """
-optimize_sofa.py — SOFA process management, launching, and subprocess handling.
+sofa.py — SOFA process management, launching, and subprocess handling.
 
 Manages SOFA simulation instance lifecycle, Windows job object setup,
 and process attachment for graceful cleanup.
@@ -12,7 +12,7 @@ import time
 from ctypes import wintypes
 from pathlib import Path
 
-from optimization.optimize_config import HEADLESS, RUNSOFA_EXE, SOFA_GUI, ASSETS_ROOT
+from optimization.config import HEADLESS, RUNSOFA_EXE, SOFA_GUI, ASSETS_ROOT
 
 # Global job handle for Windows process group management
 SOFA_JOB_HANDLE = None

@@ -25,21 +25,21 @@ Each generation:
 
 **`algorithm.py`** — Optuna study setup and CMA-ES sampler configuration. Creates the study (SQLite-backed), defines the search space from `ModelParams` field metadata, and computes the weighted composite score from multi-test results.
 
-**`optimize_config.py`** — All hardcoded defaults and tuning constants in one place: parallelism limits, generation counts, paths, CMA-ES hyperparameters (`SIGMA0`, `STARTUP_TRIALS`), score weights. Edit here to reconfigure the loop without touching the logic.
+**`config.py`** — All hardcoded defaults and tuning constants in one place: parallelism limits, generation counts, paths, CMA-ES hyperparameters (`SIGMA0`, `STARTUP_TRIALS`), score weights. Edit here to reconfigure the loop without touching the logic.
 
-**`optimize_geometry.py`** — Trial parameter → STL pipeline. Calls `generation/generate_gripper.py` in a subprocess, handles timeouts, renders an offscreen preview image via pyvista, and copies the visual mesh.
+**`geometry.py`** — Trial parameter → STL pipeline. Calls `generation/generate_gripper.py` in a subprocess, handles timeouts, renders an offscreen preview image via pyvista, and copies the visual mesh.
 
-**`optimize_sofa.py`** — SOFA subprocess management. Launches `runSofa.exe` with the correct env vars, attaches a Windows Job Object for clean process-tree cleanup, and monitors for hangs.
+**`sofa.py`** — SOFA subprocess management. Launches `runSofa.exe` with the correct env vars, attaches a Windows Job Object for clean process-tree cleanup, and monitors for hangs.
 
-**`optimize_scoring.py`** — Score reading and aggregation. Polls `runtime/trials/<trial>/` for run result JSONs, aggregates multi-run scores, writes `summary.json` per generation and `progress.json` for the UI.
+**`scoring.py`** — Score math and progress reporting. Normalizes and aggregates multi-test scores, writes `summary.json` per generation and `progress.json` for the UI. File I/O primitives live in `_scoring_io.py`; trial-state CRUD (read/write `trial_state.json`) lives in `_trial_state.py`.
 
 **`state.py`** — Per-trial state tracking across runs. Collects individual run results and computes the final trial score once all runs are done.
 
-**`optimize_utils.py`** — Directory setup, file utilities, cleanup logging.
+**`utils.py`** — Directory setup, file utilities, cleanup logging.
 
 ---
 
-## Key constants (in `optimize_config.py`)
+## Key constants (in `config.py`)
 
 | Constant | What it controls |
 |---|---|
@@ -59,10 +59,10 @@ Each generation:
 ```
 Optuna (CMA-ES)
     └── proposes params
-            └── optimize_geometry.py   generates STL + preview
-            └── optimize_sofa.py       launches runSofa.exe
+            └── geometry.py   generates STL + preview
+            └── sofa.py       launches runSofa.exe
                     └── scene.py       runs simulation, writes score JSON
-            └── optimize_scoring.py    reads scores, aggregates
+            └── scoring.py    reads scores, aggregates
     └── receives score → updates distribution
 ```
 

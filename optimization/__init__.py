@@ -1,3 +1,3 @@
 """Optimization package root (proxy)."""
 
-__all__ = ["optimize", "optimize_config", "optimize_geometry"]
+__all__ = ["optimize", "config", "geometry"]

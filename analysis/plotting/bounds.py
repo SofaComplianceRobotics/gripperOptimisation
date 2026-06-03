@@ -23,7 +23,7 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         A Plotly `Figure` visualizing parameter distributions and markers.
     """
     try:
-        from optimization.optimize_config import PARAM_SPECS
+        from optimization.config import PARAM_SPECS
 
         active_specs = [p for p in PARAM_SPECS if p["min"] < p["max"]]
 

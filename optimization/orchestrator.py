@@ -18,15 +18,15 @@ import optuna
 
 from optimization.algorithm import build_cmaes_study
 from optimization.generation.runner import run_generation
-from optimization.optimize_config import (
+from optimization.config import (
     LAB_ROOT,
     N_GENERATIONS,
     N_PARALLEL,
     SELECTED_TEST_NAMES,
     build_env,
 )
-from optimization.optimize_scoring import write_progress
-from optimization.optimize_utils import reset_trials_dir
+from optimization.scoring import write_progress
+from optimization.utils import reset_trials_dir
 from optimization.state import TrialState
 
 

@@ -20,7 +20,7 @@ from optimization.generation.plan import (
     trial_has_ungated_positive_run,
 )
 from optimization.generation.launch import _relaunch_run
-from optimization.optimize_config import (
+from optimization.config import (
     LAB_ROOT,
     N_REPEATS,
     RUN_PLAN,
@@ -33,11 +33,11 @@ from optimization._trial_state import (
     read_trial_state,
     update_trial_run,
 )
-from optimization.optimize_scoring import (
+from optimization.scoring import (
     cleanup_generation_status_files,
     write_gen_summary,
 )
-from optimization.optimize_utils import cleanup_collision_stls
+from optimization.utils import cleanup_collision_stls
 from optimization.state import TrialState
 
 

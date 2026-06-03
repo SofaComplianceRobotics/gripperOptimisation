@@ -13,7 +13,7 @@ import optuna
 from optimization.generation.finalize import finalize_generation
 from optimization.generation.launch import launch_generation_trials
 from optimization.generation.progress import generation_progress_writer
-from optimization.optimize_config import (
+from optimization.config import (
     N_PARALLEL,
     RUN_PLAN,
     SELECTED_TEST_NAMES,

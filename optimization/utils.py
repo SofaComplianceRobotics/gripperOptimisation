@@ -1,5 +1,5 @@
 """
-optimize_utils.py — Miscellaneous utility functions for trial and directory management.
+utils.py — Miscellaneous utility functions for trial and directory management.
 
 Provides directory setup, file utilities, and misc logging functions.
 """
@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from optimization.optimize_config import TRIALS_DIR, PREVIEWS_DIR, PRINT_CLEANUP_LOGS
+from optimization.config import TRIALS_DIR, PREVIEWS_DIR, PRINT_CLEANUP_LOGS
 
 
 def reset_trials_dir() -> None:

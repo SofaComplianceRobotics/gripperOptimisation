@@ -8,13 +8,13 @@ dashboard: ``select_cube_spec`` returns the next candidate to run, while
 import time
 from pathlib import Path
 
-from .weight_search_common import CubeSearchSpec
-from .weight_search_common import (
+from .common import CubeSearchSpec
+from .common import (
     DEFAULT_WEIGHT_MIN,
     DEFAULT_WEIGHT_MAX,
     DEFAULT_WEIGHT_STEP,
 )
-from .weight_search_persistence import (
+from .persistence import (
     _acquire_lock,
     _lock_path,
     _read_state,
@@ -22,13 +22,13 @@ from .weight_search_persistence import (
     _resolve_state_path,
     _write_state,
 )
-from .weight_search_state import (
+from .state import (
     _append_attempt,
     _resolve_slot_state,
     _reset_state_for_generation,
     _update_latest_pending_attempt,
 )
-from .weight_search_ladder import _build_weight_levels, _choose_index
+from .ladder import _build_weight_levels, _choose_index
 
 
 def select_cube_spec(

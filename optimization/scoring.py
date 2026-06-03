@@ -1,5 +1,5 @@
 """
-optimize_scoring.py — Score aggregation, normalization, and progress reporting.
+scoring.py — Score aggregation, normalization, and progress reporting.
 
 File I/O primitives live in optimization._scoring_io.
 Trial state CRUD lives in optimization._trial_state.
@@ -9,7 +9,7 @@ import json
 import statistics
 import time
 
-from optimization.optimize_config import (
+from optimization.config import (
     GEN_PROGRESS_POLL_INTERVAL,
     HARD_FAIL_SCORE,
     N_GENERATIONS,

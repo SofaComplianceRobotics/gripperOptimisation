@@ -43,7 +43,7 @@ from launcher.bootstrap import bootstrap_lab
 
 SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
-from analysis.dashboard import launch_dashboard
+from analysis.app import launch_dashboard
 
 if __name__ == "__main__":
     launch_dashboard(port=8050, open_browser=True)

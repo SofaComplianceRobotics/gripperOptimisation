@@ -7,10 +7,9 @@ JSON storage.
 """
 
 import time
-from pathlib import Path
 from typing import List
 
-from .weight_search_common import _CUBE_SIZE_CYCLE
+from .common import _CUBE_SIZE_CYCLE
 
 
 def _slot_key(run_slot: int) -> str:

@@ -1,5 +1,5 @@
 """
-optimize_geometry.py — Geometry generation, STL rendering, and preview handling.
+geometry.py — Geometry generation, STL rendering, and preview handling.
 
 Manages the full pipeline from trial parameters to visual STL and preview images.
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pyvista as pv  # type: ignore
 
-from optimization.optimize_config import (
+from optimization.config import (
     LAB_ROOT,
     CENTERPARTS_DIR,
     GENERATE_SCRIPT,
