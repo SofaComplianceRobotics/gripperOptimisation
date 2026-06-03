@@ -12,7 +12,7 @@ import time
 from ctypes import wintypes
 from pathlib import Path
 
-from optimize_config import HEADLESS, RUNSOFA_EXE, SOFA_GUI, ASSETS_ROOT
+from optimization.optimize_config import HEADLESS, RUNSOFA_EXE, SOFA_GUI, ASSETS_ROOT
 
 # Global job handle for Windows process group management
 SOFA_JOB_HANDLE = None

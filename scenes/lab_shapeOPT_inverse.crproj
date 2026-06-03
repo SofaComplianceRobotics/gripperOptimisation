@@ -10,7 +10,7 @@ open = false
 
 
 [Window.My Robot]
-open = true
+open = false
 dockId = 4
 
 
@@ -48,7 +48,7 @@ height = 433.000000
 
 [Window.3]
 width = 480.000000
-height = 529.000000
+height = 963.000000
 
 
 [Window.6]

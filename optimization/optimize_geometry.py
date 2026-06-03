@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pyvista as pv  # type: ignore
 
-from optimize_config import (
+from optimization.optimize_config import (
     LAB_ROOT,
     CENTERPARTS_DIR,
     GENERATE_SCRIPT,

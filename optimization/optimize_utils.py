@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from optimize_config import TRIALS_DIR, PREVIEWS_DIR, PRINT_CLEANUP_LOGS
+from optimization.optimize_config import TRIALS_DIR, PREVIEWS_DIR, PRINT_CLEANUP_LOGS
 
 
 def reset_trials_dir() -> None:

@@ -12,7 +12,7 @@ import time
 import errno
 from pathlib import Path
 
-from optimize_config import (
+from optimization.optimize_config import (
     HARD_FAIL_SCORE,
     PROGRESS_FILE,
     N_PARALLEL,

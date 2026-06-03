@@ -20,6 +20,7 @@ from optimization.optimize_config import (
 from optimization.optimize_scoring import (
     aggregate_trial_scores,
     read_trial_run,
+    read_trial_state,
     update_trial_summary,
 )
 
