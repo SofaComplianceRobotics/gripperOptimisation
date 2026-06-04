@@ -64,15 +64,9 @@ def createScene(rootnode):
 
     cfg = PlaybackConfig.from_env(LAB_ROOT)
 
-    weight_min = float(
-        os.environ.get("SHAPEOPT_CUBE_WEIGHT_MIN", str(DEFAULT_WEIGHT_MIN))
-    )
-    weight_max = float(
-        os.environ.get("SHAPEOPT_CUBE_WEIGHT_MAX", str(DEFAULT_WEIGHT_MAX))
-    )
-    weight_step = float(
-        os.environ.get("SHAPEOPT_CUBE_WEIGHT_STEP", str(DEFAULT_WEIGHT_STEP))
-    )
+    weight_min = DEFAULT_WEIGHT_MIN
+    weight_max = DEFAULT_WEIGHT_MAX
+    weight_step = DEFAULT_WEIGHT_STEP
     seed_indices = load_seed_indices(LAB_ROOT)
 
     ladder_state_path = (

@@ -12,8 +12,6 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.timing_config import DT_DIRECT
-
 
 @dataclass(frozen=True)
 class OptunaMeta:
@@ -32,12 +30,15 @@ class OptunaMeta:
     @classmethod
     def from_env(cls) -> "OptunaMeta":
         """Construct from the standard OPTUNA_* environment variables."""
+        trial_state_path = os.environ.get("OPTUNA_TRIAL_STATE_PATH")
+        if trial_state_path is None:
+            return cls(trial_state_path=None, run_slot=0, gen=0, trial=0, run=0)
         return cls(
-            trial_state_path=os.environ.get("OPTUNA_TRIAL_STATE_PATH"),
-            run_slot=int(os.environ.get("OPTUNA_RUN_SLOT", "0")),
-            gen=int(os.environ.get("OPTUNA_GEN", "0")),
-            trial=int(os.environ.get("OPTUNA_TRIAL", "0")),
-            run=int(os.environ.get("OPTUNA_RUN", "0")),
+            trial_state_path=trial_state_path,
+            run_slot=int(os.environ["OPTUNA_RUN_SLOT"]),
+            gen=int(os.environ["OPTUNA_GEN"]),
+            trial=int(os.environ["OPTUNA_TRIAL"]),
+            run=int(os.environ["OPTUNA_RUN"]),
         )
 
     @property
@@ -102,40 +103,26 @@ class PlaybackConfig:
                     / "new_gripper_collision.stl"
                 ),
             ),
-            friction_coef=float(os.environ.get("SHAPEOPT_FRICTION_COEF", "0.6")),
-            floor_center_y=float(os.environ.get("SHAPEOPT_FLOOR_CENTER_Y", "-230.0")),
-            cube_spawn_clearance=float(
-                os.environ.get("SHAPEOPT_CUBE_SPAWN_CLEARANCE", "10")
-            ),
-            cube_spawn_time=float(os.environ.get("SHAPEOPT_CUBE_SPAWN_TIME", "0.4")),
-            cube_prespawn_offset=float(
-                os.environ.get("SHAPEOPT_CUBE_PRESPAWN_OFFSET", "200.0")
-            ),
-            drop_below_spawn_tol=float(
-                os.environ.get("SHAPEOPT_DROP_BELOW_SPAWN_TOL", "0.5")
-            ),
-            pickup_above_spawn_tol=float(
-                os.environ.get("SHAPEOPT_PICKUP_ABOVE_SPAWN_TOL", "1.0")
-            ),
-            early_stop_sim_time=float(
-                os.environ.get("EARLY_STOP_SIM_TIME", str(2.0 * (DT_DIRECT / 0.02)))
-            ),
-            floor_y_threshold=float(os.environ.get("FLOOR_Y_THRESHOLD", "-245.0")),
-            floor_y_buffer=float(os.environ.get("FLOOR_Y_BUFFER", "5.0")),
-            pickup_y_threshold=float(os.environ.get("PICKUP_Y_THRESHOLD", "-215.0")),
-            drop_penalty=float(os.environ.get("DROP_PENALTY", "50.0")),
-            overload_max_time=float(os.environ.get("OVERLOAD_MAX_TIME", "12.0")),
-            cube_mass_start=float(os.environ.get("CUBE_MASS_START", "0.02")),
-            cube_mass_max=float(os.environ.get("CUBE_MASS_MAX", "1.0")),
-            cube_mass_ramp_time=float(os.environ.get("CUBE_MASS_RAMP_TIME", "8.0")),
-            early_contact_stop_time=float(
-                os.environ.get("EARLY_CONTACT_STOP_TIME", "0.6")
-            ),
-            early_contact_penalty=float(
-                os.environ.get("EARLY_CONTACT_PENALTY", "-1.0")
-            ),
-            no_pickup_penalty=float(os.environ.get("NO_PICKUP_PENALTY", "0.0")),
-            undercube_penalty=float(os.environ.get("UNDERCUBE_PENALTY", "-0.2")),
-            undercube_margin=float(os.environ.get("UNDERCUBE_MARGIN", "0.0")),
-            enable_undercube_check=os.environ.get("ENABLE_UNDERCUBE_CHECK", "0") == "1",
+            friction_coef=float(os.environ["SHAPEOPT_FRICTION_COEF"]),
+            floor_center_y=-230.0,
+            cube_spawn_clearance=10.0,
+            cube_spawn_time=0.4,
+            cube_prespawn_offset=200.0,
+            drop_below_spawn_tol=0.5,
+            pickup_above_spawn_tol=1.0,
+            early_stop_sim_time=float(os.environ["EARLY_STOP_SIM_TIME"]),
+            floor_y_threshold=float(os.environ["FLOOR_Y_THRESHOLD"]),
+            floor_y_buffer=float(os.environ["FLOOR_Y_BUFFER"]),
+            pickup_y_threshold=float(os.environ["PICKUP_Y_THRESHOLD"]),
+            drop_penalty=float(os.environ["DROP_PENALTY"]),
+            overload_max_time=float(os.environ["OVERLOAD_MAX_TIME"]),
+            cube_mass_start=float(os.environ["CUBE_MASS_START"]),
+            cube_mass_max=float(os.environ["CUBE_MASS_MAX"]),
+            cube_mass_ramp_time=float(os.environ["CUBE_MASS_RAMP_TIME"]),
+            early_contact_stop_time=0.6,
+            early_contact_penalty=float(os.environ["EARLY_CONTACT_PENALTY"]),
+            no_pickup_penalty=float(os.environ["NO_PICKUP_PENALTY"]),
+            undercube_penalty=float(os.environ["UNDERCUBE_PENALTY"]),
+            undercube_margin=0.0,
+            enable_undercube_check=os.environ["ENABLE_UNDERCUBE_CHECK"] == "1",
         )

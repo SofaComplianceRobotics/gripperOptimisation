@@ -15,7 +15,6 @@ Everything else comes from core.
 
 from __future__ import annotations
 
-import json as _json
 import os
 import sys
 from pathlib import Path
@@ -31,12 +30,10 @@ from labtests.core.scene_config import OptunaMeta  # noqa: E402
 META = OptunaMeta.from_env()
 
 # Waypoints: list of [[x,y,z, qx,qy,qz,qw], hold_frames]
-_WAYPOINTS_ENV = os.environ.get("SHAPEOPT_TILT_WAYPOINTS", "")
-DEFAULT_WAYPOINTS = [
+WAYPOINTS = [
     ([0, -150, 40, 0, 0, 0, 1], 10),  # straight forward
     ([40, -150, 0, 0, 0, 0, 1], 10),  # left
 ]
-WAYPOINTS = _json.loads(_WAYPOINTS_ENV) if _WAYPOINTS_ENV else DEFAULT_WAYPOINTS
 
 PROGRAM_FILE = str(SCRIPT_DIR / "mypickandplace.crprog")
 

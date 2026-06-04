@@ -31,11 +31,9 @@ def _pick_recording_target() -> str:
 
     Priority:
       1. runtime/session_config.json written by the web UI before launching this scene
-      2. LAB_SHAPEOPT_RECORDING_TARGET env var
-      3. Interactive PyQt6 picker (if available and not disabled)
-      4. Hard fallback: grasp_hold
+      2. Interactive PyQt6 picker (if available)
+      3. Hard fallback: grasp_hold
     """
-    # Web UI writes this file before launching the recording scene
     session_cfg = LAB_ROOT / "runtime" / "session_config.json"
     if session_cfg.exists():
         try:
@@ -47,28 +45,18 @@ def _pick_recording_target() -> str:
         except Exception as exc:
             print(f"[Recording] Could not read session config: {exc}")
 
-    env_target = os.environ.get("LAB_SHAPEOPT_RECORDING_TARGET", "").strip()
-    if env_target:
-        return env_target
+    try:
+        from labtests.ui import prompt_for_tests
 
-    if os.environ.get("LAB_SHAPEOPT_RECORDING_PICKER", "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        try:
-            from labtests.ui import prompt_for_tests
-
-            selected = prompt_for_tests(
-                title="Recording Target",
-                prompt="Choose which test to record this trajectory for:",
-                multi_select=False,
-            )
-            if selected:
-                return selected[0]
-        except Exception as exc:
-            print(f"[Recording] Picker unavailable: {exc}")
+        selected = prompt_for_tests(
+            title="Recording Target",
+            prompt="Choose which test to record this trajectory for:",
+            multi_select=False,
+        )
+        if selected:
+            return selected[0]
+    except Exception as exc:
+        print(f"[Recording] Picker unavailable: {exc}")
 
     return "grasp_hold"
 

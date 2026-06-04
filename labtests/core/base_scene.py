@@ -53,7 +53,7 @@ def build_base_scene(rootnode, *, inverse: bool, friction: float = 0.6) -> Scene
 
     addSolvers(simulation)
 
-    force_paused = os.environ.get("SHAPEOPT_FORCE_PAUSED", "0").strip().lower() in (
+    force_paused = os.environ.get("SHAPEOPT_FORCE_PAUSED", "").strip().lower() in (
         "1",
         "true",
         "yes",

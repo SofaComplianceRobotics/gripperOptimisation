@@ -26,6 +26,7 @@ os.environ.setdefault(
 os.environ.setdefault("SOFA_ROOT", r"C:\dev\sofa\build")
 os.environ.setdefault("RUNSOFA_EXE", r"C:\dev\sofa\build\bin\Release\runSofa.exe")
 os.environ.setdefault("SOFA_GUI", "batch")
+os.environ.setdefault("HARD_FAIL_SCORE", "-3.0")
 os.environ.setdefault(
     "SOFA_PYTHON_PATH",
     r"C:\Users\Cesar\AppData\Local\Programs\Python\Python312",

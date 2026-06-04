@@ -127,23 +127,9 @@ CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
 # ─────────────────────────────────────────────
 # SOFA Runtime Configuration
 # ─────────────────────────────────────────────
-SOFA_ROOT = os.environ.get(
-    "SOFA_ROOT", r"C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa"
-)
-SOFA_PYTHON_PATH = os.environ.get(
-    "SOFA_PYTHON_PATH", r"C:\Users\Cesar\AppData\Local\Programs\Python\Python310"
-)
-RUNSOFA_EXE = os.environ.get("RUNSOFA_EXE", "")
-if not RUNSOFA_EXE:
-    runsofa_candidates = [
-        os.path.join(SOFA_ROOT, "bin", "runSofa.exe"),
-        os.path.join(SOFA_ROOT, "bin", "Release", "runSofa.exe"),
-        os.path.join(SOFA_ROOT, "bin", "RelWithDebInfo", "runSofa.exe"),
-        os.path.join(SOFA_ROOT, "build", "bin", "Release", "runSofa.exe"),
-    ]
-    RUNSOFA_EXE = next(
-        (p for p in runsofa_candidates if os.path.isfile(p)), runsofa_candidates[0]
-    )
+SOFA_ROOT = os.environ["SOFA_ROOT"]
+SOFA_PYTHON_PATH = os.environ["SOFA_PYTHON_PATH"]
+RUNSOFA_EXE = os.environ["RUNSOFA_EXE"]
 
 
 # ─────────────────────────────────────────────
@@ -157,26 +143,16 @@ N_GENERATIONS = 400  # how many CMA-ES generations to run
 # total trials = N_GENERATIONS * N_PARALLEL
 
 HEADLESS = True
-SOFA_GUI = os.environ.get("SOFA_GUI", "").strip().lower()
+SOFA_GUI = os.environ["SOFA_GUI"].strip().lower()
 
 STL_DELETE_DELAY = 30  # seconds after SOFA launch before deleting collision STL
 PRINT_CLEANUP_LOGS = False  # avoid interleaving with live progress bar output
 GEN_PROGRESS_POLL_INTERVAL = 0.25  # seconds between frame-progress writes
-GEOMETRY_EXPORT_TIMEOUT = float(
-    os.environ.get("GEOMETRY_EXPORT_TIMEOUT", "20")
-)  # seconds before generate_gripper.py is considered stuck
-MAX_ACTIVE_SOFA_PROCS = int(
-    os.environ.get("MAX_ACTIVE_SOFA_PROCS", "12")
-)  # throttle to avoid starving geometry export
-CMAES_STARTUP_TRIALS = int(
-    os.environ.get("CMAES_STARTUP_TRIALS", "50")
-)  # random warm-up before CMA-ES adaptation
-CMAES_SIGMA0 = float(
-    os.environ.get("CMAES_SIGMA0", "1.0")
-)  # initial global step size (exploration pressure)
-HARD_FAIL_SCORE = float(
-    os.environ.get("HARD_FAIL_SCORE", "-3.0")
-)  # generation-failure score
+GEOMETRY_EXPORT_TIMEOUT = 20.0  # seconds before generate_gripper.py is considered stuck
+MAX_ACTIVE_SOFA_PROCS = 12  # throttle to avoid starving geometry export
+CMAES_STARTUP_TRIALS = 50  # random warm-up before CMA-ES adaptation
+CMAES_SIGMA0 = 1.0  # initial global step size (exploration pressure)
+HARD_FAIL_SCORE = float(os.environ["HARD_FAIL_SCORE"])  # generation-failure score
 # ─────────────────────────────────────────────
 # Tunable Parameter Specifications
 #
@@ -223,9 +199,7 @@ DROP_PENALTY = (
 )
 
 OVERLOAD_MAX_TIME = 5.0  # seconds of post-recording overload simulation
-SOFA_REALTIME_TIMEOUT = float(
-    os.environ.get("SOFA_REALTIME_TIMEOUT", "200")
-)  # wall-clock seconds before any SOFA run prunes the whole gripper
+SOFA_REALTIME_TIMEOUT = 200.0  # wall-clock seconds before any SOFA run prunes the whole gripper
 CUBE_MASS_START = 0.005  # kg, should match scene cube initial mass
 CUBE_MASS_MAX = 1.0  # kg reached by the end of the overload ramp
 CUBE_MASS_RAMP_TIME = 8.0  # seconds to ramp from start mass to max mass
@@ -233,12 +207,10 @@ CUBE_MASS_RAMP_TIME = 8.0  # seconds to ramp from start mass to max mass
 ENABLE_UNDERCUBE_CHECK = (
     False  # if False, skip the under-cube invalid-geometry malus rule
 )
-SHAPEOPT_FRICTION_COEF = float(
-    os.environ.get("SHAPEOPT_FRICTION_COEF", "0.6")
-)  # passed to scene contact manager (mu)
-EARLY_CONTACT_PENALTY = float(os.environ.get("EARLY_CONTACT_PENALTY", "-1.0"))
-NO_PICKUP_PENALTY = float(os.environ.get("NO_PICKUP_PENALTY", "0.0"))
-UNDERCUBE_PENALTY = float(os.environ.get("UNDERCUBE_PENALTY", "-0.2"))
+SHAPEOPT_FRICTION_COEF = 0.6  # passed to scene contact manager (mu)
+EARLY_CONTACT_PENALTY = -1.0
+NO_PICKUP_PENALTY = 0.0
+UNDERCUBE_PENALTY = -0.2
 # ─────────────────────────────────────────────
 # Global State
 # ─────────────────────────────────────────────
@@ -278,9 +250,7 @@ def build_env() -> dict:
     ]
     env["PATH"] = ";".join([p for p in path_chunks if p])
 
-    sofa_site_packages = os.environ.get(
-        "SOFA_SITE_PACKAGES", os.path.join(SOFA_ROOT, "lib", "python3", "site-packages")
-    )
+    sofa_site_packages = os.environ["SOFA_SITE_PACKAGES"]
 
     # Critical: do not inherit parent PYTHONPATH (often a Python 3.10 env from
     # EmioLabs launcher). SofaPython3 in custom builds can run a different Python

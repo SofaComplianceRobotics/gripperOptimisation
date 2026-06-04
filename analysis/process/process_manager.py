@@ -123,10 +123,7 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
     """
     # Interactive scenes require the emiolabs SOFA (ImGui + emiolabs plugins).
     # The custom batch SOFA used for optimisation does not have these.
-    runsofa = os.environ.get(
-        "EMIOLABS_RUNSOFA_EXE",
-        r"C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa\bin\runSofa.exe",
-    )
+    runsofa = os.environ["EMIOLABS_RUNSOFA_EXE"]
     if not os.path.isfile(runsofa):
         return f"runSofa.exe not found at: {runsofa}"
 
