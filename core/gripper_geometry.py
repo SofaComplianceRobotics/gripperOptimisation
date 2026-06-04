@@ -6,15 +6,9 @@ used when assembling the full gripper model.
 """
 
 import math
-import sys
-from pathlib import Path
 
 import cadquery as cq
 from cadquery import Vector, Wire
-
-SRC_ROOT = Path(__file__).resolve().parents[1]
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
 
 from .geometry_helpers import annular_sector
 from .params import ModelParams, PROFILE_EXTRUDE_MARGIN

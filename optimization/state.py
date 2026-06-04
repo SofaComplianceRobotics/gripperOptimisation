@@ -1,11 +1,6 @@
 """Trial data tracking and state management for the optimization loop."""
 
-import sys
 from pathlib import Path
-
-_SRC_ROOT = Path(__file__).resolve().parent.parent
-if str(_SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SRC_ROOT))
 
 from optimization._trial_state import (
     read_trial_run,

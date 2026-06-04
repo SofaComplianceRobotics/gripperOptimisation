@@ -9,10 +9,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_SRC_ROOT = _SCRIPT_DIR.parent
-if str(_SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SRC_ROOT))
+_LAB_ROOT = Path(__file__).resolve().parent.parent
+if str(_LAB_ROOT) not in sys.path:
+    sys.path.insert(0, str(_LAB_ROOT))
+
+from launcher.bootstrap import bootstrap_lab
+
+bootstrap_lab(__file__)
 
 import optuna
 

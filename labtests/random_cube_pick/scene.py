@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(
     0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir()))
 )
-from labtests.core.scene_paths import ensure_scene_paths
+from launcher.bootstrap import bootstrap_lab
 from labtests.random_cube_pick.carryover import load_seed_indices
 from labtests.random_cube_pick.weight_search import (
     DEFAULT_WEIGHT_MAX,
@@ -39,7 +39,7 @@ from labtests.random_cube_pick.weight_search import (
     weight_points_for_index,
 )
 
-SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 from core.timing_config import DT_DIRECT as DT
 

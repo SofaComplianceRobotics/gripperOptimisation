@@ -8,14 +8,9 @@ configuration scatter across the codebase.
 import dataclasses
 import json
 import os
-import sys
 from pathlib import Path
 
-# Setup sys.path BEFORE importing from core
-SCRIPT_DIR = Path(__file__).resolve().parent
-SRC_ROOT = SCRIPT_DIR.parent
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+SRC_ROOT = Path(__file__).resolve().parent.parent
 
 from core.params import ModelParams
 from core.timing_config import DT_DIRECT

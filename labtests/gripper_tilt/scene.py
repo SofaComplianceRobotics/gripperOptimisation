@@ -22,9 +22,9 @@ from pathlib import Path
 
 
 sys.path.insert(0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir())))
-from labtests.core.scene_paths import ensure_scene_paths
+from launcher.bootstrap import bootstrap_lab
 
-SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 from labtests.core.scene_config import OptunaMeta  # noqa: E402
 

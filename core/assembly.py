@@ -6,14 +6,8 @@ gripping device ready for simulation or export.
 """
 
 import math
-import sys
-from pathlib import Path
 
 import cadquery as cq
-
-SRC_ROOT = Path(__file__).resolve().parents[1]
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
 
 from core.geometry_helpers import make_vertical_drop_from_low_face
 from core.params import ModelParams

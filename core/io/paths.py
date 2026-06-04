@@ -4,20 +4,13 @@ Handles configuration of export directories and path resolution
 for gripper model output files.
 """
 
-import sys
 from pathlib import Path
 
 from core.params import ModelParams
 
-# Root path configuration
 CORE_ROOT = Path(__file__).resolve().parent.parent
 LAB_ROOT = CORE_ROOT.parent
 APP_ROOT = LAB_ROOT
-
-# Ensure lab root is on sys.path for imports
-SRC_ROOT = LAB_ROOT.parent
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
 
 
 def make_versioned_export_path(p: ModelParams, extension: str) -> Path:

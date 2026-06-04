@@ -6,12 +6,7 @@ Can be called directly via run_export(params) or used as CLI entry point.
 
 import logging
 import shutil
-import sys
 from pathlib import Path
-
-SRC_ROOT = Path(__file__).resolve().parents[1]
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
 
 from core.assembly import assemble_model
 from core.gripper_parts import make_pincer_pair_world_collision

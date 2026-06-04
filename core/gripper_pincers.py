@@ -6,15 +6,9 @@ building pincer geometry used in the gripper assembly.
 """
 
 import math
-import sys
-from pathlib import Path
 
 import cadquery as cq
 from cadquery import Edge, Vector
-
-SRC_ROOT = Path(__file__).resolve().parents[1]
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
 
 from .params import ModelParams, PincerSplinePoint
 
