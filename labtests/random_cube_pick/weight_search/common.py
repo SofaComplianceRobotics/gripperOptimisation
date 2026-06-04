@@ -15,7 +15,7 @@ STATE_FILE_NAME = "random_cube_pick_weight_search.json"
 # Defaults for the weight search ladder (kg).
 DEFAULT_WEIGHT_MIN = 0.02
 DEFAULT_WEIGHT_MAX = 0.2
-DEFAULT_WEIGHT_STEP = 0.02
+DEFAULT_WEIGHT_STEP = 0.05
 
 # The cycle of cube sizes this helper uses. Each slot maps onto one entry in
 # this tuple (indexing starts at 1). Repeating sizes is intentional so the
