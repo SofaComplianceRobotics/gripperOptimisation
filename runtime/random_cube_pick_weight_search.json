@@ -69,11 +69,11 @@
         20.0,
         20.0
       ],
-      "low_index": 0,
+      "low_index": 1,
       "high_index": -1,
-      "last_index": 0,
-      "last_weight": 0.02,
-      "last_outcome": "pending",
+      "last_index": 1,
+      "last_weight": 0.04,
+      "last_outcome": "failure",
       "last_score": null,
       "attempts": [
         {
@@ -102,13 +102,45 @@
           "weight": 0.02,
           "outcome": "pending",
           "updated_at": 1780041420.36003
+        },
+        {
+          "index": 0,
+          "weight": 0.02,
+          "outcome": "pending",
+          "updated_at": 1780560868.2206407
+        },
+        {
+          "index": 0,
+          "weight": 0.02,
+          "outcome": "pending",
+          "updated_at": 1780560921.4906583
+        },
+        {
+          "index": 0,
+          "weight": 0.02,
+          "outcome": "pending",
+          "updated_at": 1780561055.0793605
+        },
+        {
+          "index": 0,
+          "weight": 0.02,
+          "outcome": "success",
+          "updated_at": 1780561244.305401,
+          "score": null
+        },
+        {
+          "index": 1,
+          "weight": 0.04,
+          "outcome": "failure",
+          "updated_at": 1780561524.256824,
+          "score": null
         }
       ],
-      "updated_at": 1780041420.36003
+      "updated_at": 1780561524.256824
     }
   },
   "weight_min": 0.02,
   "weight_max": 0.2,
   "weight_step": 0.02,
-  "updated_at": 1780041420.36003
+  "updated_at": 1780561524.256824
 }

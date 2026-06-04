@@ -88,11 +88,20 @@ def build_search_snapshot(
         else []
     )
 
+    _STATE_COLORS = {
+        "tested_success": ("#2f9e44", "#2b8a3e"),
+        "tested_failure": ("#e03131", "#c92a2a"),
+        "deduced_success": ("#8ce99a", "#51cf66"),
+        "deduced_failure": ("#ffa8a8", "#ff8787"),
+        "pending": ("#0270ff", "#1971c2"),
+    }
+
     segments = []
     for index, weight in enumerate(weights):
         state_name = _segment_state_for_index(
             index=index, low_index=low_index, high_index=high_index, attempts=attempts
         )
+        color, border_color = _STATE_COLORS.get(state_name, ("#dee2e6", "#ced4da"))
         segments.append(
             {
                 "index": index,
@@ -100,8 +109,8 @@ def build_search_snapshot(
                 "weight": weight,
                 "state": state_name,
                 "state_label": state_name.replace("_", " "),
-                "color": "#dee2e6",
-                "border_color": "#ced4da",
+                "color": color,
+                "border_color": border_color,
                 "tested": state_name.startswith("tested"),
                 "deduced": state_name.startswith("deduced"),
                 "pending": state_name == "pending",

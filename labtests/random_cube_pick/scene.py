@@ -57,6 +57,7 @@ def createScene(rootnode):
     from labtests.core.modules.cube_floor import setup as setup_cube_floor
     from labtests.core.modules.motor_playback import setup as setup_playback
     from labtests.core.playback_controller import make_playback_controller
+    from labtests.core._sim_query import set_cube_mass
     from labtests.core.plugins import add_required_plugins
     from labtests.core.scene_config import PlaybackConfig
     from labtests.core.scoring import ScoreWriter
@@ -159,7 +160,7 @@ def createScene(rootnode):
 
         def _update_overload_mass(self) -> None:
             # Mass is fixed — no ramp keeps the draw fair across runs
-            self._set_cube_mass(cube_mass)
+            set_cube_mass(self.rootnode, cube_mass)
 
         def _finish_run(
             self, score: float | None, reason: str, *, pruned: bool = False

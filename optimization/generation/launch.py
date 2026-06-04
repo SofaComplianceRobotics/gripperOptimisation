@@ -98,7 +98,12 @@ def _relaunch_run(
         f"[sofa] Gen {gen_index:04d} Trial {trial_index:02d} "
         f"Run {run_slot}/{N_REPEATS} [{test_name} {test_run_index}/{test_run_total}]"
     )
-    runs.append((proc, trial_state_path, run_slot))
+    for i, (_old_proc, _old_path, old_slot) in enumerate(runs):
+        if old_slot == run_slot:
+            runs[i] = (proc, trial_state_path, run_slot)
+            break
+    else:
+        runs.append((proc, trial_state_path, run_slot))
     launch_times_by_slot[run_slot] = time.time()
     launched_run_plan_entries.append((test_name, test_run_index, test_run_total))
 

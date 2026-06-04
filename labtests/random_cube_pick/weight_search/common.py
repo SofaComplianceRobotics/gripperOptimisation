@@ -43,6 +43,15 @@ class CubeSearchSpec:
             chosen (e.g. "binary_search", "seeded", "converged").
     """
 
+    run_slot: int
+    cube_scale: list
+    cube_mass: float
+    weight_index: int
+    weight_levels: list
+    lower_index: int
+    upper_index: int
+    status: str
+
 
 def weight_points_for_index(weight_index: int) -> int:
     """Return the 1-based ladder score for a selected weight index.

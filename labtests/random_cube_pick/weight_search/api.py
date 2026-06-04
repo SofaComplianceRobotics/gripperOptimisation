@@ -8,7 +8,7 @@ dashboard: ``select_cube_spec`` returns the next candidate to run, while
 import time
 from pathlib import Path
 
-from .common import CubeSearchSpec
+from .common import CubeSearchSpec, _CUBE_SIZE_CYCLE
 from .common import (
     DEFAULT_WEIGHT_MIN,
     DEFAULT_WEIGHT_MAX,
@@ -55,7 +55,7 @@ def select_cube_spec(
     if not _acquire_lock(lock_path):
         # If we cannot acquire the lock, return a fallback candidate drawn from
         # the default search range so the caller can continue without blocking.
-        cube_scale = list([8.0, 8.0, 8.0][(int(run_slot) - 1) % 1])
+        cube_scale = list(_CUBE_SIZE_CYCLE[(int(run_slot) - 1) % len(_CUBE_SIZE_CYCLE)])
         index, status = _choose_index(0, len(weights) - 1, len(weights))
         return CubeSearchSpec(
             run_slot=int(run_slot),
@@ -96,7 +96,7 @@ def select_cube_spec(
 
         slot_state.update(
             {
-                "cube_scale": list([8.0, 8.0, 8.0][(int(run_slot) - 1) % 1]),
+                "cube_scale": list(_CUBE_SIZE_CYCLE[(int(run_slot) - 1) % len(_CUBE_SIZE_CYCLE)]),
                 "last_index": index,
                 "last_weight": weights[index],
                 "last_outcome": "pending",
