@@ -12,6 +12,8 @@ from process.process_manager import OPTIMIZE_SCRIPT
 
 
 def register_optimise_callbacks(app) -> None:
+    """Register optimise tab callbacks: weight store, sliders, pie chart, and run/stop."""
+
     app.clientside_callback(
         """
         function(slider_vals, check_vals, eq_clicks, norm_clicks, slider_ids, store) {
@@ -234,6 +236,24 @@ def register_optimise_callbacks(app) -> None:
         prevent_initial_call=True,
     )
     def handle_optimise(_, __, check_vals, check_ids, gate_vals, gate_ids, store):
+        """Validate selections and launch or stop the optimization subprocess.
+
+        Builds ``LAB_SHAPEOPT_TESTS``, ``LAB_SHAPEOPT_TEST_WEIGHTS``, and
+        ``LAB_SHAPEOPT_GATED_TESTS`` env vars from the current UI state before
+        handing off to the process manager.
+
+        Args:
+            _: Start button click count (unused directly; ``ctx.triggered_id`` used).
+            __: Stop button click count (unused directly).
+            check_vals: List of checklist values per test (truthy = selected).
+            check_ids: List of dicts with ``"test"`` key, one per test row.
+            gate_vals: List of checklist values for gate toggles.
+            gate_ids: List of dicts with ``"test"`` key for gate checkboxes.
+            store: Dict mapping test name → weight int from the weights store.
+
+        Returns:
+            Status message string describing the outcome or a validation error.
+        """
         if ctx.triggered_id == "opt-stop-btn":
             return _stop_proc("optimize")
 
@@ -275,4 +295,12 @@ def register_optimise_callbacks(app) -> None:
         Input("opt-interval", "n_intervals"),
     )
     def update_opt_log(_):
+        """Poll and return the current optimization subprocess log.
+
+        Args:
+            _: Interval tick (unused).
+
+        Returns:
+            Log contents as a string.
+        """
         return _read_proc_log("optimize")

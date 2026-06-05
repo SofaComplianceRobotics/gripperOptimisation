@@ -77,10 +77,12 @@ Always start with the path bootstrap (copy verbatim):
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir())))
-from labtests.core.scene_paths import ensure_scene_paths
+sys.path.insert(
+    0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir()))
+)
+from launcher.bootstrap import bootstrap_lab
 
-SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 ```
 
 ---
@@ -166,9 +168,11 @@ Use when the test doesn't need collisions: alignment, tilt, pose-accuracy. You d
 import json, os, sys
 from pathlib import Path
 
-sys.path.insert(0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir())))
-from labtests.core.scene_paths import ensure_scene_paths
-SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = ensure_scene_paths(__file__)
+sys.path.insert(
+    0, str(next(c for c in Path(__file__).parents if (c / "labtests").is_dir()))
+)
+from launcher.bootstrap import bootstrap_lab
+SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 from labtests.core.scene_config import OptunaMeta
 META = OptunaMeta.from_env()

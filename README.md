@@ -41,7 +41,7 @@ python optimization/orchestrator.py
 
 Open the analysis dashboard:
 ```bash
-python analysis/app.py
+python launcher/launch_web.py
 ```
 
 ---
@@ -57,6 +57,7 @@ lab_shapeOPT/
 ├── generation/      # Scripts to build a gripper mesh from the active config (standard and fine variants)
 ├── labtests/        # Registry of composable simulation tests used by the optimizer to score grippers
 ├── launcher/        # Entry-point scripts — bootstraps dependencies and starts the web interface
+├── notion_pages/    # Notion documentation pages for the lab (not Python, not required to run)
 ├── optimization/    # CMA-ES optimization loop — trial orchestration, SOFA subprocess management, scoring
 ├── project/         # EmioLabs platform project files (platform-specific format, not Python)
 ├── runtime/         # Generated at runtime — Optuna DB, session config, benchmark results

@@ -23,11 +23,25 @@ TRIALS_DIR = LAB_ROOT / "runtime" / "trials"
 
 
 def register_monitoring_callbacks(app) -> None:
+    """Register monitoring callbacks: performance graph, progress, bounds, and jump controls."""
+
     @app.callback(
         Output("trial-detail-panel", "children"),
         Input("performance-graph", "clickData"),
     )
     def on_trial_click(click_data):
+        """Show the detail panel for the trial clicked on the performance graph.
+
+        Extracts gen/trial identifiers from the point's customdata, loads the
+        corresponding ``trial_state.json``, and builds the detail panel HTML.
+
+        Args:
+            click_data: Plotly clickData dict; each point carries
+                ``customdata = [score, gen_name, trial_name]``.
+
+        Returns:
+            Dash HTML component with trial detail, or an empty Div if no data.
+        """
         if not click_data:
             return html.Div()
         try:
@@ -35,7 +49,7 @@ def register_monitoring_callbacks(app) -> None:
             cd = point.get("customdata")
             if not cd or len(cd) < 3:
                 return html.Div()
-            gen_name, trial_name = cd[1], cd[2]
+            gen_name, trial_name = cd[1], cd[2]  # customdata layout: [score, gen_name, trial_name]
             if not gen_name or not trial_name:
                 return html.Div()
             state = _read_json(TRIALS_DIR / gen_name / trial_name / "trial_state.json")
@@ -56,6 +70,18 @@ def register_monitoring_callbacks(app) -> None:
         Input("performance-interval", "n_intervals"),
     )
     def update_performance(tab, _):
+        """Rebuild the performance graph and leaderboard for the performance tab.
+
+        Returns empty components when a different tab is active to avoid
+        rebuilding expensive graphs on every interval tick.
+
+        Args:
+            tab: Currently active tab value string.
+            _: Interval tick (unused).
+
+        Returns:
+            Tuple of (Plotly Figure, leaderboard HTML component).
+        """
         records, summaries = _load_data()
         if tab != "performance":
             return go.Figure(), html.Div()
@@ -68,6 +94,14 @@ def register_monitoring_callbacks(app) -> None:
         Input("bounds-interval", "n_intervals"),
     )
     def update_bounds(_):
+        """Rebuild the parameter bounds heatmap.
+
+        Args:
+            _: Interval tick (unused).
+
+        Returns:
+            Plotly Figure for the param bounds graph.
+        """
         return _build_param_bounds_graph(show_heatmap=True)
 
     @app.callback(
@@ -75,6 +109,14 @@ def register_monitoring_callbacks(app) -> None:
         Input("progress-interval", "n_intervals"),
     )
     def update_progress(_):
+        """Rebuild the progress stats and trial grid for the current generation.
+
+        Args:
+            _: Interval tick (unused).
+
+        Returns:
+            Tuple of (stats HTML component, grid HTML component).
+        """
         records, summaries = _load_data()
         current_records = _current_generation_records(records)
         stats = _build_progress_stats(current_records, records)
@@ -88,6 +130,19 @@ def register_monitoring_callbacks(app) -> None:
         State("jump-auto-enabled", "data"),
     )
     def update_jump_target(_clicks, _intervals, auto_enabled):
+        """Compute the DOM id of the earliest in-progress trial to scroll to.
+
+        Called on both manual button click and interval tick. On interval tick,
+        skips the lookup when auto-jump is disabled to avoid unnecessary work.
+
+        Args:
+            _clicks: Jump button click count.
+            _intervals: Interval tick count.
+            auto_enabled: Bool store value controlling auto-scroll behaviour.
+
+        Returns:
+            Dict with keys ``target_id`` (str or None) and ``auto`` (bool).
+        """
         triggered = getattr(ctx, "triggered_id", None)
         is_auto = triggered == "progress-interval"
 

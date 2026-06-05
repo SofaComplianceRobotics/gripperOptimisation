@@ -226,3 +226,10 @@ runtime/exports/
 notion_pages/
 runtime/random_cube_pick_seed_weights.json
 runtime/random_cube_pick_weight_search.json
+
+# Claude Code
+.claude/
+
+# Understand Anything
+.understand-anything/
+

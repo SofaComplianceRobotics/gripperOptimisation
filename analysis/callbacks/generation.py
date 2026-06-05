@@ -21,6 +21,8 @@ CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
 
 
 def register_generation_callbacks(app, _catalog: dict) -> None:
+    """Register generation tab callbacks: run/stop buttons and file open actions."""
+
     @app.callback(
         Output("gen-status", "children"),
         Input("gen-btn", "n_clicks"),
@@ -29,6 +31,19 @@ def register_generation_callbacks(app, _catalog: dict) -> None:
         prevent_initial_call=True,
     )
     def handle_generate(_, __, ___):
+        """Start standard generation, fine generation, or stop the subprocess.
+
+        Dispatches on ``ctx.triggered_id`` rather than click counts so all
+        three buttons share one callback without ambiguity.
+
+        Args:
+            _: Standard generate button click count.
+            __: Fine generate button click count.
+            ___: Stop button click count.
+
+        Returns:
+            Status message string from the subprocess manager.
+        """
         tid = ctx.triggered_id
         if tid == "gen-stop-btn":
             return _stop_proc("generate")
@@ -41,6 +56,14 @@ def register_generation_callbacks(app, _catalog: dict) -> None:
         Input("gen-interval", "n_intervals"),
     )
     def update_gen_log(_):
+        """Poll and return the current generate subprocess log.
+
+        Args:
+            _: Interval tick (unused).
+
+        Returns:
+            Log contents as a string.
+        """
         return _read_proc_log("generate")
 
     @app.callback(
@@ -51,6 +74,16 @@ def register_generation_callbacks(app, _catalog: dict) -> None:
         prevent_initial_call=True,
     )
     def handle_gen_open(_, __, ___):
+        """Open a generated output file in the OS default viewer.
+
+        Args:
+            _: Open STL button click count.
+            __: Open JSON button click count.
+            ___: Open fine STL button click count.
+
+        Returns:
+            Status message string describing the outcome.
+        """
         file_map = {
             "gen-open-stl-btn": CENTERPARTS_DIR / "new_gripper.stl",
             "gen-open-json-btn": CENTERPARTS_DIR / "new_gripper.json",

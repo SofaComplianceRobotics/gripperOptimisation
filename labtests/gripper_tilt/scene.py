@@ -98,6 +98,8 @@ def createScene(rootnode):
             effector_handles.target_mo.position.value = [pos]
 
             points = effector_handles.effector_mo.position.value
+            # Y-axis distance between opposite effector point pairs (0-2 and 1-3).
+            # The larger spread is the worst-case tilt seen at this waypoint.
             diff_02 = abs(points[0][1] - points[2][1])
             diff_13 = abs(points[1][1] - points[3][1])
             y_spread = max(diff_02, diff_13)

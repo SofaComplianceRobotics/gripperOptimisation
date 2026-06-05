@@ -19,6 +19,8 @@ LAB_ROOT = Path(__file__).resolve().parents[2]
 
 
 def register_scene_callbacks(app, catalog: dict) -> None:
+    """Register scene tab callbacks: inverse, recording, and watch scene launchers."""
+
     @app.callback(
         Output("scene-status", "children"),
         Input("scene-inverse-btn", "n_clicks"),
@@ -30,6 +32,23 @@ def register_scene_callbacks(app, catalog: dict) -> None:
         prevent_initial_call=True,
     )
     def handle_scene(_, __, ___, recording_test, watch_test, watch_slot):
+        """Launch the selected SOFA scene with the appropriate configuration.
+
+        Watch mode injects the test's scene file and env vars (test name,
+        weights, run slot, STL path) so the scene runs as if called by the
+        optimizer, allowing manual inspection of any labtest.
+
+        Args:
+            _: Inverse scene button click count.
+            __: Recording scene button click count.
+            ___: Watch scene button click count.
+            recording_test: Test name selected in the recording dropdown.
+            watch_test: Test name selected in the watch dropdown.
+            watch_slot: Run slot index for the watch scene (0-indexed).
+
+        Returns:
+            Status message string from the scene launcher.
+        """
         tid = ctx.triggered_id
         if tid == "scene-inverse-btn":
             return _launch_sofa_scene(INVERSE_SCENE)

@@ -12,7 +12,6 @@ runtime/
 ├── logs/               ← generate.log and optimize.log
 ├── modules/            ← Python packages installed by the lab (CadQuery, etc.)
 ├── recordings/         ← Motor trajectory recordings per test (NOT auto-generated)
-├── reports/            ← (reserved for future report exports)
 ├── trials/             ← Per-trial output from the optimization loop
 │   ├── gen_XXXX/
 │   │   └── trial_XX/
@@ -20,9 +19,10 @@ runtime/
 │   │       ├── trial_state.json   ← run results and scores
 │   │       └── preview.png        ← offscreen render of the gripper
 │   └── previews/                  ← flat copy of all previews (gen_XXXX_trial_XX.png)
-├── benchmark_results.json
-├── gripper_opt.db      ← Optuna SQLite database (the CMA-ES state)
-└── session_config.json ← e.g. which test to use for recording
+├── gripper_opt.db                     ← Optuna SQLite database (the CMA-ES state)
+├── session_config.json                ← written by the web UI before launching a recording scene
+├── random_cube_pick_seed_weights.json ← warm-start indices for the binary-search weight ladder
+└── random_cube_pick_weight_search.json ← full binary-search state per slot (progress + history)
 ```
 
 ---

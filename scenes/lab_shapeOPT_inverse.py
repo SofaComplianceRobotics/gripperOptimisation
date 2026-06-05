@@ -25,6 +25,7 @@ def createScene(rootnode):
 
     args = getParserArgs()
 
+    # --- Scene root and solvers ---
     settings, modelling, simulation = addHeader(rootnode, inverse=True)
     addSolvers(simulation)
 
@@ -32,6 +33,7 @@ def createScene(rootnode):
     rootnode.gravity = [0.0, -9810.0, 0.0]
     rootnode.VisualStyle.displayFlags.value = ["hideBehavior", "hideWireframe"]
 
+    # --- Robot ---
     emio = Emio(
         name="Emio",
         legsName=["blueleg"],
@@ -58,6 +60,7 @@ def createScene(rootnode):
     assembly.duration = 0.1
     emio.addObject(assembly)
 
+    # --- Visual tray (display only, no collision) ---
     tray = modelling.addChild("Tray")
     tray_mesh_path = str((LAB_ROOT.parent.parent / "data" / "meshes" / "tray.stl").resolve())
     tray.addObject(
@@ -69,11 +72,13 @@ def createScene(rootnode):
         "OglModel", src=tray.MeshSTLLoader.linkpath, color=[0.3, 0.3, 0.3, 0.2]
     )
 
+    # --- Effector chain: 4-point Rigid3 frame mapped onto the gripper ---
     emio.effector.addObject(
         "MechanicalObject", template="Rigid3", position=[0, 0, 0, 0, 0, 0, 1] * 4
     )
     emio.effector.addObject("RigidMapping", rigidIndexPerPoint=[0, 1, 2, 3])
 
+    # --- Inverse target: the ImGui-draggable Rigid3 the effector tracks ---
     effectorTarget = modelling.addChild("Target")
     effectorTarget.addObject("EulerImplicitSolver", firstOrder=True)
     effectorTarget.addObject(
@@ -90,6 +95,8 @@ def createScene(rootnode):
     emio.addInverseComponentAndGUI(
         effectorTarget.getMechanicalState().position.linkpath, barycentric=True
     )
+
+    # TCP mirrors the effector barycenter so the ImGui controller has a handle
     TCP = modelling.addChild("TCP")
     TCP.addObject(
         "MechanicalObject",
@@ -98,6 +105,7 @@ def createScene(rootnode):
     )
     MyGui.setIPController(rootnode.Modelling.Target, TCP, rootnode.ConstraintSolver)
 
+    # --- ImGui accessories: opening slider, program window, I/O stream ---
     MyGui.MoveWindow.addAccessory(
         "Gripper's opening (mm)",
         emio.centerpart.Effector.Distance.DistanceMapping.restLengths,
