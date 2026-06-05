@@ -50,7 +50,7 @@ logging.getLogger("dash").setLevel(logging.ERROR)
 from callbacks.config import register_config_callbacks
 from callbacks.generation import register_generation_callbacks
 from callbacks.monitoring import register_monitoring_callbacks
-from callbacks.optimise import register_optimise_callbacks
+from callbacks.optimize import register_optimise_callbacks
 from callbacks.scenes import register_scene_callbacks
 from ui.tabs import (
     build_config_tab,

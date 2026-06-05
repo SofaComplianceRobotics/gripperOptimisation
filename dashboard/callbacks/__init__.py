@@ -3,7 +3,7 @@
 from .config import register_config_callbacks
 from .generation import register_generation_callbacks
 from .scenes import register_scene_callbacks
-from .optimise import register_optimise_callbacks
+from .optimize import register_optimise_callbacks
 from .monitoring import register_monitoring_callbacks
 
 __all__ = [

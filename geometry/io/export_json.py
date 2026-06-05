@@ -8,8 +8,8 @@ import json
 import math
 from pathlib import Path
 
-from core.params import ModelParams
-from core.transforms.quaternion import (
+from geometry.params import ModelParams
+from geometry.transforms.quaternion import (
     _axis_angle_to_quat,
     _quat_mul,
     _normalize_quat,

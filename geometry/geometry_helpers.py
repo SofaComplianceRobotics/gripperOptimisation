@@ -9,7 +9,7 @@ import math
 
 import cadquery as cq
 
-from core.params import EPS_LEN, EPS_NORMAL
+from geometry.params import EPS_LEN, EPS_NORMAL
 
 
 def annular_sector(

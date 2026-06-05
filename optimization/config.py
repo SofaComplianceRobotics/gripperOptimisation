@@ -12,8 +12,8 @@ from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parent.parent
 
-from core.params import ModelParams
-from core.timing_config import DT_DIRECT
+from geometry.params import ModelParams
+from geometry.timing_config import DT_DIRECT
 from labtests.registry import get_default_test_names, get_test_spec, parse_test_names
 
 # ─────────────────────────────────────────────

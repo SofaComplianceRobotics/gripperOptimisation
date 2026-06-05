@@ -41,7 +41,7 @@ from labtests.random_cube_pick.weight_search import (
 
 SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
-from core.timing_config import DT_DIRECT as DT
+from geometry.timing_config import DT_DIRECT as DT
 
 RECORD_FILE = str(
     LAB_ROOT / "runtime" / "recordings" / "random_cube_pick" / "motor_recording.json"

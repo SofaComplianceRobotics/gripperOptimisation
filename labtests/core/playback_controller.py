@@ -24,7 +24,7 @@ Four override hooks:
 
 from __future__ import annotations
 
-from core.timing_config import DT_CONTACT, DT_DIRECT
+from geometry.timing_config import DT_CONTACT, DT_DIRECT
 
 from labtests.core._loop_phases import (
     apply_scoring_rules,

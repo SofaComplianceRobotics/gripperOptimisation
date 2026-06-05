@@ -24,7 +24,7 @@ from optimization.config import (
     SELECTED_TEST_NAMES,
     SELECTED_TEST_WEIGHTS,
 )
-from optimization.geometry import (
+from optimization.geom_pipeline import (
     GeometryExportFailureError,
     GeometryExportTimeoutError,
     generate_stl_for_trial,
@@ -33,7 +33,7 @@ from optimization.geometry import (
     resolve_failed_preview_image,
 )
 from optimization._trial_state import update_trial_run
-from optimization.sofa import launch_sofa, wait_for_geometry_slot
+from optimization.sofa_runner import launch_sofa, wait_for_geometry_slot
 from optimization.state import TrialState, _save_trial_checkpoint
 
 

@@ -11,7 +11,7 @@ from pathlib import Path
 import cadquery as cq
 from OCP.BRepTools import BRepTools
 
-from core.params import ModelParams
+from geometry.params import ModelParams
 
 RETURN_GMSH_WARNING = 1  # 0=silent, 1=errors only, 5=full
 

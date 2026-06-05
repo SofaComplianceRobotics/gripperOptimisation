@@ -8,18 +8,18 @@ import logging
 import shutil
 from pathlib import Path
 
-from core.assembly import assemble_model
-from core.gripper_parts import make_pincer_pair_world_collision
-from core.io.export_mesh import (
+from geometry.assembly import assemble_model
+from geometry.gripper_parts import make_pincer_pair_world_collision
+from geometry.io.export_mesh import (
     model_to_stl_collision,
     model_to_stl,
     model_to_vtk,
     run_invariants,
 )
-from core.io.export_json import export_leg_attachment_json
-from core.io.paths import make_versioned_export_path
-from core.transforms.quaternion import rotate_model_to_export_frame
-from core.params import ModelParams, validate_params
+from geometry.io.export_json import export_leg_attachment_json
+from geometry.io.paths import make_versioned_export_path
+from geometry.transforms.quaternion import rotate_model_to_export_frame
+from geometry.params import ModelParams, validate_params
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 

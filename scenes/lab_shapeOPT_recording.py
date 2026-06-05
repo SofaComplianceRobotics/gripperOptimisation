@@ -23,7 +23,7 @@ SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 import Sofa.Core
 
-from core.timing_config import DT_INVERSE
+from geometry.timing_config import DT_INVERSE
 
 
 def _pick_recording_target() -> str:

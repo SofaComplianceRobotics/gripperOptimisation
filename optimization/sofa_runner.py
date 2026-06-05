@@ -1,5 +1,5 @@
 """
-sofa.py — SOFA process management, launching, and subprocess handling.
+sofa_runner.py — SOFA process management, launching, and subprocess handling.
 
 Manages SOFA simulation instance lifecycle, Windows job object setup,
 and process attachment for graceful cleanup.

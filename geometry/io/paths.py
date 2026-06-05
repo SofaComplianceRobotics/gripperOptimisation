@@ -6,7 +6,7 @@ for gripper model output files.
 
 from pathlib import Path
 
-from core.params import ModelParams
+from geometry.params import ModelParams
 
 CORE_ROOT = Path(__file__).resolve().parent.parent
 LAB_ROOT = CORE_ROOT.parent

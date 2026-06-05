@@ -9,9 +9,9 @@ import math
 
 import cadquery as cq
 
-from core.geometry_helpers import make_vertical_drop_from_low_face
-from core.params import ModelParams
-from core.gripper_parts import make_circle, make_leg_attachment, make_pincer_pair_world
+from geometry.geometry_helpers import make_vertical_drop_from_low_face
+from geometry.params import ModelParams
+from geometry.gripper_parts import make_circle, make_leg_attachment, make_pincer_pair_world
 
 
 def _rotate_vector_axis_angle(

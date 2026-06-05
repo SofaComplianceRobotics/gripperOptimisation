@@ -7,7 +7,7 @@ without inheriting from the controller.
 
 from __future__ import annotations
 
-from core.timing_config import DT_DIRECT
+from geometry.timing_config import DT_DIRECT
 
 from labtests.core._sim_query import (
     get_cube_collision_min_y,

@@ -22,8 +22,8 @@ from _gripper_common import (
 _START_TS = time.perf_counter()
 ensure_cadquery_runtime()
 
-from core.export_pipeline import run_export  # noqa: E402
-from core.params import ModelParams  # noqa: E402
+from geometry.export_pipeline import run_export  # noqa: E402
+from geometry.params import ModelParams  # noqa: E402
 
 
 def main() -> None:

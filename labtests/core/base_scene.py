@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 from typing import NamedTuple
-from core.timing_config import DT_INVERSE, DT_DIRECT
+from geometry.timing_config import DT_INVERSE, DT_DIRECT
 
 
 class SceneNodes(NamedTuple):

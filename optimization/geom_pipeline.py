@@ -1,5 +1,5 @@
 """
-geometry.py — Geometry generation, STL rendering, and preview handling.
+geom_pipeline.py — Geometry generation, STL rendering, and preview handling.
 
 Manages the full pipeline from trial parameters to visual STL and preview images.
 """
