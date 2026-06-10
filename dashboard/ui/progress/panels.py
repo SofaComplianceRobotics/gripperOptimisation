@@ -9,7 +9,7 @@ trials stand.
 
 from dash import html
 
-from plotting.colors import C_BANNER, C_BORDER, C_FINAL
+from dashboard.plotting.colors import C_BANNER, C_BORDER, C_FINAL
 
 from .builders import _build_progress_card
 

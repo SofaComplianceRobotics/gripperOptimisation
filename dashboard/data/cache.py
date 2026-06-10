@@ -48,8 +48,8 @@ def _load_data():
         Tuple of (records, summaries). Uses a short-lived cache to avoid
         excessive disk reads.
     """
-    from analyze_config import LIVE_REFRESH_SECONDS
-    from analyze_io import load_all_trials, load_gen_summaries
+    from dashboard.analyze_config import LIVE_REFRESH_SECONDS
+    from dashboard.analyze_io import load_all_trials, load_gen_summaries
 
     try:
         now = time.time()

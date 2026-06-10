@@ -2,13 +2,11 @@
 
 import plotly.graph_objects as go
 
+from .colors import C_AVG, C_BEST, C_FINAL
 from .compute import (
+    _calculate_smart_ticks,
     _compute_contributions,
     _test_color,
-    _calculate_smart_ticks,
-    C_FINAL,
-    C_AVG,
-    C_BEST,
 )
 
 # ---------------------------------------------------------------------------
@@ -161,7 +159,7 @@ def _build_avg_traces(plot_data: dict, all_test_names: list[str]) -> list[go.Sca
     # Rolling average
     avg_x, avg_y = plot_data["avg_x"], plot_data["avg_y"]
     if avg_x:
-        from analyze_config import CENTERED_AVG_HALF_WINDOW
+        from dashboard.analyze_config import CENTERED_AVG_HALF_WINDOW
 
         trace_avg = go.Scatter(
             x=avg_x,

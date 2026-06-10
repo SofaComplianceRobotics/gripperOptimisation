@@ -11,8 +11,8 @@ Module contents:
 
 from dash import html
 
-from data.cache import _load_trial_state
-from plotting.colors import C_BANNER
+from dashboard.data.cache import _load_trial_state
+from dashboard.plotting.colors import C_BANNER
 
 from .helpers import (
     _get_test_max_score,

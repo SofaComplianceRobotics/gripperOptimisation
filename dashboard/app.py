@@ -8,14 +8,10 @@ import sys
 import threading
 import time
 import webbrowser
-from pathlib import Path
 
 from launcher.bootstrap import bootstrap_lab
 
 SCRIPT_DIR, _SRC_ROOT, _APP_ROOT, _LAB_ROOT = bootstrap_lab(__file__)
-ANALYSIS_DIR = Path(__file__).resolve().parent
-if str(ANALYSIS_DIR) not in sys.path:
-    sys.path.insert(0, str(ANALYSIS_DIR))
 
 try:
     from dash import Dash, dcc, html
@@ -31,12 +27,12 @@ os.environ.pop("WERKZEUG_SERVER_FD", None)
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 logging.getLogger("dash").setLevel(logging.ERROR)
 
-from callbacks.config import register_config_callbacks
-from callbacks.generation import register_generation_callbacks
-from callbacks.monitoring import register_monitoring_callbacks
-from callbacks.optimize import register_optimise_callbacks
-from callbacks.scenes import register_scene_callbacks
-from ui.tabs import (
+from dashboard.callbacks.config import register_config_callbacks
+from dashboard.callbacks.generation import register_generation_callbacks
+from dashboard.callbacks.monitoring import register_monitoring_callbacks
+from dashboard.callbacks.optimize import register_optimise_callbacks
+from dashboard.callbacks.scenes import register_scene_callbacks
+from dashboard.ui.tabs import (
     build_config_tab,
     build_generate_tab,
     build_optimise_tab,
@@ -44,6 +40,18 @@ from ui.tabs import (
     build_performance_tab,
     build_progress_tab,
     build_scenes_tab,
+)
+from dashboard.ui.tabs.styles import (
+    BODY_STYLE,
+    HEADER_BAR_STYLE,
+    HEADER_INNER_STYLE,
+    HEADER_SUBTITLE_STYLE,
+    HEADER_TITLE_STYLE,
+    PAGE_STYLE,
+    TAB_CONTENT_STYLE,
+    TAB_SELECTED_STYLE,
+    TAB_STYLE,
+    TABS_STYLE,
 )
 
 
@@ -59,63 +67,58 @@ def create_app() -> Dash:
 
     app = Dash(
         __name__,
+        title="ShapeOPT",
+        update_title=None,
         external_stylesheets=[
             "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         ],
     )
 
+    tab_defs = [
+        ("Config", "config", build_config_tab()),
+        ("Generate", "generate", build_generate_tab()),
+        ("Scenes", "scenes", build_scenes_tab(catalog)),
+        ("Optimise", "optimise", build_optimise_tab(catalog)),
+        ("Performance", "performance", build_performance_tab()),
+        ("Progress", "progress", build_progress_tab()),
+        ("Parameter Bounds", "bounds", build_param_bounds_tab()),
+    ]
+
     app.layout = html.Div(
         [
-            html.Div(
-                [
-                    html.H1("ShapeOPT", className="text-center mb-1 mt-1"),
-                    html.P(
-                        "Configure · Generate · Optimise · Analyse",
-                        className="text-center text-muted mb-2",
-                    ),
-                ]
+            html.Header(
+                html.Div(
+                    [
+                        html.Span("ShapeOPT", style=HEADER_TITLE_STYLE),
+                        html.Span(
+                            "Configure · Generate · Optimise · Analyse",
+                            style=HEADER_SUBTITLE_STYLE,
+                        ),
+                    ],
+                    style=HEADER_INNER_STYLE,
+                ),
+                style=HEADER_BAR_STYLE,
             ),
-            dcc.Tabs(
-                id="tabs",
-                value="config",
-                children=[
-                    dcc.Tab(
-                        label="Config", value="config", children=build_config_tab()
-                    ),
-                    dcc.Tab(
-                        label="Generate",
-                        value="generate",
-                        children=build_generate_tab(),
-                    ),
-                    dcc.Tab(
-                        label="Scenes",
-                        value="scenes",
-                        children=build_scenes_tab(catalog),
-                    ),
-                    dcc.Tab(
-                        label="Optimise",
-                        value="optimise",
-                        children=build_optimise_tab(catalog),
-                    ),
-                    dcc.Tab(
-                        label="Performance",
-                        value="performance",
-                        children=build_performance_tab(),
-                    ),
-                    dcc.Tab(
-                        label="Progress",
-                        value="progress",
-                        children=build_progress_tab(),
-                    ),
-                    dcc.Tab(
-                        label="Parameter Bounds",
-                        value="bounds",
-                        children=build_param_bounds_tab(),
-                    ),
-                ],
+            html.Div(
+                dcc.Tabs(
+                    id="tabs",
+                    value="config",
+                    style=TABS_STYLE,
+                    children=[
+                        dcc.Tab(
+                            label=label,
+                            value=value,
+                            children=html.Div(children, style=TAB_CONTENT_STYLE),
+                            style=TAB_STYLE,
+                            selected_style=TAB_SELECTED_STYLE,
+                        )
+                        for label, value, children in tab_defs
+                    ],
+                ),
+                style=BODY_STYLE,
             ),
         ],
-        className="py-3",
+        style=PAGE_STYLE,
     )
 
     register_config_callbacks(app)

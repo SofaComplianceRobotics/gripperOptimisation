@@ -7,10 +7,13 @@ from pathlib import Path
 import plotly.graph_objects as go
 from dash import Input, Output, State, ctx, html
 
-from data.cache import _current_generation_records, _load_data, _read_json
-from plotting.bounds import _build_param_bounds_graph
-from plotting.performance import _build_leaderboard_html, _build_performance_graph
-from ui.progress import (
+from dashboard.data.cache import _current_generation_records, _load_data, _read_json
+from dashboard.plotting.bounds import _build_param_bounds_graph
+from dashboard.plotting.performance import (
+    _build_leaderboard_html,
+    _build_performance_graph,
+)
+from dashboard.ui.progress import (
     _build_progress_grid,
     _build_progress_stats,
     _build_trial_detail,

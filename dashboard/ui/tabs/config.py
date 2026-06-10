@@ -9,7 +9,7 @@ def build_config_tab() -> html.Div:
     Returns:
         A Dash HTML `Div` containing configuration editor and save controls.
     """
-    from process.process_manager import _load_config_text
+    from dashboard.process.process_manager import _load_config_text
 
     return html.Div(
         [

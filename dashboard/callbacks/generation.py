@@ -8,7 +8,7 @@ from pathlib import Path
 from dash import Input, Output, ctx
 
 from names import CENTERPARTS_DIRNAME, GRIPPER_NAME, GRIPPER_PRINT_NAME
-from process.process_manager import (
+from dashboard.process.process_manager import (
     GENERATE_FINE_SCRIPT,
     GENERATE_SCRIPT,
     _read_proc_log,

@@ -14,5 +14,5 @@ TOP_X = 10  # Number of top trials to display in leaderboard
 CENTERED_AVG_HALF_WINDOW = 10  # Window size for rolling average plot
 LIVE_REFRESH_SECONDS = 2.0  # Refresh interval for live monitoring
 
-HARD_FAIL_SCORE = float(os.environ["HARD_FAIL_SCORE"])
+HARD_FAIL_SCORE = float(os.environ.get("HARD_FAIL_SCORE", "-3.0"))
 SCORE_AGGREGATION = "mean"

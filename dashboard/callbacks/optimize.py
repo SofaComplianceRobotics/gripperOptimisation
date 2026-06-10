@@ -7,8 +7,12 @@ import os
 
 from dash import ALL, Input, Output, State, ctx
 
-from process.process_manager import _read_proc_log, _start_proc, _stop_proc
-from process.process_manager import OPTIMIZE_SCRIPT
+from dashboard.process.process_manager import (
+    OPTIMIZE_SCRIPT,
+    _read_proc_log,
+    _start_proc,
+    _stop_proc,
+)
 
 
 def register_optimise_callbacks(app) -> None:

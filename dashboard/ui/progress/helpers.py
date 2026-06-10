@@ -1,6 +1,6 @@
 """Progress state helpers — state logic and cache management."""
 
-from data.cache import _load_trial_state, TRIALS_DIR
+from dashboard.data.cache import TRIALS_DIR, _load_trial_state
 
 # ── Caches ─────────────────────────────────────────────────────
 _MAX_SCORE_CACHE: dict[str, float] = {}

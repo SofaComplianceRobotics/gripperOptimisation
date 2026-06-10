@@ -9,7 +9,7 @@ import json
 import statistics
 from pathlib import Path
 
-from analyze_config import (
+from dashboard.analyze_config import (
     TRIALS_DIR,
     HARD_FAIL_SCORE,
     SCORE_AGGREGATION,

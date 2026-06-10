@@ -8,7 +8,7 @@ from pathlib import Path
 from dash import Input, Output, State, ctx
 
 from names import GRIPPER_COLLISION_STL
-from process.process_manager import (
+from dashboard.process.process_manager import (
     INVERSE_SCENE,
     RECORDING_SCENE,
     _launch_sofa_scene,

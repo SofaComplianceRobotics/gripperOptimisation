@@ -7,7 +7,7 @@ import re
 
 from dash import Input, Output, State, html
 
-from process.process_manager import CONFIG_FILE
+from dashboard.process.process_manager import CONFIG_FILE
 
 
 def register_config_callbacks(app) -> None:

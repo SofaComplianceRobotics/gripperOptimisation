@@ -2,7 +2,7 @@
 
 from dash import dcc, html
 
-from analyze_config import LIVE_REFRESH_SECONDS
+from dashboard.analyze_config import LIVE_REFRESH_SECONDS
 
 
 def build_performance_tab() -> html.Div:

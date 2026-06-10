@@ -1,35 +1,9 @@
 """Compute: Mathematical functions for data transformation, aggregation, score calculations."""
 
-from analyze_config import CENTERED_AVG_HALF_WINDOW
-from analyze_io import load_all_trials
+from dashboard.analyze_config import CENTERED_AVG_HALF_WINDOW
+from dashboard.analyze_io import load_all_trials
 
-# ---------------------------------------------------------------------------
-# Colour palette — matches UI.py SLICE_COLORS
-# ---------------------------------------------------------------------------
-TEST_COLORS = [
-    "#404867",  # (matches C_BANNER in UI.py)
-    "#6b7aad",
-    "#9aa3cc",
-    "#2c3e6b",
-    "#c0392b",
-    "#2ecc71",
-    "#e67e22",
-    "#9b59b6",
-]
-
-NEG_ALPHA = 0.40  # alpha for negative-contribution segments
-NEG_HATCH = (
-    "////"  # hatch for negative segments (note: Plotly doesn't support hatching)
-)
-
-C_BANNER = "#404867"
-C_BG = "#ffffff"
-C_SECTION = "#fafbfc"
-C_BORDER = "#d0d3d8"
-C_FINAL = "#c0392b"  # final-score tick colour
-C_AVG = "#2ecc71"  # rolling average line
-C_BEST = "#e74c3c"  # best-so-far line
-
+from .colors import TEST_COLORS
 
 # ---------------------------------------------------------------------------
 # Helpers
