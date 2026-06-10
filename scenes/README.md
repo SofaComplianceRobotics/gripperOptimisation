@@ -6,6 +6,10 @@ SOFA scene scripts for manual use — not run by the optimizer. Launch with `run
 
 ## Files
 
+**`_manual_scene.py`** — shared scene assembly
+
+Both scenes below drive the same robot with the same effector-target and ImGui setup; `build_manual_scene()` owns that common part (robot, tray, effector chain, draggable target, GUI accessories). The scene files only add what makes them unique.
+
 **`lab_shapeOPT_inverse.py`** — manual inverse-mode control
 
 Loads the gripper in inverse solver mode with the full SOFA ImGui interface: drag-to-target effector control, gripper opening slider, program window, and I/O stream. Use this to manually drive the gripper, inspect the current mesh geometry, or validate a config before optimizing.

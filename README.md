@@ -14,7 +14,7 @@ Lab ShapeOPT lets you generate soft robotic gripper geometries from a parameter 
 
 **Prerequisites:** EmioLabs installed (provides SOFA and runSofa.exe). Python 3.10+.
 
-Dependencies are managed by EmioLabs. If running outside the platform, install the packages used across `core/`, `generation/`, `optimization/`, and `analysis/` manually (CadQuery, gmsh, Optuna, Dash, pyvista, matplotlib).
+Dependencies are managed by EmioLabs. If running outside the platform, install the packages used across `geometry/`, `generation/`, `optimization/`, and `dashboard/` manually (CadQuery, gmsh, Optuna, Dash, pyvista, matplotlib).
 
 ---
 
@@ -39,9 +39,14 @@ Run the optimization loop:
 python optimization/orchestrator.py
 ```
 
-Open the analysis dashboard:
+Open the dashboard:
 ```bash
 python launcher/launch_web.py
+```
+
+Run the unit tests:
+```bash
+python -m pytest
 ```
 
 ---
@@ -50,18 +55,19 @@ python launcher/launch_web.py
 
 ```
 lab_shapeOPT/
-├── analysis/        # Dash web dashboard — leaderboard, score history, trial inspection
 ├── config/          # Active gripper config files (JSONC) read by generation and optimization
 ├── cool_grippers/   # Curated saved gripper configs with preview images — reference designs
-├── core/            # Parametric geometry engine — part definitions, assembly, mesh export, param schema
+├── dashboard/       # Dash web control panel — config editing, run controls, live monitoring
 ├── generation/      # Scripts to build a gripper mesh from the active config (standard and fine variants)
+├── geometry/        # Parametric geometry engine — part definitions, assembly, mesh export, param schema
 ├── labtests/        # Registry of composable simulation tests used by the optimizer to score grippers
-├── launcher/        # Entry-point scripts — bootstraps dependencies and starts the web interface
-├── notion_pages/    # Notion documentation pages for the lab (not Python, not required to run)
+├── launcher/        # Entry-point scripts — bootstraps the environment and starts the web interface
 ├── optimization/    # CMA-ES optimization loop — trial orchestration, SOFA subprocess management, scoring
 ├── project/         # EmioLabs platform project files (platform-specific format, not Python)
-├── runtime/         # Generated at runtime — Optuna DB, session config, benchmark results
-└── scenes/          # SOFA scene scripts passed directly to runSofa.exe
+├── runtime/         # Generated at runtime — Optuna DB, session config, trial results
+├── scenes/          # SOFA scene scripts passed directly to runSofa.exe
+├── tests/           # pytest unit tests for the pure-Python layers
+└── names.py         # Single source for cross-component part/file names
 ```
 
 ---

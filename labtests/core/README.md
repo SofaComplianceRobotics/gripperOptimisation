@@ -6,15 +6,19 @@ Shared infrastructure for every ShapeOPT test. All scene files import from here 
 
 ## Public modules
 
-**`base_scene.py`** — `build_base_scene(rootnode, *, inverse, friction)` → `SceneNodes | None`
+**`base_scene.py`** — `build_base_scene(rootnode, *, inverse, friction, multithreading)` → `SceneNodes | None`
 
-The single call that every test's `createScene()` makes first. Configures the root node, builds the Emio robot, attaches legs, and returns a `SceneNodes` named-tuple with `(rootnode, settings, modelling, simulation, emio)`. Returns `None` if the robot mesh is invalid — callers must check and bail.
+The single call that every test's `createScene()` makes first. Configures the root node, builds the Emio robot, attaches legs, and returns a `SceneNodes` named-tuple with `(rootnode, settings, modelling, simulation, emio)`. Returns `None` if the robot mesh is invalid — callers must check and bail. Part names come from `names.py`. `multithreading` defaults off (optimization runs many SOFA processes in parallel); the manual scenes pass `True`.
 
-**`scene_config.py`** — environment-variable config objects
+**`scene_defaults.py`** — default physics and scoring values
 
-Two frozen dataclasses populated at scene startup from `OPTUNA_*` / `SHAPEOPT_*` / physics env vars injected by the optimizer:
-- `OptunaMeta.from_env()` — the five values every test needs to write scores: `trial_state_path`, `run_slot`, `gen`, `trial`, `run`.
-- `PlaybackConfig.from_env(lab_root)` — full config for direct-mode tests: mesh path, friction, cube physics, scoring thresholds, mass ramp. Embeds an `OptunaMeta` as `.meta`.
+Single source for the direct-mode scene constants (friction, cube spawn/mass, pickup thresholds, scoring penalties). Scenes run standalone on these values; no env vars required.
+
+**`scene_config.py`** — config resolution objects
+
+Two frozen dataclasses populated at scene startup:
+- `OptunaMeta.from_env()` — the five values every test needs to write scores: `trial_state_path`, `run_slot`, `gen`, `trial`, `run`. All zero/None when launched outside the optimizer.
+- `PlaybackConfig.from_env(lab_root)` — full config for direct-mode tests: mesh path, friction, cube physics, scoring thresholds, mass ramp. Values come from `scene_defaults.py`, individually overridable per-process via the matching env var (e.g. `CUBE_MASS_MAX`). Embeds an `OptunaMeta` as `.meta`.
 
 **`scoring.py`** — `ScoreWriter`
 
@@ -49,10 +53,6 @@ Stateless functions that take the controller instance explicitly, making the pha
 **`_sim_query.py`** — low-level SOFA node reads and writes
 
 Thin wrappers around SOFA mechanical state access: `get_cube_y`, `set_cube_mass`, `get_cube_collision_min_y`, `get_gripper_collision_min_y`, `spawn_overlap_detected`. All return `None` or a safe default on error so they never crash a running scene.
-
-**`scene_paths.py`** — `ensure_scene_paths(scene_file)` (legacy)
-
-Older path-bootstrapping function. Superseded by `launcher.bootstrap.bootstrap_lab` — use that in new scene files.
 
 ---
 

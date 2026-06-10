@@ -18,7 +18,7 @@ Not read by any script automatically. Use it as a known-good backup: copy it to 
 
 ## Format
 
-Keys map directly to `ModelParams` fields defined in `core/params.py`. Unknown keys are silently ignored. Missing keys use the dataclass defaults.
+Keys map directly to `ModelParams` fields defined in `geometry/params.py`. Any field name works (except output naming, which is fixed in `names.py`). Unknown keys are silently ignored. Missing keys use the dataclass defaults.
 
 ```jsonc
 {
@@ -35,4 +35,4 @@ Keys map directly to `ModelParams` fields defined in `core/params.py`. Unknown k
 }
 ```
 
-To see all available keys and their valid ranges, refer to `core/params.py` — each field has `opt` metadata with `(type, min, max)`.
+To see all available keys, their search ranges, and their validity rules, refer to `geometry/params.py` — each field carries `opt` and `check` metadata.

@@ -31,7 +31,7 @@ runtime/
 
 **`gripper_opt.db`** — Optuna's SQLite database. Stores all trial params, scores, and the CMA-ES sampler state. The optimizer resumes from this on restart. Delete it to start a fresh optimization run.
 
-**`trials/progress.json`** — Written after every trial. Contains overall progress (generation, trial counts, best/avg score, test weights). Read by the analysis dashboard and the UI progress bar.
+**`trials/progress.json`** — Written after every trial. Contains overall progress (generation, trial counts, best/avg score, test weights). Read by the dashboard and the UI progress bar.
 
 **`trials/gen_XXXX/trial_XX/trial_state.json`** — Per-trial score breakdown. Has one entry per simulation run, including score, reason string, sim time, and test-specific fields (hold time, cube Y, etc.).
 
@@ -43,4 +43,4 @@ runtime/
 
 **`recordings/<test_name>/motor_recording.json`** — Motor position trajectory recorded in inverse mode. Required by any direct-mode labtest. These are committed and should not be deleted — re-recording takes manual effort.
 
-**`modules/`** — Python packages that `_gripper_common.py` installs when CadQuery isn't available in the environment. Managed automatically.
+**`modules/`** — Lab-local Python packages (CadQuery and friends) used when they aren't available in the active environment. Install into it manually with `pip install --target runtime/modules/site-packages <package>`.

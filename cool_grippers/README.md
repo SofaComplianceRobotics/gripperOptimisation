@@ -12,9 +12,8 @@ cool_grippers/
 │   └── lab_config_0.jsonc
 ├── gripper_1/
 │   └── lab_config_1.jsonc
-...
-└── gripper_7/
-    └── lab_config_7.jsonc
+└── gripper_N/
+    └── lab_config_N.jsonc
 ```
 
 Each `lab_config_X.jsonc` is a complete `ModelParams` parameter set in the same format as `config/lab_config.jsonc`.

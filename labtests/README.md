@@ -253,7 +253,7 @@ from labtests.grasp_hold.scene import createScene as createScene  # noqa: F401
 |---|---|
 | `build_base_scene(rootnode, inverse, friction)` | Robot + solvers. Returns `SceneNodes` or `None`. |
 | `add_required_plugins(simulation)` | 13 SOFA plugins for collision and contact. |
-| `PlaybackConfig.from_env(lab_root)` | All `SHAPEOPT_*` / `OPTUNA_*` env vars in one object. |
+| `PlaybackConfig.from_env(lab_root)` | Scene physics/scoring config: defaults from `core/scene_defaults.py`, env vars override individually. |
 | `OptunaMeta.from_env()` | Optuna metadata only (gen, trial, run, slot). |
 | `setup_collision(emio, stl_path)` | Adds gripper collision mesh. Returns node. |
 | `setup_cube_floor(simulation, gripper_collision, **kwargs)` | Adds cube + floor. Returns `CubeFloorHandles`. |
@@ -283,6 +283,8 @@ from labtests.grasp_hold.scene import createScene as createScene  # noqa: F401
 | `OPTUNA_RUN` | Current run number |
 | `OPTUNA_STL_PATH` | Path to the gripper collision STL |
 
+None of these are required: launched standalone (dashboard "watch" button, manual runSofa), scenes fall back to `core/scene_defaults.py` values and a no-trial `OptunaMeta`. Physics/scoring values (`CUBE_MASS_MAX`, `SHAPEOPT_FRICTION_COEF`, ...) can also be set per-process to override a default for one-off experiments.
+
 ---
 
 ## Checklist
@@ -291,6 +293,6 @@ from labtests.grasp_hold.scene import createScene as createScene  # noqa: F401
 - [ ] `test.json` — `label`, `description`, `default_selected`, `run_count`
 - [ ] `scoring.py` — `SCORE_KEY`, `TEST_NAME`, `TEST_LABEL`, `TEST_DESCRIPTION`, `MAX_SCORE`
 - [ ] `scene.py` — defines `createScene(rootnode)`, returns `rootnode`
-- [ ] Path bootstrap (3-line `ensure_scene_paths` block) at top of `scene.py`
+- [ ] Path bootstrap (`bootstrap_lab` block) at top of `scene.py`
 - [ ] `writer.write_score_and_stop(score, reason)` called exactly once per run
 - [ ] `MAX_SCORE` matches the highest realistic score the test can produce

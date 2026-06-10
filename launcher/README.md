@@ -14,7 +14,7 @@ Sets up the two SOFA environments before handing off to the dashboard:
 
 Clears `PYTHONHOME` / `PYTHONSTARTUP` / `PYTHONUSERBASE` / `PYTHONEXECUTABLE` that EmioLabs injects, which would otherwise leak into SOFA subprocesses and break their Python interpreter.
 
-Calls `analysis.app.launch_dashboard(port=8050, open_browser=True)`.
+Calls `dashboard.app.launch_dashboard(port=8050, open_browser=True)`.
 
 **`bootstrap.py`** — `bootstrap_lab(script_file)` → `(script_dir, src_root, app_root, lab_root)`
 

@@ -1,6 +1,6 @@
 # generation/
 
-Entry points for turning a config file into gripper mesh files. Scripts here read `config/lab_config.jsonc`, build a `ModelParams`, and hand off to `core/export_pipeline.py`.
+Entry points for turning a config file into gripper mesh files. Scripts here read `config/lab_config.jsonc`, build a `ModelParams`, and hand off to `geometry/export_pipeline.py`.
 
 ---
 
@@ -8,12 +8,17 @@ Entry points for turning a config file into gripper mesh files. Scripts here rea
 
 **`generate_gripper.py`** — Standard generation. Reads the active config and exports the simulation-resolution mesh (STL + VTK + leg attachment JSON). This is what the optimizer calls for every trial, and what the EmioLabs UI button triggers.
 
-**`generate_gripper_fine.py`** — Same flow but outputs a much finer mesh intended for 3D printing. Writes `new_gripper_print.stl` separately so it doesn't overwrite the coarser simulation mesh. Run this manually when you want to print a design.
+**`generate_gripper_fine.py`** — Same flow but outputs a much finer mesh intended for 3D printing. Writes the print STL under a separate name (see `names.py`) so it never overwrites the coarser simulation mesh. Run this manually when you want to print a design.
 
-**`_gripper_common.py`** — Shared bootstrap used by both scripts above. Handles: JSONC config loading (strips `//` comments), `ModelParams` construction from the config dict, and `ensure_cadquery_runtime()` which installs CadQuery from `runtime/` if it isn't available in the active environment. Prefixed with `_` — not a public entry point.
+**`_gripper_common.py`** — Shared bootstrap used by both scripts above:
+- `load_jsonc()` — JSONC loading; strips `//` comments without touching `//` inside string values
+- `params_from_config()` — generic config→`ModelParams` mapping (see below)
+- `ensure_cadquery_runtime()` — verifies CadQuery is importable (current env or `runtime/modules/site-packages`), with an actionable error if not
+
+Prefixed with `_` — not a public entry point.
 
 ---
 
 ## How config maps to geometry
 
-`config/lab_config.jsonc` keys map directly to `ModelParams` fields defined in `core/params.py`. Any key in the config that matches a field name overrides the default. Unknown keys are ignored. The optimizer writes its own config values through this same path.
+Every `ModelParams` field name found in the config is applied, coerced to the type of the field's default. Unknown keys are ignored; missing keys keep their defaults. Exceptions: `export_dir`/`export_stem` are never read from config (output naming is a code-level contract in `names.py`), and `mesh_enabled`/`mesh_show_viewer` are always forced for batch generation. The optimizer writes its own per-trial config through this same path.
