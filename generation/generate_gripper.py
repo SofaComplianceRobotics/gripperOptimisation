@@ -30,9 +30,6 @@ def main() -> None:
     This function parses CLI arguments, loads the JSONC configuration, builds
     model parameters and runs the export pipeline producing STL/JSON/VTK files.
     """
-    import sys
-
-    print(sys.executable)
     parser = argparse.ArgumentParser(
         description="Generate gripper meshes from a JSONC config."
     )

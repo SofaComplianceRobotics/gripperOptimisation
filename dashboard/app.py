@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -20,26 +19,11 @@ if str(ANALYSIS_DIR) not in sys.path:
 
 try:
     from dash import Dash, dcc, html
-
-    DASH_AVAILABLE = True
-except ImportError:
-    DASH_AVAILABLE = False
-
-
-def install_dependencies() -> None:
-    """Auto-install missing dashboard dependencies."""
-    packages = ["dash"]
-    for pkg in packages:
-        try:
-            __import__(pkg.replace("-", "_"))
-        except ImportError:
-            print(f"[info] Installing {pkg}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", pkg, "-q"])
-
-
-if not DASH_AVAILABLE:
-    install_dependencies()
-    from dash import Dash, dcc, html
+except ImportError as exc:
+    raise ImportError(
+        "The 'dash' package is required for the ShapeOPT dashboard. "
+        f"Install it with: {sys.executable} -m pip install dash"
+    ) from exc
 
 
 os.environ.pop("WERKZEUG_RUN_MAIN", None)

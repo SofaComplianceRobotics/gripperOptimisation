@@ -4,10 +4,8 @@ Shared bootstrap, config loading, and parameter building for gripper generation 
 
 from __future__ import annotations
 
-import importlib
 import json
 import re
-import subprocess
 import sys
 from dataclasses import fields, replace
 from pathlib import Path
@@ -16,7 +14,6 @@ LAB_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = LAB_ROOT
 
 LAB_SITE_PACKAGES = LAB_ROOT / "runtime" / "modules" / "site-packages"
-LAB_REQUIREMENTS = LAB_ROOT / "requirements.txt"
 
 
 def load_jsonc(path: Path) -> dict:
@@ -57,52 +54,22 @@ def _has_required_runtime_packages() -> bool:
         return False
 
 
-def _install_lab_dependencies_here() -> bool:
-    """Install lab requirements into the lab-local site-packages directory.
-
-    Returns:
-        True on successful installation, False otherwise.
-    """
-    if not LAB_REQUIREMENTS.exists():
-        return False
-    LAB_SITE_PACKAGES.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "--disable-pip-version-check",
-            "--target",
-            str(LAB_SITE_PACKAGES),
-            "-r",
-            str(LAB_REQUIREMENTS),
-        ],
-        check=False,
-    )
-    if result.returncode != 0:
-        return False
-    importlib.invalidate_caches()
-    _bootstrap_lab_site_packages()
-    return True
-
-
 def ensure_cadquery_runtime() -> None:
-    """Ensure CadQuery is importable, auto-installing into the lab-local site-packages if needed.
+    """Ensure CadQuery is importable, checking the lab-local site-packages.
 
     Raises:
-        RuntimeError: If CadQuery cannot be used after the auto-install attempt.
+        RuntimeError: If CadQuery is not importable from the current
+            environment or from the lab-local site-packages.
     """
     if _has_required_runtime_packages():
         return
     _bootstrap_lab_site_packages()
     if _has_required_runtime_packages():
         return
-    if _install_lab_dependencies_here() and _has_required_runtime_packages():
-        return
     raise RuntimeError(
-        "CadQuery is not available in Emio's Python runtime and auto-install "
-        "failed. Please ensure pip installation is allowed and retry from Emio."
+        "CadQuery is not importable. Install it into the active Python "
+        f"environment, or into the lab-local directory: {LAB_SITE_PACKAGES} "
+        f'(pip install --target "{LAB_SITE_PACKAGES}" cadquery).'
     )
 
 
@@ -117,32 +84,14 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     Returns:
         A new ModelParams instance.
     """
-    _legacy_h = cfg.get("cylinder_height")
-    _h_fallback = float(_legacy_h) if _legacy_h is not None else None
-
     kwargs: dict = dict(
         cylinder_radius=float(cfg.get("cylinder_radius", base.cylinder_radius)),
         cylinder_hole_thickness=float(
             cfg.get("cylinder_hole_thickness", base.cylinder_hole_thickness)
         ),
-        cylinder_height_A=float(
-            cfg.get(
-                "cylinder_height_A",
-                _h_fallback if _h_fallback is not None else base.cylinder_height_A,
-            )
-        ),
-        cylinder_height_B=float(
-            cfg.get(
-                "cylinder_height_B",
-                _h_fallback if _h_fallback is not None else base.cylinder_height_B,
-            )
-        ),
-        cylinder_height_C=float(
-            cfg.get(
-                "cylinder_height_C",
-                _h_fallback if _h_fallback is not None else base.cylinder_height_C,
-            )
-        ),
+        cylinder_height_A=float(cfg.get("cylinder_height_A", base.cylinder_height_A)),
+        cylinder_height_B=float(cfg.get("cylinder_height_B", base.cylinder_height_B)),
+        cylinder_height_C=float(cfg.get("cylinder_height_C", base.cylinder_height_C)),
         cylinder_plateau_A_deg=float(
             cfg.get("cylinder_plateau_A_deg", base.cylinder_plateau_A_deg)
         ),

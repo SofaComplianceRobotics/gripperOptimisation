@@ -1,8 +1,8 @@
 """Unit tests for generation/_gripper_common.py — JSONC loading and the
 config-dict → ModelParams mapping.
 
-These pin the exact mapping behaviour (legacy fallback, type coercion,
-fine-mode overrides) before any refactor of params_from_config.
+These pin the exact mapping behaviour (type coercion, fine-mode
+overrides) before any refactor of params_from_config.
 """
 
 import pytest
@@ -57,18 +57,12 @@ class TestParamsFromConfig:
         params = params_from_config({"p1_dist": 42.0}, ModelParams())
         assert params.p1_dist == 42.0
 
-    def test_legacy_cylinder_height_fills_all_three(self):
-        params = params_from_config({"cylinder_height": 3.0}, ModelParams())
-        assert params.cylinder_height_A == 3.0
-        assert params.cylinder_height_B == 3.0
-        assert params.cylinder_height_C == 3.0
-
-    def test_explicit_height_beats_legacy_fallback(self):
-        cfg = {"cylinder_height": 3.0, "cylinder_height_B": 1.2}
+    def test_heights_applied_individually(self):
+        cfg = {"cylinder_height_A": 3.0, "cylinder_height_B": 1.2}
         params = params_from_config(cfg, ModelParams())
         assert params.cylinder_height_A == 3.0
         assert params.cylinder_height_B == 1.2
-        assert params.cylinder_height_C == 3.0
+        assert params.cylinder_height_C == ModelParams().cylinder_height_C
 
     def test_int_fields_round_from_float(self):
         params = params_from_config({"ring_ramp_samples": 64.7}, ModelParams())
