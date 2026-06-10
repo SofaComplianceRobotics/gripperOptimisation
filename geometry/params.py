@@ -8,6 +8,8 @@ used throughout the generation, assembly, and export pipeline.
 import math
 from dataclasses import dataclass, field, fields
 
+from names import GRIPPER_NAME
+
 # ─────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────
@@ -204,7 +206,7 @@ class ModelParams:
 
     # Export
     export_dir: str = "runtime/exports"
-    export_stem: str = "new_gripper"
+    export_stem: str = GRIPPER_NAME
 
 
 def param_specs(base: ModelParams | None = None) -> list[dict]:

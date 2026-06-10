@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import os
 from typing import NamedTuple
+
 from geometry.timing_config import DT_INVERSE, DT_DIRECT
+from names import GRIPPER_NAME, LEG_NAME
 
 
 class SceneNodes(NamedTuple):
@@ -23,7 +25,13 @@ class SceneNodes(NamedTuple):
     emio: object
 
 
-def build_base_scene(rootnode, *, inverse: bool, friction: float = 0.6) -> SceneNodes:
+def build_base_scene(
+    rootnode,
+    *,
+    inverse: bool,
+    friction: float = 0.6,
+    multithreading: bool = False,
+) -> SceneNodes:
     """Configure rootnode and build the Emio robot.
 
     This is the only code that runs for every single test.
@@ -35,6 +43,8 @@ def build_base_scene(rootnode, *, inverse: bool, friction: float = 0.6) -> Scene
                  False → direct/forward dynamics header (grasp, scoring).
         friction: Contact friction coefficient (direct mode only; ignored for
             inverse scenes which have no collision pipeline).
+        multithreading: Enable SOFA multithreading. Off for optimization runs
+            (many parallel SOFA processes), on for interactive manual scenes.
 
     Returns:
         SceneNodes with (rootnode, settings, modelling, simulation, emio).
@@ -48,7 +58,7 @@ def build_base_scene(rootnode, *, inverse: bool, friction: float = 0.6) -> Scene
         inverse=inverse,
         withCollision=not inverse,
         friction=friction,
-        multithreading=False,
+        multithreading=multithreading,
     )
 
     addSolvers(simulation)
@@ -72,7 +82,7 @@ def build_base_scene(rootnode, *, inverse: bool, friction: float = 0.6) -> Scene
 
     emio = Emio(
         name="Emio",
-        legsName=["blueleg"],
+        legsName=[LEG_NAME],
         legsModel=["beam"],
         legsPositionOnMotor=[
             "counterclockwisedown",
@@ -80,7 +90,7 @@ def build_base_scene(rootnode, *, inverse: bool, friction: float = 0.6) -> Scene
             "counterclockwisedown",
             "clockwisedown",
         ],
-        centerPartName="new_gripper",
+        centerPartName=GRIPPER_NAME,
         centerPartType="deformable",
         centerPartModel="beam",
         centerPartClass=Gripper,

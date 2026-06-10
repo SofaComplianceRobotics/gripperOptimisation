@@ -7,6 +7,7 @@ from pathlib import Path
 
 from dash import Input, Output, State, ctx
 
+from names import GRIPPER_COLLISION_STL
 from process.process_manager import (
     INVERSE_SCENE,
     RECORDING_SCENE,
@@ -63,7 +64,7 @@ def register_scene_callbacks(app, catalog: dict) -> None:
                 "LAB_SHAPEOPT_TEST_WEIGHTS": json.dumps({watch_test: 100}),
                 "OPTUNA_RUN_SLOT": str(watch_slot or "0"),
             }
-            default_stl = LAB_ROOT / "runtime" / "exports" / "new_gripper_collision.stl"
+            default_stl = LAB_ROOT / "runtime" / "exports" / GRIPPER_COLLISION_STL
             if default_stl.exists():
                 extra_env["OPTUNA_STL_PATH"] = str(default_stl)
             return _launch_sofa_scene(test_spec.scene_file, extra_env=extra_env)

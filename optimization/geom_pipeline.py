@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pyvista as pv  # type: ignore
 
+from names import GRIPPER_COLLISION_STL, GRIPPER_NAME
 from optimization.config import (
     LAB_ROOT,
     CENTERPARTS_DIR,
@@ -180,13 +181,13 @@ def generate_stl_for_trial(trial_dir: Path, config: dict) -> tuple[Path, Path]:
 
     trial_id = f"{trial_dir.parent.name}_{trial_dir.name}"
 
-    collision_src = CENTERPARTS_DIR / "new_gripper_collision.stl"
+    collision_src = CENTERPARTS_DIR / GRIPPER_COLLISION_STL
     if not collision_src.exists():
         raise RuntimeError("Collision STL not found after generation.")
     collision_stl = CENTERPARTS_DIR / f"gripper_{trial_id}_collision.stl"
     collision_src.replace(collision_stl)
 
-    visual_src = CENTERPARTS_DIR / "new_gripper.stl"
+    visual_src = CENTERPARTS_DIR / f"{GRIPPER_NAME}.stl"
     if not visual_src.exists():
         raise RuntimeError("Visual STL not found after generation.")
     visual_stl_copy = trial_dir / "visual.stl"

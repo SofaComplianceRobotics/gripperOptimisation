@@ -9,6 +9,7 @@ import pytest
 
 from generation._gripper_common import load_jsonc, params_from_config
 from geometry.params import ModelParams
+from names import GRIPPER_PRINT_NAME
 
 
 def _write_jsonc(tmp_path, text: str):
@@ -100,7 +101,7 @@ class TestParamsFromConfig:
 class TestParamsFromConfigFine:
     def test_fine_overrides_mesh_and_stem(self):
         params = params_from_config({}, ModelParams(), fine=True)
-        assert params.export_stem == "new_gripper_print"
+        assert params.export_stem == GRIPPER_PRINT_NAME
         assert params.mesh_size_max_stl == 2
         assert params.mesh_size_min_stl == 0.8
 

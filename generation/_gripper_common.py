@@ -10,6 +10,8 @@ import sys
 from dataclasses import fields, replace
 from pathlib import Path
 
+from names import GRIPPER_PRINT_NAME
+
 LAB_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = LAB_ROOT
 
@@ -125,7 +127,7 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     if fine:
         kwargs["mesh_size_max_stl"] = 2
         kwargs["mesh_size_min_stl"] = 0.8
-        kwargs["export_stem"] = "new_gripper_print"
+        kwargs["export_stem"] = GRIPPER_PRINT_NAME
         kwargs["ring_ramp_samples"] = max(
             kwargs.get("ring_ramp_samples", base.ring_ramp_samples), 64
         )

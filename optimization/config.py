@@ -12,6 +12,7 @@ from pathlib import Path
 SRC_ROOT = Path(__file__).resolve().parent.parent
 
 from geometry.params import ModelParams, param_specs
+from names import CENTERPARTS_DIRNAME
 from geometry.timing_config import DT_DIRECT
 from labtests.registry import get_default_test_names, get_test_spec, parse_test_names
 
@@ -121,7 +122,7 @@ FAILED_PREVIEW_IMAGE_CANDIDATES: tuple[Path, ...] = (
 PROGRESS_FILE = TRIALS_DIR / "progress.json"
 
 # Where generate_gripper.py deposits its STL outputs
-CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
+CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / CENTERPARTS_DIRNAME
 
 # ─────────────────────────────────────────────
 # SOFA Runtime Configuration

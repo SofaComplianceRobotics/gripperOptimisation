@@ -16,6 +16,7 @@ from _gripper_common import (
     load_jsonc,
     params_from_config,
 )
+from names import CENTERPARTS_DIRNAME
 
 _START_TS = time.perf_counter()
 ensure_cadquery_runtime()
@@ -45,7 +46,7 @@ def main() -> None:
     cfg = load_jsonc(config_path)
     params = params_from_config(cfg, ModelParams())
 
-    secondary_dir = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
+    secondary_dir = LAB_ROOT.parent.parent / "data" / "meshes" / CENTERPARTS_DIRNAME
 
     stl_path = run_export(params, secondary_dir=secondary_dir)
     if stl_path is None:

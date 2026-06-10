@@ -7,6 +7,7 @@ from pathlib import Path
 
 from dash import Input, Output, ctx
 
+from names import CENTERPARTS_DIRNAME, GRIPPER_NAME, GRIPPER_PRINT_NAME
 from process.process_manager import (
     GENERATE_FINE_SCRIPT,
     GENERATE_SCRIPT,
@@ -17,7 +18,7 @@ from process.process_manager import (
 
 
 LAB_ROOT = Path(__file__).resolve().parents[2]
-CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / "centerparts"
+CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / CENTERPARTS_DIRNAME
 
 
 def register_generation_callbacks(app, _catalog: dict) -> None:
@@ -85,9 +86,9 @@ def register_generation_callbacks(app, _catalog: dict) -> None:
             Status message string describing the outcome.
         """
         file_map = {
-            "gen-open-stl-btn": CENTERPARTS_DIR / "new_gripper.stl",
-            "gen-open-json-btn": CENTERPARTS_DIR / "new_gripper.json",
-            "gen-open-fine-stl-btn": CENTERPARTS_DIR / "new_gripper_print.stl",
+            "gen-open-stl-btn": CENTERPARTS_DIR / f"{GRIPPER_NAME}.stl",
+            "gen-open-json-btn": CENTERPARTS_DIR / f"{GRIPPER_NAME}.json",
+            "gen-open-fine-stl-btn": CENTERPARTS_DIR / f"{GRIPPER_PRINT_NAME}.stl",
         }
         path = file_map.get(ctx.triggered_id)
         if path is None:

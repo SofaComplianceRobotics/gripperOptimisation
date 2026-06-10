@@ -12,6 +12,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from names import CENTERPARTS_DIRNAME, GRIPPER_COLLISION_STL
+
 
 @dataclass(frozen=True)
 class OptunaMeta:
@@ -99,8 +101,8 @@ class PlaybackConfig:
                     assets_root
                     / "data"
                     / "meshes"
-                    / "centerparts"
-                    / "new_gripper_collision.stl"
+                    / CENTERPARTS_DIRNAME
+                    / GRIPPER_COLLISION_STL
                 ),
             ),
             friction_coef=float(os.environ["SHAPEOPT_FRICTION_COEF"]),
