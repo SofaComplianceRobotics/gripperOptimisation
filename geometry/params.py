@@ -6,7 +6,7 @@ used throughout the generation, assembly, and export pipeline.
 """
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 # ─────────────────────────────────────────────
 # Constants
@@ -205,6 +205,42 @@ class ModelParams:
     # Export
     export_dir: str = "runtime/exports"
     export_stem: str = "new_gripper"
+
+
+def param_specs(base: ModelParams | None = None) -> list[dict]:
+    """Build parameter specs from ModelParams field metadata.
+
+    One spec dict per field annotated with "opt" metadata. Consumers:
+    the optimizer builds its search space from these, the dashboard
+    renders the bounds tab from them.
+
+    Fields with min == max == 0 are "frozen": listed, but consumers
+    treat them as fixed at their default rather than searchable.
+
+    Args:
+        base: Instance providing default values. A fresh ModelParams()
+            is used if None.
+
+    Returns:
+        List of dicts with keys: name, type, min, max, default.
+    """
+    if base is None:
+        base = ModelParams()
+    specs = []
+    for f in fields(base):
+        opt = f.metadata.get("opt")
+        if opt is None:
+            continue
+        specs.append(
+            {
+                "name": f.name,
+                "type": opt["type"],
+                "min": opt["min"],
+                "max": opt["max"],
+                "default": getattr(base, f.name),
+            }
+        )
+    return specs
 
 
 def validate_params(p: ModelParams) -> None:

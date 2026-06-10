@@ -1,10 +1,11 @@
 """Parameter bounds visualization."""
 
-import json
-import re
 from pathlib import Path
 
 import plotly.graph_objects as go
+
+from generation._gripper_common import load_jsonc
+from geometry.params import param_specs
 
 from .colors import C_BG
 
@@ -23,16 +24,10 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         A Plotly `Figure` visualizing parameter distributions and markers.
     """
     try:
-        from optimization.config import PARAM_SPECS
-
-        active_specs = [p for p in PARAM_SPECS if p["min"] < p["max"]]
+        active_specs = [p for p in param_specs() if p["min"] < p["max"]]
 
         if not active_specs:
             return go.Figure().add_annotation(text="No active parameters to display")
-
-        def _parse_jsonc(text: str) -> dict:
-            clean = re.sub(r"//[^\n]*", "", text)
-            return json.loads(clean)
 
         trial_config_paths = []
         try:
@@ -57,7 +52,7 @@ def _build_param_bounds_graph(show_heatmap: bool = False) -> go.Figure:
         trial_configs = []
         for cfg_path in trial_config_paths[-40:]:
             try:
-                trial_configs.append(_parse_jsonc(cfg_path.read_text(encoding="utf-8")))
+                trial_configs.append(load_jsonc(cfg_path))
             except Exception:
                 pass
 

@@ -5,14 +5,13 @@ Centralizes all hardcoded defaults, paths, and tuning parameters to minimize
 configuration scatter across the codebase.
 """
 
-import dataclasses
 import json
 import os
 from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parent.parent
 
-from geometry.params import ModelParams
+from geometry.params import ModelParams, param_specs
 from geometry.timing_config import DT_DIRECT
 from labtests.registry import get_default_test_names, get_test_spec, parse_test_names
 
@@ -156,34 +155,13 @@ HARD_FAIL_SCORE = float(os.environ["HARD_FAIL_SCORE"])  # generation-failure sco
 # ─────────────────────────────────────────────
 # Tunable Parameter Specifications
 #
-# All optimisable parameters are defined in core/params.py via field metadata:
+# All optimisable parameters are defined in geometry/params.py via field metadata:
 #   • metadata={"opt": {"type": "float", "min": X, "max": Y}}  — active
 #   • metadata={"opt": {"type": "float", "min": 0, "max": 0}}  — frozen (default used)
 #
-# To add, remove, or re-range a parameter: edit ModelParams in core/params.py only.
+# To add, remove, or re-range a parameter: edit ModelParams in geometry/params.py only.
 # ─────────────────────────────────────────────
-
-
-def _param_specs_from_metadata(base: ModelParams) -> list[dict]:
-    """Build param spec entries for all ModelParams fields annotated with opt metadata."""
-    specs = []
-    for f in dataclasses.fields(base):
-        opt = f.metadata.get("opt")
-        if opt is None:
-            continue
-        specs.append(
-            {
-                "name": f.name,
-                "type": opt["type"],
-                "min": opt["min"],
-                "max": opt["max"],
-                "default": getattr(base, f.name),
-            }
-        )
-    return specs
-
-
-PARAM_SPECS: list[dict] = _param_specs_from_metadata(BASE_PARAMS)
+PARAM_SPECS: list[dict] = param_specs(BASE_PARAMS)
 
 # ─────────────────────────────────────────────
 # Simulation Scoring & Early Stop Parameters

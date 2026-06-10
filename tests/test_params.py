@@ -9,7 +9,7 @@ from typing import get_type_hints
 
 import pytest
 
-from geometry.params import ModelParams, validate_params
+from geometry.params import ModelParams, param_specs, validate_params
 
 
 def test_field_defaults_match_their_annotations():
@@ -117,6 +117,42 @@ class TestPincerPoints:
         assert p1.p[0] == pytest.approx(40.0)
         assert p1.h_in[0] == pytest.approx(40.0)
         assert p1.h_in[1] == pytest.approx(5.0)
+
+
+class TestParamSpecs:
+    def test_only_opt_annotated_fields_appear(self):
+        spec_names = {s["name"] for s in param_specs()}
+        # Spot-check: opt-annotated in, plain fields out.
+        assert "cylinder_radius" in spec_names
+        assert "p1_dist" in spec_names
+        assert "leg_hole_length" not in spec_names
+        assert "export_stem" not in spec_names
+
+    def test_every_spec_is_well_formed(self):
+        """Guard against typos in the opt metadata of any current or future field."""
+        valid_types = {"float", "int", "bool"}
+        for spec in param_specs():
+            assert spec["type"] in valid_types, spec["name"]
+            assert spec["min"] <= spec["max"], (
+                f"{spec['name']}: min {spec['min']} > max {spec['max']}"
+            )
+
+    def test_defaults_come_from_the_given_instance(self):
+        base = ModelParams(cylinder_radius=99.0)
+        specs = {s["name"]: s for s in param_specs(base)}
+        assert specs["cylinder_radius"]["default"] == 99.0
+
+    def test_active_specs_contain_their_default(self):
+        """An active search range that excludes its own default is a config smell."""
+        for spec in param_specs():
+            if spec["min"] == spec["max"]:
+                continue  # frozen — default intentionally outside 0..0
+            if spec["type"] == "bool":
+                continue
+            assert spec["min"] <= spec["default"] <= spec["max"], (
+                f"{spec['name']}: default {spec['default']} outside "
+                f"[{spec['min']}, {spec['max']}]"
+            )
 
 
 class TestValidateParams:
