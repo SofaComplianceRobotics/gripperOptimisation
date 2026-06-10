@@ -159,6 +159,25 @@ class TestValidateParams:
     def test_defaults_are_valid(self):
         validate_params(ModelParams())
 
+    def test_check_metadata_vocabulary(self):
+        """Guard against typos in any field's "check"/"check_if" metadata."""
+        field_names = {f.name for f in fields(ModelParams)}
+        for f in fields(ModelParams):
+            check = f.metadata.get("check")
+            if check is not None:
+                if isinstance(check, str):
+                    assert check in ("positive", "non_negative"), f.name
+                else:
+                    assert check[0] in ("ge", "open_closed", "open_open"), f.name
+            gate = f.metadata.get("check_if")
+            if gate is not None:
+                assert gate in field_names, f"{f.name}: check_if -> unknown {gate}"
+
+    def test_mesh_checks_skipped_when_meshing_disabled(self):
+        # A bad mesh size must NOT fail validation if meshing is off.
+        params = replace(ModelParams(), mesh_enabled=False, mesh_size_max_stl=0.0)
+        validate_params(params)
+
     @pytest.mark.parametrize(
         "field_name, bad_value",
         [

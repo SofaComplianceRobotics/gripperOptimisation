@@ -44,19 +44,24 @@ class ModelParams:
 
     # Ring
     cylinder_radius: float = field(
-        default=26.5, metadata={"opt": {"type": "float", "min": 26, "max": 28}}
+        default=26.5,
+        metadata={"opt": {"type": "float", "min": 26, "max": 28}, "check": "positive"},
     )
     cylinder_hole_thickness: float = field(
-        default=3.0, metadata={"opt": {"type": "float", "min": 1, "max": 5}}
+        default=3.0,
+        metadata={"opt": {"type": "float", "min": 1, "max": 5}, "check": "positive"},
     )
     cylinder_height_A: float = field(
-        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
+        default=1.0,
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
     )
     cylinder_height_B: float = field(
-        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
+        default=1.0,
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
     )
     cylinder_height_C: float = field(
-        default=1.0, metadata={"opt": {"type": "float", "min": 0.2, "max": 5}}
+        default=1.0,
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
     )
     cylinder_plateau_A_deg: float = field(
         default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
@@ -70,34 +75,49 @@ class ModelParams:
     )
 
     # Leg attachment
-    leg_hole_length: float = 10.0
-    leg_hole_width: float = 5.0
-    leg_attachment_height: float = 15.0
-    leg_wall_thickness: float = 1.5
+    leg_hole_length: float = field(default=10.0, metadata={"check": "positive"})
+    leg_hole_width: float = field(default=5.0, metadata={"check": "positive"})
+    leg_attachment_height: float = field(default=15.0, metadata={"check": "positive"})
+    leg_wall_thickness: float = field(default=1.5, metadata={"check": "positive"})
 
     # Detailing
-    slit_width: float = 0.1
-    trapezoid_start_from_top: float = 3.5
+    slit_width: float = field(default=0.1, metadata={"check": "non_negative"})
+    trapezoid_start_from_top: float = field(
+        default=3.5, metadata={"check": "non_negative"}
+    )
 
     # Assembly
-    leg_attachement_inward_offset: float = 3.0
+    leg_attachement_inward_offset: float = field(
+        default=3.0, metadata={"check": "non_negative"}
+    )
     leg_attachement_tilt_angle: float = field(
         default=15.0, metadata={"opt": {"type": "float", "min": 0, "max": 30.0}}
     )
     leg_attachement_lift: float = 2.5
-    leg_attachement_drop_overlap: float = 0.15
+    leg_attachement_drop_overlap: float = field(
+        default=0.15, metadata={"check": "non_negative"}
+    )
 
     # Pincers
     pincer_profile_width: float = field(
-        default=5.0, metadata={"opt": {"type": "float", "min": 2.0, "max": 8.0}}
+        default=5.0,
+        metadata={
+            "opt": {"type": "float", "min": 2.0, "max": 8.0},
+            "check": "positive",
+        },
     )
     pincer_profile_height: float = field(
-        default=10.0, metadata={"opt": {"type": "float", "min": 6.0, "max": 16.0}}
+        default=10.0,
+        metadata={
+            "opt": {"type": "float", "min": 6.0, "max": 16.0},
+            "check": "positive",
+        },
     )
-    pincer_profile_samples: int = 4
-    pincer_round_cap_segments: int = 3
+    pincer_profile_samples: int = field(default=4, metadata={"check": ("ge", 4)})
+    pincer_round_cap_segments: int = field(default=3, metadata={"check": ("ge", 2)})
     pincer_path_scale: float = field(
-        default=1.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=1.0,
+        metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
     )
     pincer_tilt_y_deg: float = field(
         default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
@@ -185,22 +205,48 @@ class ModelParams:
             PincerSplinePoint(p=(p1_x, p1_y), h_in=(p1_hin_x, p1_hin_y), h_out=None),
         )
 
-    # Mesh
-    ring_ramp_samples: int = 32
+    # Mesh — size/quality checks only apply when meshing is on (check_if).
+    ring_ramp_samples: int = field(default=32, metadata={"check": ("ge", 8)})
     mesh_enabled: bool = True
-    mesh_size_max_stl: float = 45.0
-    mesh_size_min_stl: float = 15.0
-    mesh_size_max_vtk: float = 45.0
-    mesh_size_min_vtk: float = 10.0
-    mesh_collision_size: float = field(
-        default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+    mesh_size_max_stl: float = field(
+        default=45.0, metadata={"check": "positive", "check_if": "mesh_enabled"}
     )
-    mesh_collision_tail_fraction: float = 1.0
+    mesh_size_min_stl: float = field(
+        default=15.0, metadata={"check": "positive", "check_if": "mesh_enabled"}
+    )
+    mesh_size_max_vtk: float = field(
+        default=45.0, metadata={"check": "positive", "check_if": "mesh_enabled"}
+    )
+    mesh_size_min_vtk: float = field(
+        default=10.0, metadata={"check": "positive", "check_if": "mesh_enabled"}
+    )
+    mesh_collision_size: float = field(
+        default=90.0,
+        metadata={
+            "opt": {"type": "float", "min": 0, "max": 0},
+            "check": "positive",
+            "check_if": "mesh_enabled",
+        },
+    )
+    mesh_collision_tail_fraction: float = field(
+        default=1.0,
+        metadata={"check": ("open_closed", 0.0, 1.0), "check_if": "mesh_enabled"},
+    )
     mesh_angle_smooth: float = field(
-        default=20.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=20.0,
+        metadata={
+            "opt": {"type": "float", "min": 0, "max": 0},
+            "check": ("open_open", 0.0, 90.0),
+            "check_if": "mesh_enabled",
+        },
     )
     mesh_size_from_curvature: int = field(
-        default=12, metadata={"opt": {"type": "int", "min": 0, "max": 0}}
+        default=12,
+        metadata={
+            "opt": {"type": "int", "min": 0, "max": 0},
+            "check": "non_negative",
+            "check_if": "mesh_enabled",
+        },
     )
     mesh_show_viewer: bool = False
 
@@ -245,8 +291,48 @@ def param_specs(base: ModelParams | None = None) -> list[dict]:
     return specs
 
 
+def _apply_check(name: str, value, check) -> None:
+    """Enforce one field's "check" metadata rule.
+
+    Supported rules:
+        "positive"               — value > 0
+        "non_negative"           — value >= 0
+        ("ge", n)                — value >= n
+        ("open_closed", lo, hi)  — lo < value <= hi
+        ("open_open", lo, hi)    — lo < value < hi
+
+    Raises:
+        ValueError: If the value violates the rule, or the rule is unknown.
+    """
+    if check == "positive":
+        if value <= 0:
+            raise ValueError(f"{name} must be > 0. Got {value}.")
+    elif check == "non_negative":
+        if value < 0:
+            raise ValueError(f"{name} must be >= 0. Got {value}.")
+    elif check[0] == "ge":
+        if value < check[1]:
+            raise ValueError(f"{name} must be >= {check[1]}. Got {value}.")
+    elif check[0] == "open_closed":
+        lo, hi = check[1], check[2]
+        if not (lo < value <= hi):
+            raise ValueError(f"{name} must be in ({lo}, {hi}]. Got {value}.")
+    elif check[0] == "open_open":
+        lo, hi = check[1], check[2]
+        if not (lo < value < hi):
+            raise ValueError(
+                f"{name} must be between {lo} and {hi} exclusive. Got {value}."
+            )
+    else:
+        raise ValueError(f"Unknown check rule {check!r} on field {name}.")
+
+
 def validate_params(p: ModelParams) -> None:
     """Validate all model parameters before build.
+
+    Per-field rules are declared as "check" metadata on each ModelParams
+    field (optionally gated by "check_if") and enforced generically.
+    Only cross-field geometric constraints are written out below.
 
     Args:
         p: Parameter set to validate.
@@ -254,36 +340,16 @@ def validate_params(p: ModelParams) -> None:
     Raises:
         ValueError: If any parameter is invalid or geometrically infeasible.
     """
-    positive_fields = {
-        "cylinder_radius": p.cylinder_radius,
-        "cylinder_height_A": p.cylinder_height_A,
-        "cylinder_height_B": p.cylinder_height_B,
-        "cylinder_height_C": p.cylinder_height_C,
-        "cylinder_hole_thickness": p.cylinder_hole_thickness,
-        "leg_hole_length": p.leg_hole_length,
-        "leg_hole_width": p.leg_hole_width,
-        "leg_attachment_height": p.leg_attachment_height,
-        "leg_wall_thickness": p.leg_wall_thickness,
-    }
+    for f in fields(p):
+        check = f.metadata.get("check")
+        if check is None:
+            continue
+        gate = f.metadata.get("check_if")
+        if gate is not None and not getattr(p, gate):
+            continue
+        _apply_check(f.name, getattr(p, f.name), check)
 
-    for name, value in positive_fields.items():
-        if value <= 0:
-            raise ValueError(f"{name} must be > 0. Got {value}.")
-
-    if p.slit_width < 0:
-        raise ValueError(f"slit_width must be >= 0. Got {p.slit_width}.")
-    if p.leg_attachement_inward_offset < 0:
-        raise ValueError(
-            f"leg_attachement_inward_offset must be >= 0. Got {p.leg_attachement_inward_offset}."
-        )
-    if p.leg_attachement_drop_overlap < 0:
-        raise ValueError(
-            f"leg_attachement_drop_overlap must be >= 0. Got {p.leg_attachement_drop_overlap}."
-        )
-    if p.trapezoid_start_from_top < 0:
-        raise ValueError(
-            f"trapezoid_start_from_top must be >= 0. Got {p.trapezoid_start_from_top}."
-        )
+    # ── Cross-field geometric constraints ──
     if p.cylinder_hole_thickness >= 2.0 * p.cylinder_radius:
         raise ValueError(
             "cylinder_hole_thickness is too large for cylinder_radius; "
@@ -302,27 +368,6 @@ def validate_params(p: ModelParams) -> None:
             "target distance > inner diameter."
         )
 
-    if p.pincer_profile_width <= 0:
-        raise ValueError(
-            f"pincer_profile_width must be > 0. Got {p.pincer_profile_width}."
-        )
-    if p.pincer_profile_height <= 0:
-        raise ValueError(
-            f"pincer_profile_height must be > 0. Got {p.pincer_profile_height}."
-        )
-    if p.ring_ramp_samples < 8:
-        raise ValueError(f"ring_ramp_samples must be >= 8. Got {p.ring_ramp_samples}.")
-    if p.pincer_path_scale <= 0:
-        raise ValueError(f"pincer_path_scale must be > 0. Got {p.pincer_path_scale}.")
-    if p.pincer_profile_samples < 4:
-        raise ValueError(
-            "pincer_profile_samples must be >= 4. " f"Got {p.pincer_profile_samples}."
-        )
-    if p.pincer_round_cap_segments < 2:
-        raise ValueError(
-            "pincer_round_cap_segments must be >= 2. "
-            f"Got {p.pincer_round_cap_segments}."
-        )
     if len(p.pincer_points) < 2:
         raise ValueError("pincer_points must contain at least 2 spline points.")
 
@@ -331,39 +376,3 @@ def validate_params(p: ModelParams) -> None:
             raise ValueError("First pincer spline point must define h_out.")
         if i == len(p.pincer_points) - 1 and pt.h_in is None:
             raise ValueError("Last pincer spline point must define h_in.")
-
-    if p.mesh_enabled:
-        if p.mesh_size_max_stl <= 0:
-            raise ValueError(
-                f"mesh_size_max_stl must be > 0. Got {p.mesh_size_max_stl}."
-            )
-        if p.mesh_size_min_stl <= 0:
-            raise ValueError(
-                f"mesh_size_min_stl must be > 0. Got {p.mesh_size_min_stl}."
-            )
-        if p.mesh_size_max_vtk <= 0:
-            raise ValueError(
-                f"mesh_size_max_vtk must be > 0. Got {p.mesh_size_max_vtk}."
-            )
-        if p.mesh_size_min_vtk <= 0:
-            raise ValueError(
-                f"mesh_size_min_vtk must be > 0. Got {p.mesh_size_min_vtk}."
-            )
-        if p.mesh_collision_size <= 0:
-            raise ValueError(
-                f"mesh_collision_size must be > 0. Got {p.mesh_collision_size}."
-            )
-        if not (0.0 < p.mesh_collision_tail_fraction <= 1.0):
-            raise ValueError(
-                "mesh_collision_tail_fraction must be in (0, 1]. "
-                f"Got {p.mesh_collision_tail_fraction}."
-            )
-        if p.mesh_size_from_curvature < 0:
-            raise ValueError(
-                f"mesh_size_from_curvature must be >= 0. Got {p.mesh_size_from_curvature}."
-            )
-        if not (0.0 < p.mesh_angle_smooth < 90.0):
-            raise ValueError(
-                f"mesh_angle_smooth must be between 0 and 90 exclusive. "
-                f"Got {p.mesh_angle_smooth}."
-            )
