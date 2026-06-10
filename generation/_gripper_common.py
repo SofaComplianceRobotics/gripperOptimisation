@@ -16,6 +16,12 @@ APP_ROOT = LAB_ROOT
 LAB_SITE_PACKAGES = LAB_ROOT / "runtime" / "modules" / "site-packages"
 
 
+# Matches a JSON string literal (kept) or a // line comment (stripped).
+# Trying the string alternative first prevents '//' inside values
+# (e.g. URLs, Windows paths) from being treated as a comment.
+_JSONC_STRING_OR_COMMENT = re.compile(r'("(?:\\.|[^"\\])*")|//[^\n]*')
+
+
 def load_jsonc(path: Path) -> dict:
     """Load a JSONC file, stripping // line comments.
 
@@ -26,7 +32,7 @@ def load_jsonc(path: Path) -> dict:
         Parsed JSON content.
     """
     text = path.read_text(encoding="utf-8")
-    text = re.sub(r"//.*$", "", text, flags=re.MULTILINE)
+    text = _JSONC_STRING_OR_COMMENT.sub(lambda m: m.group(1) or "", text)
     return json.loads(text)
 
 
@@ -73,8 +79,22 @@ def ensure_cadquery_runtime() -> None:
     )
 
 
+# Never settable from a config file: the optimizer and SOFA scenes rely on
+# the exported file names, so output naming stays a code-level contract.
+_CONFIG_EXCLUDED_FIELDS = frozenset({"export_dir", "export_stem"})
+
+# Always forced, regardless of what the config says: batch generation must
+# produce meshes and must never block on a viewer window.
+_CONFIG_FORCED_FIELDS = {"mesh_enabled": True, "mesh_show_viewer": False}
+
+
 def params_from_config(cfg: dict, base, fine: bool = False):
     """Build a ModelParams instance from a config dict.
+
+    Every ModelParams field whose name appears in the config is applied,
+    coerced to the type of the field's default value. Unknown config keys
+    are ignored. Exceptions: _CONFIG_EXCLUDED_FIELDS are never read from
+    the config, and _CONFIG_FORCED_FIELDS always win.
 
     Args:
         cfg: Parsed lab_config.jsonc dict.
@@ -84,74 +104,23 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     Returns:
         A new ModelParams instance.
     """
-    kwargs: dict = dict(
-        cylinder_radius=float(cfg.get("cylinder_radius", base.cylinder_radius)),
-        cylinder_hole_thickness=float(
-            cfg.get("cylinder_hole_thickness", base.cylinder_hole_thickness)
-        ),
-        cylinder_height_A=float(cfg.get("cylinder_height_A", base.cylinder_height_A)),
-        cylinder_height_B=float(cfg.get("cylinder_height_B", base.cylinder_height_B)),
-        cylinder_height_C=float(cfg.get("cylinder_height_C", base.cylinder_height_C)),
-        cylinder_plateau_A_deg=float(
-            cfg.get("cylinder_plateau_A_deg", base.cylinder_plateau_A_deg)
-        ),
-        cylinder_plateau_B_deg=float(
-            cfg.get("cylinder_plateau_B_deg", base.cylinder_plateau_B_deg)
-        ),
-        cylinder_plateau_C_deg=float(
-            cfg.get("cylinder_plateau_C_deg", base.cylinder_plateau_C_deg)
-        ),
-        leg_attachement_tilt_angle=float(
-            cfg.get("leg_attachement_tilt_angle", base.leg_attachement_tilt_angle)
-        ),
-        pincer_profile_width=float(
-            cfg.get("pincer_profile_width", base.pincer_profile_width)
-        ),
-        pincer_profile_height=float(
-            cfg.get("pincer_profile_height", base.pincer_profile_height)
-        ),
-        pincer_profile_samples=int(
-            round(float(cfg.get("pincer_profile_samples", base.pincer_profile_samples)))
-        ),
-        pincer_round_cap_segments=int(
-            round(
-                float(
-                    cfg.get("pincer_round_cap_segments", base.pincer_round_cap_segments)
-                )
-            )
-        ),
-        pincer_path_scale=float(cfg.get("pincer_path_scale", base.pincer_path_scale)),
-        pincer_tilt_y_deg=float(cfg.get("pincer_tilt_y_deg", base.pincer_tilt_y_deg)),
-        pincer_round_ends=bool(cfg.get("pincer_round_ends", base.pincer_round_ends)),
-        ring_ramp_samples=int(
-            round(float(cfg.get("ring_ramp_samples", base.ring_ramp_samples)))
-        ),
-        mesh_enabled=True,
-        mesh_show_viewer=False,
-    )
-
-    # Auto-apply any ModelParams scalar field annotated with opt metadata
-    # that isn't already set explicitly above. This means adding a new
-    # directly-mapped optimisable parameter only requires editing ModelParams.
-    #
-    # Explanation: `ModelParams` contains `opt` metadata on fields exposed to
-    # optimization. This block copies those fields from the JSON config if present,
-    # applying the correct type (int/bool/float). This avoids manual duplication
-    # of mappings when adding a new optimizable parameter.
-    for _f in fields(base):
-        if _f.name in kwargs:
+    kwargs: dict = {}
+    for f in fields(base):
+        if f.name in _CONFIG_EXCLUDED_FIELDS or f.name not in cfg:
             continue
-        _opt = _f.metadata.get("opt")
-        if _opt is None:
-            continue
-        _raw = cfg.get(_f.name, getattr(base, _f.name))
-        _t = _opt.get("type", "float")
-        if _t == "int":
-            kwargs[_f.name] = int(round(float(_raw)))
-        elif _t == "bool":
-            kwargs[_f.name] = bool(_raw)
+        raw = cfg[f.name]
+        default = getattr(base, f.name)
+        # bool before int: bool is a subclass of int in Python.
+        if isinstance(default, bool):
+            kwargs[f.name] = bool(raw)
+        elif isinstance(default, int):
+            kwargs[f.name] = int(round(float(raw)))
+        elif isinstance(default, float):
+            kwargs[f.name] = float(raw)
         else:
-            kwargs[_f.name] = float(_raw)
+            kwargs[f.name] = raw
+
+    kwargs.update(_CONFIG_FORCED_FIELDS)
 
     if fine:
         kwargs["mesh_size_max_stl"] = 2

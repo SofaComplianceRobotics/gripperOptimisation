@@ -4,11 +4,32 @@ Covers the ring height interpolation, the polar→cartesian pincer spline
 points, and the validate_params() rejection rules.
 """
 
-from dataclasses import replace
+from dataclasses import fields, replace
+from typing import get_type_hints
 
 import pytest
 
 from geometry.params import ModelParams, validate_params
+
+
+def test_field_defaults_match_their_annotations():
+    """Every scalar field's default must have exactly its annotated type.
+
+    params_from_config coerces config values based on the runtime type of
+    the default, so a float field with an int default (e.g. 45 instead of
+    45.0) silently truncates config values for that field.
+    """
+    hints = get_type_hints(ModelParams)
+    defaults = ModelParams()
+    for f in fields(ModelParams):
+        annotated = hints[f.name]
+        if annotated not in (int, float, bool, str):
+            continue
+        value = getattr(defaults, f.name)
+        assert type(value) is annotated, (
+            f"{f.name}: default {value!r} is {type(value).__name__}, "
+            f"but the field is annotated {annotated.__name__}"
+        )
 
 
 class TestCylinderHeightAt:

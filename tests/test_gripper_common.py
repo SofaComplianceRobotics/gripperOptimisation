@@ -30,14 +30,20 @@ class TestLoadJsonc:
         text = '{\n"a": 1, // explains a\n"b": 2\n}'
         assert load_jsonc(_write_jsonc(tmp_path, text)) == {"a": 1, "b": 2}
 
-    @pytest.mark.xfail(
-        reason="the comment regex also strips '//' inside string values",
-        strict=True,
-    )
     def test_slashes_inside_string_values_survive(self, tmp_path):
         text = '{"url": "http://example.com"}'
         assert load_jsonc(_write_jsonc(tmp_path, text)) == {
             "url": "http://example.com"
+        }
+
+    def test_comment_after_string_value_stripped(self, tmp_path):
+        text = '{"path": "C://stuff" // windows-style path\n}'
+        assert load_jsonc(_write_jsonc(tmp_path, text)) == {"path": "C://stuff"}
+
+    def test_escaped_quote_inside_string(self, tmp_path):
+        text = '{"label": "say \\"hi\\" // not a comment"}'
+        assert load_jsonc(_write_jsonc(tmp_path, text)) == {
+            "label": 'say "hi" // not a comment'
         }
 
 
@@ -78,6 +84,17 @@ class TestParamsFromConfig:
         params = params_from_config(cfg, ModelParams())
         assert params.mesh_enabled is True
         assert params.mesh_show_viewer is False
+
+    def test_non_opt_field_applied_from_config(self):
+        # All fields are configurable, not only the opt-annotated ones.
+        params = params_from_config({"mesh_size_max_stl": 30.0}, ModelParams())
+        assert params.mesh_size_max_stl == 30.0
+
+    def test_export_naming_cannot_be_set_from_config(self):
+        cfg = {"export_stem": "evil", "export_dir": "elsewhere"}
+        params = params_from_config(cfg, ModelParams())
+        assert params.export_stem == ModelParams().export_stem
+        assert params.export_dir == ModelParams().export_dir
 
 
 class TestParamsFromConfigFine:

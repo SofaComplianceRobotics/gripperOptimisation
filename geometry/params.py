@@ -95,7 +95,7 @@ class ModelParams:
     pincer_profile_samples: int = 4
     pincer_round_cap_segments: int = 3
     pincer_path_scale: float = field(
-        default=1, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=1.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
     )
     pincer_tilt_y_deg: float = field(
         default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
@@ -186,10 +186,10 @@ class ModelParams:
     # Mesh
     ring_ramp_samples: int = 32
     mesh_enabled: bool = True
-    mesh_size_max_stl: float = 45
-    mesh_size_min_stl: float = 15
-    mesh_size_max_vtk: float = 45
-    mesh_size_min_vtk: float = 10
+    mesh_size_max_stl: float = 45.0
+    mesh_size_min_stl: float = 15.0
+    mesh_size_max_vtk: float = 45.0
+    mesh_size_min_vtk: float = 10.0
     mesh_collision_size: float = field(
         default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
     )
