@@ -13,7 +13,6 @@ SRC_ROOT = Path(__file__).resolve().parent.parent
 
 from geometry.params import ModelParams, param_specs
 from names import CENTERPARTS_DIRNAME
-from geometry.timing_config import DT_DIRECT
 from labtests.registry import get_default_test_names, get_test_spec, parse_test_names
 
 # ─────────────────────────────────────────────
@@ -165,31 +164,12 @@ HARD_FAIL_SCORE = float(os.environ["HARD_FAIL_SCORE"])  # generation-failure sco
 PARAM_SPECS: list[dict] = param_specs(BASE_PARAMS)
 
 # ─────────────────────────────────────────────
-# Simulation Scoring & Early Stop Parameters
+# Simulation Runtime Limits
+#
+# Scene physics and scoring defaults live in labtests/core/scene_defaults.py
+# — scenes read them directly; env vars are optional per-process overrides.
 # ─────────────────────────────────────────────
-EARLY_STOP_SIM_TIME = 2.0 * (
-    DT_DIRECT / 0.02
-)  # scaled so gate fires after the same number of recorded frames regardless of DT_DIRECT
-FLOOR_Y_THRESHOLD = -235.0  # cube Y below this = on the floor / never picked up
-FLOOR_Y_BUFFER = 5.0  # how far above threshold counts as "still on floor"
-PICKUP_Y_THRESHOLD = -215.0  # cube Y above this = considered picked up
-DROP_PENALTY = (
-    50.0  # score to assign if cube is dropped after being picked up at least once
-)
-
-OVERLOAD_MAX_TIME = 5.0  # seconds of post-recording overload simulation
 SOFA_REALTIME_TIMEOUT = 200.0  # wall-clock seconds before any SOFA run prunes the whole gripper
-CUBE_MASS_START = 0.005  # kg, should match scene cube initial mass
-CUBE_MASS_MAX = 1.0  # kg reached by the end of the overload ramp
-CUBE_MASS_RAMP_TIME = 8.0  # seconds to ramp from start mass to max mass
-
-ENABLE_UNDERCUBE_CHECK = (
-    False  # if False, skip the under-cube invalid-geometry malus rule
-)
-SHAPEOPT_FRICTION_COEF = 0.6  # passed to scene contact manager (mu)
-EARLY_CONTACT_PENALTY = -1.0
-NO_PICKUP_PENALTY = 0.0
-UNDERCUBE_PENALTY = -0.2
 # ─────────────────────────────────────────────
 # Global State
 # ─────────────────────────────────────────────
@@ -242,21 +222,6 @@ def build_env() -> dict:
         ]
     )
 
-    # Early stop parameters — read by lab_shapeOPT.py via os.environ.get()
-    env["EARLY_STOP_SIM_TIME"] = str(EARLY_STOP_SIM_TIME)
-    env["FLOOR_Y_THRESHOLD"] = str(FLOOR_Y_THRESHOLD)
-    env["FLOOR_Y_BUFFER"] = str(FLOOR_Y_BUFFER)
-    env["PICKUP_Y_THRESHOLD"] = str(PICKUP_Y_THRESHOLD)
-    env["DROP_PENALTY"] = str(DROP_PENALTY)
-    env["OVERLOAD_MAX_TIME"] = str(OVERLOAD_MAX_TIME)
-    env["CUBE_MASS_START"] = str(CUBE_MASS_START)
-    env["CUBE_MASS_MAX"] = str(CUBE_MASS_MAX)
-    env["CUBE_MASS_RAMP_TIME"] = str(CUBE_MASS_RAMP_TIME)
-    env["ENABLE_UNDERCUBE_CHECK"] = "1" if ENABLE_UNDERCUBE_CHECK else "0"
-    env["EARLY_CONTACT_PENALTY"] = str(EARLY_CONTACT_PENALTY)
-    env["NO_PICKUP_PENALTY"] = str(NO_PICKUP_PENALTY)
-    env["UNDERCUBE_PENALTY"] = str(UNDERCUBE_PENALTY)
-    env["SHAPEOPT_FRICTION_COEF"] = str(SHAPEOPT_FRICTION_COEF)
     env["LAB_SHAPEOPT_TESTS"] = ",".join(SELECTED_TEST_NAMES)
     env["LAB_SHAPEOPT_RUNS_PER_TRIAL"] = str(N_REPEATS)
     env["LAB_SHAPEOPT_RUN_PLAN"] = ",".join(

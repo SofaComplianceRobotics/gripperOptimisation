@@ -1,9 +1,10 @@
-"""Shared environment-variable configuration for all ShapeOPT scenes.
+"""Shared configuration objects for all ShapeOPT scenes.
 
-The optimizer injects parameters through environment variables so that SOFA
-scenes are stateless — a fresh process reads its full config from the
-environment at startup. This module centralises all that parsing so each
-scene file only needs one call to get a fully populated config object.
+Scenes are stateless: a fresh SOFA process builds its full config at startup
+from labtests/core/scene_defaults.py, with optional per-process overrides
+through environment variables (set by the optimizer for trial metadata, or
+by hand for one-off experiments). This module centralises that resolution so
+each scene file only needs one call to get a fully populated config object.
 """
 
 from __future__ import annotations
@@ -12,7 +13,20 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from labtests.core import scene_defaults as defaults
 from names import CENTERPARTS_DIRNAME, GRIPPER_COLLISION_STL
+
+
+def _env_float(name: str, default: float) -> float:
+    """Read a float env var, falling back to the given default."""
+    raw = os.environ.get(name)
+    return default if raw is None else float(raw)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """Read a "1"/"0" env var, falling back to the given default."""
+    raw = os.environ.get(name)
+    return default if raw is None else raw == "1"
 
 
 @dataclass(frozen=True)
@@ -105,26 +119,44 @@ class PlaybackConfig:
                     / GRIPPER_COLLISION_STL
                 ),
             ),
-            friction_coef=float(os.environ["SHAPEOPT_FRICTION_COEF"]),
-            floor_center_y=-230.0,
-            cube_spawn_clearance=10.0,
-            cube_spawn_time=0.4,
-            cube_prespawn_offset=200.0,
-            drop_below_spawn_tol=0.5,
-            pickup_above_spawn_tol=1.0,
-            early_stop_sim_time=float(os.environ["EARLY_STOP_SIM_TIME"]),
-            floor_y_threshold=float(os.environ["FLOOR_Y_THRESHOLD"]),
-            floor_y_buffer=float(os.environ["FLOOR_Y_BUFFER"]),
-            pickup_y_threshold=float(os.environ["PICKUP_Y_THRESHOLD"]),
-            drop_penalty=float(os.environ["DROP_PENALTY"]),
-            overload_max_time=float(os.environ["OVERLOAD_MAX_TIME"]),
-            cube_mass_start=float(os.environ["CUBE_MASS_START"]),
-            cube_mass_max=float(os.environ["CUBE_MASS_MAX"]),
-            cube_mass_ramp_time=float(os.environ["CUBE_MASS_RAMP_TIME"]),
-            early_contact_stop_time=0.6,
-            early_contact_penalty=float(os.environ["EARLY_CONTACT_PENALTY"]),
-            no_pickup_penalty=float(os.environ["NO_PICKUP_PENALTY"]),
-            undercube_penalty=float(os.environ["UNDERCUBE_PENALTY"]),
-            undercube_margin=0.0,
-            enable_undercube_check=os.environ["ENABLE_UNDERCUBE_CHECK"] == "1",
+            friction_coef=_env_float("SHAPEOPT_FRICTION_COEF", defaults.FRICTION_COEF),
+            floor_center_y=defaults.FLOOR_CENTER_Y,
+            cube_spawn_clearance=defaults.CUBE_SPAWN_CLEARANCE,
+            cube_spawn_time=defaults.CUBE_SPAWN_TIME,
+            cube_prespawn_offset=defaults.CUBE_PRESPAWN_OFFSET,
+            drop_below_spawn_tol=defaults.DROP_BELOW_SPAWN_TOL,
+            pickup_above_spawn_tol=defaults.PICKUP_ABOVE_SPAWN_TOL,
+            early_stop_sim_time=_env_float(
+                "EARLY_STOP_SIM_TIME", defaults.EARLY_STOP_SIM_TIME
+            ),
+            floor_y_threshold=_env_float(
+                "FLOOR_Y_THRESHOLD", defaults.FLOOR_Y_THRESHOLD
+            ),
+            floor_y_buffer=_env_float("FLOOR_Y_BUFFER", defaults.FLOOR_Y_BUFFER),
+            pickup_y_threshold=_env_float(
+                "PICKUP_Y_THRESHOLD", defaults.PICKUP_Y_THRESHOLD
+            ),
+            drop_penalty=_env_float("DROP_PENALTY", defaults.DROP_PENALTY),
+            overload_max_time=_env_float(
+                "OVERLOAD_MAX_TIME", defaults.OVERLOAD_MAX_TIME
+            ),
+            cube_mass_start=_env_float("CUBE_MASS_START", defaults.CUBE_MASS_START),
+            cube_mass_max=_env_float("CUBE_MASS_MAX", defaults.CUBE_MASS_MAX),
+            cube_mass_ramp_time=_env_float(
+                "CUBE_MASS_RAMP_TIME", defaults.CUBE_MASS_RAMP_TIME
+            ),
+            early_contact_stop_time=defaults.EARLY_CONTACT_STOP_TIME,
+            early_contact_penalty=_env_float(
+                "EARLY_CONTACT_PENALTY", defaults.EARLY_CONTACT_PENALTY
+            ),
+            no_pickup_penalty=_env_float(
+                "NO_PICKUP_PENALTY", defaults.NO_PICKUP_PENALTY
+            ),
+            undercube_penalty=_env_float(
+                "UNDERCUBE_PENALTY", defaults.UNDERCUBE_PENALTY
+            ),
+            undercube_margin=defaults.UNDERCUBE_MARGIN,
+            enable_undercube_check=_env_bool(
+                "ENABLE_UNDERCUBE_CHECK", defaults.ENABLE_UNDERCUBE_CHECK
+            ),
         )
