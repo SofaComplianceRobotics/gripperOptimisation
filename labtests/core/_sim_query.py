@@ -22,6 +22,12 @@ def set_cube_mass(rootnode, value: float) -> None:
 
     Clamped to 0.0001 to avoid SOFA physics instability at near-zero mass.
 
+    WARNING: setting ``totalMass`` on a Rigid3 UniformMass RESETS its inertia
+    tensor to identity, undoing the box inertia cube_floor sets at build time.
+    So only call this when the mass actually has to change (the overload ramp) —
+    never every frame at a constant mass, or the cube's rotational inertia is
+    silently destroyed.
+
     Args:
         rootnode: SOFA root node.
         value: Desired mass value.
@@ -31,6 +37,28 @@ def set_cube_mass(rootnode, value: float) -> None:
         rootnode.Simulation.Cube.cube_mass.totalMass.value = mass
     except Exception:
         pass
+
+
+def set_gripper_collision_active(gripper_collision, active: bool) -> None:
+    """Enable or disable the gripper's collision models at runtime.
+
+    SOFA's per-step collision detection skips any model whose ``active`` flag
+    is False, so toggling it lets the gripper pass through the floor while it
+    moves to its start pose (the cube is parked far away during this window),
+    then collide normally once re-enabled at cube spawn.
+
+    Args:
+        gripper_collision: The gripper CollisionModel node from collision_stl.
+        active: True to enable collision, False to disable it.
+    """
+    for name in (
+        "gripperCollisionPoints",
+        "gripperCollisionLines",
+        "gripperCollisionTriangles",
+    ):
+        model = gripper_collision.getObject(name)
+        if model is not None:
+            model.active.value = active
 
 
 def get_cube_collision_min_y(rootnode) -> float | None:

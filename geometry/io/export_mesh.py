@@ -102,7 +102,7 @@ def _export_with_gmsh(
         else:
             gmsh.option.setNumber("Mesh.AngleSmoothNormals", p.mesh_angle_smooth)
             # Recombine triangles to quads for more efficient surface mesh.
-            gmsh.option.setNumber("Mesh.RecombineAll", 1)
+            gmsh.option.setNumber("Mesh.RecombineAll", 0)
             # Aggressive smoothing to blend stepped geometry into smooth slopes
             gmsh.option.setNumber("Mesh.Smoothing", 10)  # Multiple smoothing passes
             gmsh.option.setNumber(
@@ -200,7 +200,7 @@ def model_to_stl_collision(
         gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 0)
         gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
         gmsh.option.setNumber("Mesh.MeshSizeFromParametricPoints", 0)
-        gmsh.option.setNumber("Mesh.RecombineAll", 1)
+        gmsh.option.setNumber("Mesh.RecombineAll", 0)
 
         gmsh.option.setNumber("Mesh.Algorithm", 6)
         gmsh.option.setNumber("Mesh.Optimize", 1)

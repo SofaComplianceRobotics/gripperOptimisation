@@ -80,6 +80,7 @@ class PlaybackConfig:
     gripper_mesh_path: str
     # ── Scene physics ─────────────────────────────────────────────────────────
     friction_coef: float
+    playback_time_scale: float
     floor_center_y: float
     cube_spawn_clearance: float
     cube_spawn_time: float
@@ -120,6 +121,9 @@ class PlaybackConfig:
                 ),
             ),
             friction_coef=_env_float("SHAPEOPT_FRICTION_COEF", defaults.FRICTION_COEF),
+            playback_time_scale=_env_float(
+                "PLAYBACK_TIME_SCALE", defaults.PLAYBACK_TIME_SCALE
+            ),
             floor_center_y=defaults.FLOOR_CENTER_Y,
             cube_spawn_clearance=defaults.CUBE_SPAWN_CLEARANCE,
             cube_spawn_time=defaults.CUBE_SPAWN_TIME,

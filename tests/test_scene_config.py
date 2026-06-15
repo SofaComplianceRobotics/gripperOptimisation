@@ -18,6 +18,7 @@ LAB_ROOT = Path(__file__).resolve().parents[1]
 
 ENV_VARS = (
     "SHAPEOPT_FRICTION_COEF",
+    "PLAYBACK_TIME_SCALE",
     "EARLY_STOP_SIM_TIME",
     "FLOOR_Y_THRESHOLD",
     "FLOOR_Y_BUFFER",
@@ -99,7 +100,12 @@ class TestPlaybackConfigOverrides:
         assert meta.run_info == {"gen": 5, "trial": 13, "run": 1}
 
 
-def test_early_stop_default_scales_with_dt():
-    from geometry.timing_config import DT_DIRECT
+def test_early_stop_is_absolute_sim_time_gate():
+    # The pickup gate is an absolute simulation-time deadline now that playback
+    # runs on the recording's true timeline (PLAYBACK_TIME_SCALE), not the old
+    # dt-compressed one. It must stay well inside the trajectory length.
+    assert defaults.EARLY_STOP_SIM_TIME == 5.0
 
-    assert defaults.EARLY_STOP_SIM_TIME == 2.0 * (DT_DIRECT / 0.02)
+
+def test_playback_time_scale_default_is_real_time():
+    assert defaults.PLAYBACK_TIME_SCALE == 1.0

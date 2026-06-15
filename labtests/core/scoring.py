@@ -41,6 +41,7 @@ class ScoreWriter:
         self.run_slot = int(run_slot)
         self._finished = False
         self._last_status: dict[str, Any] = {}
+        self._last_write_monotonic = float("-inf")
 
     def _acquire_lock(self, lock_path: Path, timeout_s: float = 5.0) -> bool:
         """Acquire a simple cross-process file lock using exclusive create."""
@@ -104,7 +105,9 @@ class ScoreWriter:
         finally:
             self._release_lock(lock_path)
 
-    def write_status(self, payload: dict[str, Any]) -> None:
+    def write_status(
+        self, payload: dict[str, Any], *, min_interval: float = 0.0
+    ) -> None:
         """Atomically write a live-status payload.
 
         Status writes are best-effort: any I/O error is silently swallowed
@@ -112,9 +115,22 @@ class ScoreWriter:
 
         Args:
             payload: Arbitrary dict merged with run_info before writing.
+            min_interval: Skip the file write if the last one happened fewer
+                than this many wall-clock seconds ago. The payload is still
+                recorded internally so the final score write stays complete.
+                Writes after the run has finished always go through.
         """
         full = {**self.run_info, **payload, "updated_at": self.rootnode.time.value}
         self._last_status = dict(full)
+
+        now = time.monotonic()
+        if (
+            min_interval > 0.0
+            and not self._finished
+            and now - self._last_write_monotonic < min_interval
+        ):
+            return
+        self._last_write_monotonic = now
 
         self._update_trial_state_run(full)
 

@@ -8,6 +8,7 @@ simulation time.
 
 from __future__ import annotations
 
+import os
 from typing import NamedTuple
 
 
@@ -60,6 +61,19 @@ def setup(
 
     # ── Cube ──────────────────────────────────────────────────────────────────
 
+    # Mass-normalized inertia of a solid box (mesh/cube.obj spans ±1, so the
+    # full side length is 2 × scale). SOFA multiplies this matrix by the mass
+    # internally. NOTE: setting UniformMass.totalMass at runtime RESETS this to
+    # identity, so the controller must NOT re-set the mass every frame at a
+    # constant value — it only changes mass during the overload ramp.
+    side_x, side_y, side_z = (2.0 * s for s in cube_scale)
+    inertia_xx = (side_y**2 + side_z**2) / 12.0
+    inertia_yy = (side_x**2 + side_z**2) / 12.0
+    inertia_zz = (side_x**2 + side_y**2) / 12.0
+    cube_inertia = [
+        inertia_xx, 0.0, 0.0, 0.0, inertia_yy, 0.0, 0.0, 0.0, inertia_zz
+    ]
+
     cube = simulation.addChild("Cube")
     cube.addObject(
         "MechanicalObject",
@@ -67,7 +81,11 @@ def setup(
         position=[[0.0, cube_spawn_y, 0.0, 0.0, 0.0, 0.0, 1.0]],
         showObject=True,
     )
-    cube.addObject("UniformMass", name="cube_mass", totalMass=cube_mass)
+    cube.addObject(
+        "UniformMass",
+        name="cube_mass",
+        vertexMass=[cube_mass, 1.0, cube_inertia],
+    )
 
     visu_cube = cube.addChild("Visual")
     visu_cube.addObject(
@@ -117,6 +135,41 @@ def setup(
         collisionModel1=gripper_collision.gripperCollisionTriangles.getLinkPath(),
         collisionModel2=collision.cubeCollisionTriangles.getLinkPath(),
     )
+
+    # MinProximityIntersection only generates point↔triangle and line↔line
+    # contacts, never triangle↔triangle, so the listener above stays empty and
+    # cannot measure the grip. These watch the channels that actually carry the
+    # contacts. Created only when contact debugging is on (each listener walks
+    # its contact list every step), and consumed by playback_controller.
+    if os.environ.get("SHAPEOPT_DEBUG_CONTACTS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        for model1, model2, suffix in (
+            (
+                gripper_collision.gripperCollisionPoints,
+                collision.cubeCollisionTriangles,
+                "gPcT",
+            ),
+            (
+                gripper_collision.gripperCollisionTriangles,
+                collision.cubeCollisionPoints,
+                "gTcP",
+            ),
+            (
+                gripper_collision.gripperCollisionLines,
+                collision.cubeCollisionLines,
+                "gLcL",
+            ),
+        ):
+            simulation.addObject(
+                "ContactListener",
+                name=f"cubeGripperContactDbg_{suffix}",
+                collisionModel1=model1.getLinkPath(),
+                collisionModel2=model2.getLinkPath(),
+            )
 
     # ── Floor ─────────────────────────────────────────────────────────────────
 

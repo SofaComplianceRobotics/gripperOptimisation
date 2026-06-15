@@ -12,6 +12,7 @@ from geometry.timing_config import DT_DIRECT
 from labtests.core._sim_query import (
     get_cube_collision_min_y,
     get_gripper_collision_min_y,
+    set_gripper_collision_active,
     spawn_overlap_detected,
 )
 
@@ -47,19 +48,39 @@ def timeline_frame_at(sim_time: float, total_frames: int) -> int:
     return min(total_frames, int(sim_time / DT_DIRECT))
 
 
-def playback_index_at(sim_time: float, recorded_frames: int) -> int:
-    """Return the recorded motor frame index for the current simulation time.
+def interpolated_motor_positions(
+    sim_time: float,
+    motor_positions: list[list[float]],
+    recording_dt: float,
+    time_scale: float = 1.0,
+) -> list[float]:
+    """Return motor positions for the current sim time, lerped between frames.
+
+    The recording timeline is mapped to simulation time through its own capture
+    interval, so a trajectory recorded at any dt replays at its true rate
+    (divided by ``time_scale``). Linear interpolation between neighbouring
+    frames keeps the commanded motor motion smooth at every physics step
+    instead of jumping one full recorded frame at a time.
 
     Args:
         sim_time: Current simulation time in seconds.
-        recorded_frames: Total number of recorded motor frames.
+        motor_positions: Recorded frames, each a list of motor angles.
+        recording_dt: Seconds between recorded frames.
+        time_scale: Replay speed factor (1.0 = recorded rate).
 
     Returns:
-        Frame index clamped to [0, recorded_frames - 1].
+        Interpolated motor angles; the last frame once the recording ends.
     """
-    if recorded_frames <= 0:
-        return 0
-    return min(recorded_frames - 1, int(sim_time / DT_DIRECT))
+    n = len(motor_positions)
+    if n == 0:
+        return []
+    frame_pos = max(0.0, sim_time) * time_scale / recording_dt
+    index = int(frame_pos)
+    if index >= n - 1:
+        return list(motor_positions[-1])
+    frac = frame_pos - index
+    current, following = motor_positions[index], motor_positions[index + 1]
+    return [a + (b - a) * frac for a, b in zip(current, following)]
 
 
 # ── Spawn phase ───────────────────────────────────────────────────────────────
@@ -129,6 +150,9 @@ def handle_cube_spawn(ctrl, sim_time: float) -> float | None:
         ]
         cube_mo.velocity.value = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
         ctrl.cube_has_spawned = True
+        # Gripper has reached its start pose clear of the floor; restore its
+        # collision so it can land on the floor and grasp the cube.
+        set_gripper_collision_active(ctrl.gripper_collision, True)
         ctrl.spawn_contact_check_frames = 2
         ctrl._post_spawn_slow_frames = 2
         cube_y = float(ctrl.cube_handles.cube_spawn_y)

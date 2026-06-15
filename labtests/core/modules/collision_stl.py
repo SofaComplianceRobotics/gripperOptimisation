@@ -24,8 +24,12 @@ def setup(emio, stl_path: str):
     gripper_collision.addObject("MeshSTLLoader", name="loader", filename=stl_path)
     gripper_collision.addObject("MeshTopology", src="@loader")
     gripper_collision.addObject("MechanicalObject")
-    gripper_collision.addObject("PointCollisionModel", group=1)
-    gripper_collision.addObject("LineCollisionModel", group=1)
+    gripper_collision.addObject(
+        "PointCollisionModel", name="gripperCollisionPoints", group=1
+    )
+    gripper_collision.addObject(
+        "LineCollisionModel", name="gripperCollisionLines", group=1
+    )
     gripper_collision.addObject(
         "TriangleCollisionModel", name="gripperCollisionTriangles", group=1
     )

@@ -158,7 +158,7 @@ The default `BasePlaybackController` scores by hold time — how many seconds th
 | `_update_overload_mass()` | Every frame during overload | Ramps mass from start to max |
 | `_on_horizon_complete(sim_time)` | When recording finishes | Calls `write_pruned_and_stop` |
 
-Inside a subclass you also have: `self.hold_time`, `self.writer`, `self.cfg`, `self._set_cube_mass(value)`.
+Inside a subclass you also have: `self.hold_time`, `self.writer`, `self.cfg`.
 
 ### Mode B — Inverse (effector target control)
 

@@ -1,0 +1,57 @@
+[Window.Input/Output]
+open = false
+dockId = 4
+
+
+[Window.Program]
+open = false
+
+
+[Window.My Robot]
+open = false
+
+
+[Window.Move]
+open = false
+
+
+[Window.Plotting]
+open = false
+
+
+[Window.Viewport]
+open = true
+dockId = 5
+
+
+[Window.Scene Graph]
+open = false
+
+
+[Window.Log]
+open = false
+
+
+[Window.2]
+width = 480.000000
+height = 963.000000
+
+
+[Window.4]
+width = 480.000000
+height = 963.000000
+
+
+[Window.3]
+width = 480.000000
+height = 581.000000
+
+
+[Window.6]
+width = 1440.000000
+height = 339.000000
+
+
+[Window.5]
+width = 1910.000000
+height = 963.000000

@@ -77,8 +77,13 @@ def build_base_scene(
     if not inverse:
         local_min_dist = rootnode.getObject("LocalMinDistance")
         if local_min_dist is not None:
-            local_min_dist.alarmDistance = 5
-            local_min_dist.contactDistance = 1.5
+            # alarmDistance must stay above the cube's per-step fall distance at
+            # floor impact (~4.4mm after the spawn-clearance drop) so contacts
+            # are detected before it tunnels. contactDistance tightened to 1.0mm
+            # (from 1.5) to reduce the cushion the cube rested on without
+            # starving the flat cube-floor contact.
+            local_min_dist.alarmDistance = 5.0
+            local_min_dist.contactDistance = 1.0
 
     emio = Emio(
         name="Emio",

@@ -24,18 +24,25 @@ Four override hooks:
 
 from __future__ import annotations
 
+import os
+
 from geometry.timing_config import DT_CONTACT, DT_DIRECT
 
+from labtests.core import scene_defaults
 from labtests.core._loop_phases import (
     apply_scoring_rules,
     check_spawn_contact_window,
     current_phase,
     ensure_drop_threshold_initialized,
     handle_cube_spawn,
-    playback_index_at,
+    interpolated_motor_positions,
     timeline_frame_at,
 )
-from labtests.core._sim_query import get_cube_y, set_cube_mass
+from labtests.core._sim_query import (
+    get_cube_y,
+    set_cube_mass,
+    set_gripper_collision_active,
+)
 
 
 def make_playback_controller(SofaController):
@@ -76,9 +83,15 @@ def make_playback_controller(SofaController):
             self.physics_step = 0
             self.sim_time = 0.0
             self.recorded_frames = len(playback.motor_positions)
-            self.recorded_duration = self.recorded_frames * DT_DIRECT
+            self.time_scale = max(1e-6, cfg.playback_time_scale)
+            # Trajectory duration follows the recording's own capture rate,
+            # compressed by the configured time scale.
+            self.recorded_duration = (
+                self.recorded_frames * playback.recording_dt / self.time_scale
+            )
+            recorded_physics_frames = max(1, int(round(self.recorded_duration / DT_DIRECT)))
             self.overload_frames = max(0, int(cfg.overload_max_time / DT_DIRECT))
-            self.total_frames = self.recorded_frames + self.overload_frames
+            self.total_frames = recorded_physics_frames + self.overload_frames
             self.total_duration = self.recorded_duration + cfg.overload_max_time
             # Start at contact timestep so the gripper settles before the cube appears;
             # switched back to DT_DIRECT after the post-spawn slow frames elapse
@@ -100,7 +113,17 @@ def make_playback_controller(SofaController):
             self.cube_has_spawned = False
             self.spawn_contact_check_frames = 0
             self._post_spawn_slow_frames = 0
-            set_cube_mass(rootnode, self._initial_cube_mass())
+            # Gripper↔cube contact instrumentation (off unless SHAPEOPT_DEBUG_CONTACTS=1).
+            self._debug_contacts = os.environ.get(
+                "SHAPEOPT_DEBUG_CONTACTS", ""
+            ).strip().lower() in ("1", "true", "yes", "on")
+            # The gripper spawns overlapping the floor and cannot reach its start
+            # pose while fighting floor contact. Disable its collision until the
+            # cube teleports in (handle_cube_spawn re-enables it); the cube is
+            # parked far above the workspace until then, so nothing else is near.
+            set_gripper_collision_active(gripper_collision, False)
+            # Mass + box inertia are already set by cube_floor at build time.
+            # Do NOT re-set the mass here (totalMass would reset the inertia).
             writer.write_status(
                 {
                     "state": "running",
@@ -111,7 +134,9 @@ def make_playback_controller(SofaController):
                 }
             )
             print(
-                f"[Playback] {self.recorded_frames} recorded + {self.overload_frames} overload frames\n"
+                f"[Playback] {self.recorded_frames} recorded frames over "
+                f"{self.recorded_duration:.2f}s (time_scale={self.time_scale:g}) "
+                f"+ {self.overload_frames} overload frames\n"
                 f"[Scoring] hold-time after {cfg.early_stop_sim_time:.2f}s, "
                 f"pickup threshold: {cfg.pickup_y_threshold}"
             )
@@ -127,10 +152,15 @@ def make_playback_controller(SofaController):
             return self.cfg.cube_mass_start
 
         def _update_overload_mass(self) -> None:
-            """Ramp cube mass from start to max during the overload phase."""
+            """Ramp cube mass from start to max during the overload phase.
+
+            During the recorded phase the mass stays at its build-time value, so
+            we deliberately do NOT call set_cube_mass (which would reset the box
+            inertia to identity every frame). It is only set once the overload
+            ramp actually changes the mass.
+            """
             loop_sim_time = getattr(self, "_loop_sim_time", self.sim_time)
             if loop_sim_time < self.recorded_duration:
-                set_cube_mass(self.rootnode, self.cfg.cube_mass_start)
                 return
             overload_t = max(0.0, loop_sim_time - self.recorded_duration)
             alpha = (
@@ -202,7 +232,8 @@ def make_playback_controller(SofaController):
                     "cube_y": cube_y,
                     "phase": current_phase(sim_time, self.recorded_duration),
                     "hold_time": self.hold_time,
-                }
+                },
+                min_interval=scene_defaults.STATUS_WRITE_INTERVAL,
             )
 
             if self.cube_has_spawned and cube_y is not None:
@@ -215,7 +246,12 @@ def make_playback_controller(SofaController):
 
             # Replay recorded motor positions; hold the last frame during overload
             positions = (
-                self.playback.motor_positions[playback_index_at(sim_time, self.recorded_frames)]
+                interpolated_motor_positions(
+                    sim_time,
+                    self.playback.motor_positions,
+                    self.playback.recording_dt,
+                    self.time_scale,
+                )
                 if sim_time < self.recorded_duration
                 else self.last_positions
             )
@@ -248,5 +284,82 @@ def make_playback_controller(SofaController):
             if self.writer.finished:
                 return
             check_spawn_contact_window(self, self.sim_time)
+            if self._debug_contacts and self.cube_has_spawned:
+                self._log_contact_normals()
+
+        def _log_contact_normals(self) -> None:
+            """Print live cube motion and the real gripper↔cube contact geometry.
+
+            Aggregates the point↔triangle and line↔line listeners that
+            MinProximityIntersection actually populates, split by finger (sign
+            of the contact-point X), logged every 5 steps:
+              nC      — total real contact count across all channels.
+              normalY — mean Y of contact push directions. Positive = cube is
+                        being pushed up (the climb signature).
+              +X/-X   — per-finger contact count and mean contact height (Y).
+                        Unequal heights = the two fingers grip off-balance.
+              Vy      — cube vertical velocity. Positive = climbing.
+              w       — cube angular velocity. Large = tumbling.
+            """
+            if self.physics_step % 5 != 0:
+                return
+
+            normals_y: list[float] = []
+            # Per side: [contact count, summed contact height].
+            side_stats = {"+X": [0, 0.0], "-X": [0, 0.0]}
+            for suffix in ("gPcT", "gTcP", "gLcL"):
+                try:
+                    listener = self.rootnode.Simulation.getObject(
+                        f"cubeGripperContactDbg_{suffix}"
+                    )
+                    contacts = listener.getContactPoints() or []
+                except Exception:
+                    continue
+                for _m1, p1, _m2, p2 in contacts:
+                    dx, dy, dz = p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]
+                    length = (dx * dx + dy * dy + dz * dz) ** 0.5
+                    if length <= 1e-9:
+                        continue
+                    normals_y.append(dy / length)
+                    side = "+X" if (p1[0] + p2[0]) >= 0 else "-X"
+                    side_stats[side][0] += 1
+                    side_stats[side][1] += (p1[1] + p2[1]) / 2.0
+
+            cube_mo = self.cube_handles.cube.getMechanicalState()
+            vel = cube_mo.velocity.value[0]
+            cube_y = cube_mo.position.value[0][1]
+            normal_y = (
+                f"{sum(normals_y) / len(normals_y):+.3f}" if normals_y else "n/a"
+            )
+
+            # The gripper is the only actor that can inject the ejection energy.
+            # Track its finger-tip height (lowest collision vertex) and the
+            # vertical velocity of that tip by finite difference across the log
+            # interval, so we can see whether the gripper itself is sweeping up
+            # when the cube launches.
+            grip_pos = self.gripper_collision.getMechanicalState().position.value
+            grip_tip_y = min(p[1] for p in grip_pos)
+            prev_y = getattr(self, "_prev_grip_tip_y", None)
+            prev_t = getattr(self, "_prev_grip_tip_t", None)
+            if prev_y is not None and self.sim_time > prev_t:
+                grip_tip_vy = (grip_tip_y - prev_y) / (self.sim_time - prev_t)
+            else:
+                grip_tip_vy = 0.0
+            self._prev_grip_tip_y = grip_tip_y
+            self._prev_grip_tip_t = self.sim_time
+
+            def _side_text(label: str) -> str:
+                count, height_sum = side_stats[label]
+                height = f"{height_sum / count:7.2f}" if count else "    n/a"
+                return f"{label}:n={count:2d} h={height}"
+
+            print(
+                f"[contactdbg] t={self.sim_time:5.2f} nC={len(normals_y):2d} "
+                f"normalY={normal_y:>6} cubeY={cube_y:7.2f} Vy={vel[1]:+8.1f} "
+                f"w=({vel[3]:+.2f},{vel[4]:+.2f},{vel[5]:+.2f}) "
+                f"gripTipY={grip_tip_y:7.2f} gripVy={grip_tip_vy:+8.1f} "
+                f"| {_side_text('+X')} {_side_text('-X')}",
+                flush=True,
+            )
 
     return BasePlaybackController

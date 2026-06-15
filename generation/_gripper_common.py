@@ -10,12 +10,18 @@ import sys
 from dataclasses import fields, replace
 from pathlib import Path
 
-from names import GRIPPER_PRINT_NAME
-
 LAB_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = LAB_ROOT
 
 LAB_SITE_PACKAGES = LAB_ROOT / "runtime" / "modules" / "site-packages"
+
+# These scripts are run directly (only the generation/ dir lands on sys.path),
+# so LAB_ROOT must be added before importing any lab-root module like names.
+# A no-op when the dashboard has already put LAB_ROOT on PYTHONPATH.
+if str(LAB_ROOT) not in sys.path:
+    sys.path.insert(0, str(LAB_ROOT))
+
+from names import GRIPPER_PRINT_NAME  # noqa: E402
 
 
 # Matches a JSON string literal (kept) or a // line comment (stripped).

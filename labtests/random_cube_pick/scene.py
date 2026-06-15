@@ -57,7 +57,6 @@ def createScene(rootnode):
     from labtests.core.modules.cube_floor import setup as setup_cube_floor
     from labtests.core.modules.motor_playback import setup as setup_playback
     from labtests.core.playback_controller import make_playback_controller
-    from labtests.core._sim_query import set_cube_mass
     from labtests.core.plugins import add_required_plugins
     from labtests.core.scene_config import PlaybackConfig
     from labtests.core.scoring import ScoreWriter
@@ -125,7 +124,7 @@ def createScene(rootnode):
 
     original_write_status = writer.write_status
 
-    def write_status(payload: dict) -> None:
+    def write_status(payload: dict, **kwargs) -> None:
         snapshot = build_search_snapshot(
             LAB_ROOT,
             cfg.meta.run_slot,
@@ -136,7 +135,7 @@ def createScene(rootnode):
             generation_id=cfg.meta.gen,
         )
         merged = {**payload, **snapshot}
-        original_write_status(merged)
+        original_write_status(merged, **kwargs)
 
     writer.write_status = write_status
 
@@ -153,8 +152,10 @@ def createScene(rootnode):
             return cube_mass
 
         def _update_overload_mass(self) -> None:
-            # Mass is fixed — no ramp keeps the draw fair across runs
-            set_cube_mass(self.rootnode, cube_mass)
+            # Mass is fixed for the whole run (cube_floor set it with the correct
+            # inertia at build time), so there is nothing to update per frame.
+            # Re-setting it would reset the box inertia to identity.
+            return
 
         def _finish_run(
             self, score: float | None, reason: str, *, pruned: bool = False
