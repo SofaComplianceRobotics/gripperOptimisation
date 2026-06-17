@@ -20,8 +20,10 @@ from optimization.generation.plan import (
     trial_has_ungated_positive_run,
 )
 from optimization.generation.launch import _relaunch_run
+from optimization.geom_pipeline import render_stl_preview
 from optimization.config import (
     LAB_ROOT,
+    MAX_RUN_RELAUNCHES,
     N_REPEATS,
     RUN_PLAN,
     SELECTED_TEST_NAMES,
@@ -69,6 +71,9 @@ def finalize_generation(
     try:
         finalized: set[int] = set()
         gen_scores = prelaunch_scores.copy()
+        # Per (trial, run_slot) count of legitimate ladder-probe relaunches, so a
+        # ladder that never converges can't loop forever (see MAX_RUN_RELAUNCHES).
+        relaunch_counts: dict[tuple[int, int], int] = {}
         bar_width = 28
         start_time = time.time()
         last_print = 0.0
@@ -87,7 +92,6 @@ def finalize_generation(
                 trial_index,
                 trial,
                 runs,
-                launched_run_plan_entries,
                 pending_gated_runs,
                 trial_state_path,
                 collision_stl,
@@ -126,23 +130,65 @@ def finalize_generation(
                         test_name == "random_cube_pick"
                         and run_state not in terminal_run_states
                     ):
-                        test_run_index = int(run_data.get("test_run_index", run_slot))
-                        test_run_total = int(run_data.get("test_run_total", 3))
-                        _relaunch_run(
-                            gen_index=gen_index,
-                            trial_index=trial_index,
-                            run_slot=run_slot,
-                            test_name=test_name,
-                            test_run_index=test_run_index,
-                            test_run_total=test_run_total,
-                            trial_state_path=trial_state_path,
-                            collision_stl=collision_stl,
-                            launch_times_by_slot=launch_times_by_slot,
-                            runs=runs,
-                            launched_run_plan_entries=launched_run_plan_entries,
-                            env=env,
-                        )
-                        trial_has_active_run = True
+                        key = (trial_index, run_slot)
+                        # A genuine ladder probe re-sets probe_finished before it
+                        # self-terminates (relaunch to advance the ladder). A run
+                        # that exits without it crashed mid-simulation — fail it
+                        # immediately rather than retrying a deterministic crash.
+                        if not run_data.get("probe_finished"):
+                            reason = (
+                                "SOFA exited mid-simulation without completing a "
+                                "probe (crash, likely an unstable geometry)"
+                            )
+                            update_trial_run(
+                                trial_state_path,
+                                run_slot,
+                                {"state": "failed", "score": None, "reason": reason},
+                            )
+                            print(
+                                f"\n[crash] Gen {gen_index:04d} Trial "
+                                f"{trial_index:02d} Run {run_slot}: {reason}; "
+                                f"marked failed."
+                            )
+                            # Run is now terminal; don't relaunch or mark active.
+                        elif relaunch_counts.get(key, 0) >= MAX_RUN_RELAUNCHES:
+                            update_trial_run(
+                                trial_state_path,
+                                run_slot,
+                                {
+                                    "state": "failed",
+                                    "score": None,
+                                    "reason": (
+                                        f"exceeded {MAX_RUN_RELAUNCHES} probe "
+                                        f"relaunches without ladder convergence"
+                                    ),
+                                },
+                            )
+                            print(
+                                f"\n[relaunch-cap] Gen {gen_index:04d} Trial "
+                                f"{trial_index:02d} Run {run_slot}: ladder did not "
+                                f"converge in {MAX_RUN_RELAUNCHES} relaunches; failed."
+                            )
+                        else:
+                            relaunch_counts[key] = relaunch_counts.get(key, 0) + 1
+                            test_run_index = int(
+                                run_data.get("test_run_index", run_slot)
+                            )
+                            test_run_total = int(run_data.get("test_run_total", 3))
+                            _relaunch_run(
+                                gen_index=gen_index,
+                                trial_index=trial_index,
+                                run_slot=run_slot,
+                                test_name=test_name,
+                                test_run_index=test_run_index,
+                                test_run_total=test_run_total,
+                                trial_state_path=trial_state_path,
+                                collision_stl=collision_stl,
+                                launch_times_by_slot=launch_times_by_slot,
+                                runs=runs,
+                                env=env,
+                            )
+                            trial_has_active_run = True
 
                 if trial_has_active_run:
                     continue
@@ -156,7 +202,6 @@ def finalize_generation(
                         trial=trial,
                         runs=runs,
                         trial_state_path=trial_state_path,
-                        run_plan_entries=launched_run_plan_entries,
                         study=study,
                         test_aggregations=state.test_aggregations,
                         test_max_scores=state.test_max_scores,
@@ -188,7 +233,6 @@ def finalize_generation(
                                 collision_stl=collision_stl,
                                 launch_times_by_slot=launch_times_by_slot,
                                 runs=runs,
-                                launched_run_plan_entries=launched_run_plan_entries,
                                 env=env,
                             )
                         pending_gated_runs.clear()
@@ -218,7 +262,6 @@ def finalize_generation(
                     trial=trial,
                     runs=runs,
                     trial_state_path=trial_state_path,
-                    run_plan_entries=launched_run_plan_entries,
                     study=study,
                     test_aggregations=state.test_aggregations,
                     test_max_scores=state.test_max_scores,
@@ -231,10 +274,10 @@ def finalize_generation(
 
             now = time.time()
             if now - last_print >= 0.5:
-                total_runs = sum(len(runs) for _, _, runs, _, _, _, _, _ in processes)
+                total_runs = sum(len(runs) for _, _, runs, _, _, _, _ in processes)
                 total_done = sum(
                     sum(1 for p, _, _ in runs if p.poll() is not None)
-                    for _, _, runs, _, _, _, _, _ in processes
+                    for _, _, runs, _, _, _, _ in processes
                 )
                 pct = (100.0 * total_done / total_runs) if total_runs else 100.0
                 filled = (
@@ -256,11 +299,28 @@ def finalize_generation(
                 time.sleep(0.2)
 
         total_elapsed = time.time() - start_time
-        total_runs = sum(len(runs) for _, _, runs, _, _, _, _, _ in processes)
+        total_runs = sum(len(runs) for _, _, runs, _, _, _, _ in processes)
         print(
             f"\r[progress] Gen {gen_index:04d} SOFA [{'#' * bar_width}] "
             f"{total_runs}/{total_runs} (100.0%)  elapsed {total_elapsed:5.1f}s"
         )
+
+        # Render trial previews now — every SOFA process for this generation
+        # has exited, so pyvista's offscreen OpenGL no longer overlaps SOFA's
+        # GL initialization. Doing this mid-generation deadlocks SOFA startup
+        # on Windows (WGL contention), which is why it is deferred to here.
+        preview_tasks = launch_result.get("preview_tasks", [])
+        failed_preview = launch_result.get("failed_preview")
+        if preview_tasks:
+            print(
+                f"[preview] Gen {gen_index:04d} rendering {len(preview_tasks)} "
+                f"trial preview(s)"
+            )
+            for visual_stl_copy, trial_index in preview_tasks:
+                trial_dir = gen_dir / f"trial_{trial_index:02d}"
+                render_stl_preview(
+                    visual_stl_copy, trial_dir, gen_index, trial_index, failed_preview
+                )
 
         seeds = compute_random_cube_pick_seed_indices(trial_state_paths_by_trial)
         save_seed_indices(LAB_ROOT, seeds)

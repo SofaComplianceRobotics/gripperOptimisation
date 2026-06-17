@@ -53,6 +53,10 @@ def build_base_scene(
     from parts.gripper import Gripper  # type: ignore
     from parts.emio import Emio  # type: ignore
 
+    import utils.header as _uh  # diagnostic: which utils tree are we loading?
+
+    print(f"[env] utils.header loaded from {_uh.__file__}")
+
     settings, modelling, simulation = addHeader(
         rootnode,
         inverse=inverse,
@@ -85,6 +89,31 @@ def build_base_scene(
             local_min_dist.alarmDistance = 5.0
             local_min_dist.contactDistance = 1.0
 
+        # Relax the contact constraint solver (lab-local; the shared
+        # utils.header sets it to tolerance=1e-10 / maxIterations=1500, which is
+        # research-grade precision a grasp demo does not need). Every contact is
+        # an iterative Lagrangian constraint, so loosening these is the cheapest
+        # way to keep the sim interactive when many contacts are active. Kept
+        # here (not in utils.header) so other labs are unaffected.
+        constraint_solver = rootnode.getObject("ConstraintSolver")
+        if constraint_solver is not None:
+            constraint_solver.tolerance = 1e-3
+            constraint_solver.maxIterations = 250
+
+    # Gripper finger stiffness. The measured beam value (parameters.youngModulus
+    # = 3.5e4) leaves the fingers too stiff to conform to the rigid cube: they
+    # stay rigid under the squeeze and the cube is ejected instead of held.
+    # Softening the gripper centerpart ~10x lets the fingers wrap around and hold
+    # it. Deliberately unphysical, but required for a stable grasp in this
+    # rigid-cube setup. Direct (grasp) scenes only — the inverse control scene
+    # keeps the measured stiffness. Override with SHAPEOPT_YOUNG_MODULUS.
+    GRIPPER_YOUNG_MODULUS = 3.5e3
+    emio_kwargs: dict = {}
+    if not inverse:
+        ym = float(os.environ.get("SHAPEOPT_YOUNG_MODULUS", GRIPPER_YOUNG_MODULUS))
+        emio_kwargs["centerPartYoungModulus"] = ym
+        print(f"[gripper] centerPartYoungModulus = {ym}")
+
     emio = Emio(
         name="Emio",
         legsName=[LEG_NAME],
@@ -101,6 +130,7 @@ def build_base_scene(
         centerPartClass=Gripper,
         platformLevel=2,
         extended=True,
+        **emio_kwargs,
     )
 
     if not emio.isValid():

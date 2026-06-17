@@ -31,6 +31,51 @@ def _get_test_max_score(test_name: str) -> float:
     return result
 
 
+# Human-readable labels for the per-run lifecycle states. Keys are the raw
+# state strings written into trial_state.json by the optimization pipeline and
+# the SOFA scenes; values are what the progress tab shows. Anything not listed
+# falls back to the raw state with dashes turned into spaces.
+_RUN_STATE_LABELS = {
+    "not-started": "queued",
+    "queued": "queued",
+    "pending": "gated — waiting for ungated run",
+    "waiting-slot": "waiting for SOFA slot",
+    "generating-geometry": "generating geometry",
+    "rendering-preview": "rendering preview",
+    "launching": "launching SOFA",
+    "running": "running",
+    "done": "done",
+    "failed": "failed",
+    "error": "error",
+    "pruned": "pruned",
+    "skipped": "skipped",
+    "cancelled": "cancelled",
+}
+
+# States that mean "actively doing work" (blue), as opposed to waiting in a
+# queue (amber) or terminal (green/red/grey).
+_ACTIVE_STATES = {
+    "running",
+    "launching",
+    "generating-geometry",
+    "rendering-preview",
+}
+_WAITING_STATES = {"waiting-slot"}
+
+
+def _run_state_label(state: str) -> str:
+    """Return a human-readable label for a raw run/trial state string.
+
+    Args:
+        state: Raw state string from trial_state.json.
+
+    Returns:
+        Friendly label suitable for display in the progress tab.
+    """
+    key = str(state or "").lower()
+    return _RUN_STATE_LABELS.get(key, key.replace("-", " ") or "unknown")
+
+
 def _state_color(state: str) -> str:
     """Return a color hex code representing a run/trial state.
 
@@ -43,8 +88,10 @@ def _state_color(state: str) -> str:
     state = state.lower()
     if state in {"done"}:
         return "#2f9e44"
-    if state in {"running", "launching"}:
+    if state in _ACTIVE_STATES:
         return "#0270ff"
+    if state in _WAITING_STATES:
+        return "#f08c00"
     if state in {"failed", "error", "pruned", "skipped", "cancelled"}:
         return "#e03131"
     return "#868e96"

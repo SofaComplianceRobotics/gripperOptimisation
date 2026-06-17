@@ -84,13 +84,16 @@ def select_cube_spec(
             if isinstance(slot_state.get("attempts"), list)
             else []
         )
-        if (
-            not attempts
-            and isinstance(seed_index, int)
-            and 0 <= seed_index < len(weights)
-        ):
-            index = int(seed_index)
-            status = "seeded"
+        if not attempts:
+            # First probe of the ladder. Generations with a carryover seed start
+            # there; an unseeded ladder (generation 1) starts at the lightest
+            # rung. Subsequent probes narrow via binary search below.
+            if isinstance(seed_index, int) and 0 <= seed_index < len(weights):
+                index = int(seed_index)
+                status = "seeded"
+            else:
+                index = 0
+                status = "fresh_start"
         else:
             index, status = _choose_index(low_index, high_index, len(weights))
 

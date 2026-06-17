@@ -38,7 +38,13 @@ PICKUP_ABOVE_SPAWN_TOL = 1.0
 # ─────────────────────────────────────────────
 # Cube mass and overload ramp
 # ─────────────────────────────────────────────
-CUBE_MASS_START = 0.005  # kg, initial cube mass
+# kg, initial cube mass. Kept above ~0.02 on purpose: at the old 0.005 (5 g) the
+# cube is so light that the contact impulse needed to stop penetration flicks it
+# out of the grip before the fingers can load up (it shoots upward even on a
+# barely-closed grip, while the fingers visibly bend against the immovable
+# floor). 0.03 kg sits in the stable-and-grippable window; the mass ramp
+# (CUBE_MASS_MAX over CUBE_MASS_RAMP_TIME) still does the overload test from here.
+CUBE_MASS_START = 0.03
 CUBE_MASS_MAX = 1.0  # kg reached by the end of the overload ramp
 CUBE_MASS_RAMP_TIME = 8.0  # seconds to ramp from start mass to max mass
 OVERLOAD_MAX_TIME = 5.0  # seconds of post-recording overload simulation

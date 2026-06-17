@@ -50,6 +50,7 @@ def createScene(rootnode):
     if nodes is None:
         return
     print(f"[contact] friction configured with mu={cfg.friction_coef:.6f}")
+    print(f"[cube] mass_start={cfg.cube_mass_start} kg (default unless CUBE_MASS_START set)")
 
     add_required_plugins(nodes.simulation)
     rootnode.dt = DT

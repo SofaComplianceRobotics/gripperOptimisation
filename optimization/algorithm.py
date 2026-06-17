@@ -105,7 +105,6 @@ def _finalize_trial_score(
     trial: "optuna.trial.Trial",
     runs: list[tuple],
     trial_state_path: Path,
-    run_plan_entries: list[tuple],
     study: optuna.Study,
     test_aggregations: dict[str, str],
     test_max_scores: dict[str, float],
@@ -124,7 +123,6 @@ def _finalize_trial_score(
         trial: Optuna trial object to report results to.
         runs: List of (Popen, trial_state_path, run_slot) for this trial's SOFA runs.
         trial_state_path: Path to this trial's trial_state.json.
-        run_plan_entries: Ordered list of (test_name, run_index, run_total) tuples.
         study: Active Optuna study.
         test_aggregations: Per-test score aggregation method (e.g. "mean", "sum").
         test_max_scores: Per-test maximum possible raw score.
@@ -133,7 +131,8 @@ def _finalize_trial_score(
         gen_index: Current generation number for summary fields.
 
     Returns:
-        Final trial score out of 100, or HARD_FAIL_SCORE on any failure.
+        Final trial score out of 100, or HARD_FAIL_SCORE only when every run
+        failed (per-test isolation handles partial failures).
     """
     trial_state = read_trial_state(trial_state_path)
     if not isinstance(trial_state, dict):
@@ -155,69 +154,69 @@ def _finalize_trial_score(
         print(f"[score] trial_{trial_index:02d} → pruned (generation pruned)")
         return float("-inf")
 
-    run_scores = []
+    # Read each run slot's score together with the test name the slot recorded
+    # for itself. Grouping by the slot's own test name — instead of positionally
+    # zipping against the launch plan — keeps scores attributed to the right test
+    # even when ladder probes relaunch themselves (growing the launch plan) or
+    # gated tests are launched out of slot order.
+    run_results: list[tuple[str, float, int | None]] = []
     for _p, _path, run_slot in runs:
         run_data = read_trial_run(trial_state_path, run_slot) or {}
         raw = run_data.get("score")
-        run_scores.append(
-            float(raw) if isinstance(raw, (int, float)) else float("-inf")
+        score = float(raw) if isinstance(raw, (int, float)) else float("-inf")
+        run_results.append(
+            (str(run_data.get("test_name", "")), score, run_data.get("test_run_total"))
         )
 
-    if any(s == float("-inf") for s in run_scores):
-        final_score = HARD_FAIL_SCORE
-        study.tell(trial, final_score)
-        print(
-            f"[score] trial_{trial_index:02d} → {final_score:.2f} (generation failure)"
-        )
-        update_trial_summary(
-            trial_state_path,
-            {
-                "state": "failed",
-                "final_score": final_score,
-                "outcome": "generation failure",
-            },
-        )
-        return final_score
+    run_scores = [s for _, s, _ in run_results]
 
+    # Per-test isolation: a run with no valid result (crash, wall-clock timeout,
+    # relaunch cap) scores -inf and floors at 0 within its OWN test only — it
+    # must never invalidate the other tests' valid scores. The whole trial is
+    # hard-failed only when EVERY run failed (nothing usable was produced).
+    # Bad-mesh trials don't reach here: they're hard-failed at launch time.
     valid_scores = [s for s in run_scores if s != float("-inf")]
     if not valid_scores:
         final_score = HARD_FAIL_SCORE
         study.tell(trial, final_score)
+        print(
+            f"[score] trial_{trial_index:02d} → {final_score:.2f} (all runs failed)"
+        )
         update_trial_summary(
             trial_state_path,
             {
                 "state": "failed",
                 "final_score": final_score,
-                "outcome": "no valid run scores",
+                "outcome": "all runs failed",
             },
         )
         return final_score
 
     # Aggregate scores per test so a multi-run test still contributes one score.
+    # A crashed run floors at 0 inside its own test; a test whose runs all
+    # crashed scores 0 for its weight share but does not fail the trial.
     test_names_in_order: list[str] = []
     per_test_scores: list[float] = []
     per_test_details: dict[str, dict] = {}
 
-    for test_name, _, test_run_total in run_plan_entries:
-        if test_name in per_test_details:
-            continue
-        scores_for_test = [
-            s
-            for (t_name, _, _), s in zip(run_plan_entries, run_scores)
-            if t_name == test_name
-        ]
-        valid_for_test = [s for s in scores_for_test if s != float("-inf")]
-        if not valid_for_test:
-            continue
+    for test_name in dict.fromkeys(name for name, _, _ in run_results if name):
+        raw_scores = [s for name, s, _ in run_results if name == test_name]
+        scores_for_test = [0.0 if s == float("-inf") else s for s in raw_scores]
+        crashed_runs = sum(1 for s in raw_scores if s == float("-inf"))
         test_names_in_order.append(test_name)
         test_aggregate, _, _, test_median = aggregate_trial_scores(
-            valid_for_test,
+            scores_for_test,
             aggregation=test_aggregations.get(test_name, "mean"),
         )
         max_score = test_max_scores.get(test_name, 1.0)
+        test_run_total = next(
+            (rt for name, _, rt in run_results if name == test_name and rt is not None),
+            len(scores_for_test),
+        )
         per_test_scores.append(test_aggregate)
         per_test_details[test_name] = {
-            "run_count": len(valid_for_test),
+            "run_count": len(scores_for_test),
+            "crashed_run_count": crashed_runs,
             "run_scores": [round(s, 4) for s in scores_for_test],
             "aggregate_score": round(test_aggregate, 4),
             "median_score": round(test_median, 4),
@@ -300,7 +299,7 @@ def _finalize_trial_score(
         "test_max_scores": {
             name: test_max_scores.get(name, 1.0) for name in test_names
         },
-        "run_test_names": [name for name, _, _ in run_plan_entries],
+        "run_test_names": [name for name, _, _ in run_results],
         "test_scores": per_test_details,
         "avg_score": round(sum(valid_scores) / len(valid_scores), 4),
         "median_score": round(median_score, 4),
@@ -308,7 +307,9 @@ def _finalize_trial_score(
         "best_run": round(max(valid_scores), 4),
         "worst_run": round(min(valid_scores), 4),
         "final_score": round(final_score, 4),
-        "run_scores": [round(s, 4) for s in run_scores],
+        "run_scores": [
+            round(s, 4) if s != float("-inf") else None for s in run_scores
+        ],
     }
     update_trial_summary(trial_state_path, trial_stats)
 

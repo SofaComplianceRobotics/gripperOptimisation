@@ -29,12 +29,36 @@ from optimization.geom_pipeline import (
     GeometryExportTimeoutError,
     generate_stl_for_trial,
     params_from_trial,
-    render_stl_preview,
     resolve_failed_preview_image,
 )
 from optimization._trial_state import update_trial_run
-from optimization.sofa_runner import launch_sofa, wait_for_geometry_slot
+from optimization.sofa_runner import (
+    active_sofa_process_count,
+    launch_sofa,
+    wait_for_geometry_slot,
+)
 from optimization.state import TrialState, _save_trial_checkpoint
+
+
+def _mark_all_runs(trial_state_path: Path, run_count: int, state: str) -> None:
+    """Set the same lifecycle state on every run slot of a trial.
+
+    Surfaces trial-wide phases that happen *before* individual SOFA runs are
+    launched (slot wait, geometry export, preview render) so the progress UI
+    shows what the trial is doing instead of leaving every run on its initial
+    "not-started" label until SOFA starts.
+
+    The `reason` is intentionally left empty: a frame-less run with a non-empty
+    reason is counted as 100% complete by generation_progress_fraction, which
+    would inflate the generation progress bar during these intermediate phases.
+
+    Args:
+        trial_state_path: Path to the trial's trial_state.json.
+        run_count: Number of run slots to update.
+        state: Lifecycle state string to write to every slot.
+    """
+    for run_slot in range(1, run_count + 1):
+        update_trial_run(trial_state_path, run_slot, {"state": state, "reason": ""})
 
 
 def _relaunch_run(
@@ -49,7 +73,6 @@ def _relaunch_run(
     collision_stl: Path,
     launch_times_by_slot: dict[int, float],
     runs: list[tuple],
-    launched_run_plan_entries: list[tuple],
     env: dict,
 ) -> None:
     """Launch one run again and update the in-memory tracking lists.
@@ -65,7 +88,6 @@ def _relaunch_run(
         collision_stl: Collision STL used for the launch.
         launch_times_by_slot: Per-slot launch timestamp map.
         runs: Active run records for this trial.
-        launched_run_plan_entries: Entries used to finalize the trial score.
         env: Environment variables for the SOFA subprocesses.
     """
     test_spec = get_test_spec(test_name)
@@ -79,6 +101,10 @@ def _relaunch_run(
             "sim_time": 0.0,
             "score": None,
             "reason": "",
+            # Clear any probe flag from the previous attempt so finalize can tell
+            # a genuine probe completion (which re-sets it) from a crash that
+            # exits without completing a probe.
+            "probe_finished": False,
         },
     )
     proc = launch_sofa(
@@ -105,7 +131,6 @@ def _relaunch_run(
     else:
         runs.append((proc, trial_state_path, run_slot))
     launch_times_by_slot[run_slot] = time.time()
-    launched_run_plan_entries.append((test_name, test_run_index, test_run_total))
 
 
 def launch_generation_trials(
@@ -135,6 +160,11 @@ def launch_generation_trials(
     processes: list[tuple] = []
     collision_stls_by_trial: dict[int, Path] = {}
     prelaunch_scores: list[float] = []
+    # Preview rendering is deferred to the end of the generation (see
+    # finalize_generation): pyvista's offscreen OpenGL contends with SOFA's GL
+    # initialization on Windows (WGL), which hangs SOFA startup. We collect
+    # (visual_stl, trial_index) here and render once all SOFA processes exit.
+    preview_tasks: list[tuple[Path, int]] = []
 
     failed_preview = None
     try:
@@ -146,22 +176,30 @@ def launch_generation_trials(
         trial_index = i + 1
         trial_dir = gen_dir / f"trial_{trial_index:02d}"
         trial_dir.mkdir(exist_ok=True)
+        trial_state_path = trial_dir / "trial_state.json"
 
+        # If we're at the concurrency ceiling, the trial will block in
+        # wait_for_geometry_slot; flag it so the UI shows the wait explicitly
+        # rather than a stale "queued".
+        if active_sofa_process_count(processes) >= MAX_ACTIVE_SOFA_PROCS:
+            _mark_all_runs(trial_state_path, len(RUN_PLAN), "waiting-slot")
         wait_for_geometry_slot(processes, MAX_ACTIVE_SOFA_PROCS, gen_index, trial_index)
 
         full_config = params_from_trial(trial)
 
         try:
+            # Geometry export (generate_gripper.py) is the slow, timeout-prone
+            # phase; surface it so a stuck trial reads "generating geometry"
+            # instead of an ambiguous launch state.
+            _mark_all_runs(trial_state_path, len(RUN_PLAN), "generating-geometry")
             collision_stl, visual_stl_copy = generate_stl_for_trial(
                 trial_dir, full_config
             )
-            trial_state_path = trial_dir / "trial_state.json"
-            render_stl_preview(
-                visual_stl_copy, trial_dir, gen_index, trial_index, failed_preview
-            )
+            # Defer the preview render (GL) to generation end; just keep the
+            # visual STL on disk and remember to render it later.
+            preview_tasks.append((visual_stl_copy, trial_index))
 
             runs = []
-            launched_run_plan_entries: list[tuple[str, int, int]] = []
             pending_gated_runs: list[tuple[int, str, int, int]] = []
             launch_times_by_slot: dict[int, float] = {}
             for r, (test_name, test_run_index, test_run_total) in enumerate(RUN_PLAN):
@@ -215,9 +253,6 @@ def launch_generation_trials(
                     f"Run {r + 1}/{N_REPEATS} [{test_name} {test_run_index}/{test_run_total}]"
                 )
                 runs.append((proc, trial_state_path, r + 1))
-                launched_run_plan_entries.append(
-                    (test_name, test_run_index, test_run_total)
-                )
 
             collision_stls_by_trial[trial_index] = collision_stl
             processes.append(
@@ -225,7 +260,6 @@ def launch_generation_trials(
                     trial_index,
                     trial,
                     runs,
-                    launched_run_plan_entries,
                     pending_gated_runs,
                     trial_state_path,
                     collision_stl,
@@ -292,4 +326,5 @@ def launch_generation_trials(
         "collision_stls_by_trial": collision_stls_by_trial,
         "prelaunch_scores": prelaunch_scores,
         "failed_preview": failed_preview,
+        "preview_tasks": preview_tasks,
     }

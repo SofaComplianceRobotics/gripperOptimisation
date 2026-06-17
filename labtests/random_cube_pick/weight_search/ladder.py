@@ -46,9 +46,9 @@ def _build_weight_levels(
 def _choose_index(low_index: int, high_index: int, ladder_size: int) -> tuple[int, str]:
     """Choose the next index to probe.
 
-    Returns a tuple ``(index, strategy_name)``. The current strategy is a
-    binary-search that returns the midpoint between the low and high bounds.
-    When the range is invalid the function reports convergence.
+    Returns a tuple ``(index, strategy_name)``. The strategy is a binary search
+    that returns the midpoint between the low and high bounds. When the range is
+    invalid the function reports convergence.
     """
     low_index = max(0, min(int(low_index), ladder_size - 1))
     high_index = max(0, min(int(high_index), ladder_size - 1))

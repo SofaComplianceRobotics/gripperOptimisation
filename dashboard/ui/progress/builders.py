@@ -19,6 +19,7 @@ from .helpers import (
     _state_color,
     _get_live_score,
     _get_trial_actual_state,
+    _run_state_label,
     _weight_segment_style,
 )
 
@@ -149,8 +150,14 @@ def _build_progress_card(trial_record: dict) -> html.Div:
             if isinstance(weight_points, (int, float)):
                 weight_text += f" pts={int(weight_points)}/10"
             label_text = (
-                f"{test_name} |{count_str}{weight_text} {score_label} | {run_state}"
+                f"{test_name} |{count_str}{weight_text} {score_label} "
+                f"| {_run_state_label(run_state)}"
             )
+
+            # Surface the run's `reason` (e.g. why it failed, or what phase it
+            # is in) on the summary line when there are no ladder segments to
+            # show there instead. This is the detail the bare state label lacks.
+            run_reason = str(run.get("reason") or "").strip()
 
             # Each run gets a compact label, a progress bar, and a short summary.
             run_rows.append(
@@ -199,11 +206,13 @@ def _build_progress_card(trial_record: dict) -> html.Div:
                             },
                         ),
                         html.Div(
-                            # Summarize the selected ladder weight and segment notes.
+                            # Summarize the selected ladder weight and segment
+                            # notes; when there are no segments, fall back to the
+                            # run's reason so the phase/failure detail is visible.
                             (
                                 segment_summary
                                 if isinstance(segments, list) and segments
-                                else ""
+                                else run_reason
                             ),
                             style={
                                 "fontSize": "0.72rem",

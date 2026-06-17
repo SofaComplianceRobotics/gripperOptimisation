@@ -190,14 +190,22 @@ def launch_sofa(
     if hasattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS"):
         creation_flags |= subprocess.BELOW_NORMAL_PRIORITY_CLASS
 
+    # Capture SOFA's stdout/stderr to a per-run log so early crashes are
+    # diagnosable. Previously sent to DEVNULL, which hid the reason a run
+    # exited before it could report "running". One file per run slot, next to
+    # the trial's trial_state.json; overwritten on each (re)launch.
+    log_path = trial_state_path.parent / f"sofa_run{run_slot}.log"
+    log_file = open(log_path, "w", encoding="utf-8", errors="replace")
+
     proc = subprocess.Popen(
         [RUNSOFA_EXE, "-l", "SofaPython3", "-g", gui_mode, str(scene_file)],
         env=trial_env,
         cwd=ASSETS_ROOT,
         creationflags=creation_flags,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
     )
+    log_file.close()
     attach_process_to_sofa_job(proc)
     return proc
 
@@ -207,8 +215,8 @@ def active_sofa_process_count(processes: list[tuple]) -> int:
 
     Args:
         processes: List of tuples where index 2 stores launched runs. Supports
-            both (trial_index, trial, runs) and
-            (trial_index, trial, runs, launched_run_plan_entries).
+            any tuple whose third element is the runs list, e.g.
+            (trial_index, trial, runs, ...).
 
     Returns:
         Number of active SOFA processes.
