@@ -7,7 +7,6 @@ runner: gated-test checks, pruning, and seed index calculation.
 from __future__ import annotations
 
 from pathlib import Path
-from statistics import median_low
 
 from optimization.config import GATED_TEST_NAMES, RUN_PLAN
 from optimization._trial_state import (
@@ -42,74 +41,6 @@ def trial_has_ungated_positive_run(trial_state_path: Path) -> bool:
             return True
 
     return False
-
-
-def compute_random_cube_pick_seed_indices(
-    trial_state_paths_by_trial: list[Path],
-) -> dict[int, int]:
-    """Compute median seed indices for random_cube_pick slots across trials.
-
-    Args:
-        trial_state_paths_by_trial: Trial state files for the generation.
-
-    Returns:
-        Mapping of slot number to the median recorded index.
-    """
-    slots_for_test: list[int] = [
-        i + 1
-        for i, (test_name, _, _) in enumerate(RUN_PLAN)
-        if str(test_name) == "random_cube_pick"
-    ]
-    slot_values: dict[int, list[int]] = {slot: [] for slot in slots_for_test}
-
-    for trial_state_path in trial_state_paths_by_trial:
-        ladder_state_path = trial_state_path.with_name(
-            "random_cube_pick_weight_search.json"
-        )
-        seen_slots: set[int] = set()
-        try:
-            ladder_state = read_trial_state(ladder_state_path)
-        except Exception:
-            ladder_state = {}
-
-        slots = ladder_state.get("slots", {}) if isinstance(ladder_state, dict) else {}
-        if isinstance(slots, dict):
-            for slot_key, slot_state in slots.items():
-                try:
-                    slot = int(slot_key)
-                except Exception:
-                    continue
-                if slot not in slot_values or not isinstance(slot_state, dict):
-                    continue
-                raw_index = slot_state.get("last_index")
-                if isinstance(raw_index, int):
-                    slot_values[slot].append(int(raw_index))
-                    seen_slots.add(slot)
-
-        trial_state = read_trial_state(trial_state_path)
-        runs = trial_state.get("runs", []) if isinstance(trial_state, dict) else []
-        if not isinstance(runs, list):
-            continue
-
-        for run in runs:
-            if not isinstance(run, dict):
-                continue
-            if str(run.get("test_name", "")) != "random_cube_pick":
-                continue
-            run_slot = int(run.get("run", 0) or 0)
-            if run_slot not in slot_values or run_slot in seen_slots:
-                continue
-            raw_index = run.get("weight_selected_index")
-            if not isinstance(raw_index, int):
-                raw_index = run.get("weight_index")
-            if isinstance(raw_index, int):
-                slot_values[run_slot].append(int(raw_index))
-
-    seeds: dict[int, int] = {}
-    for slot, values in slot_values.items():
-        if values:
-            seeds[slot] = int(median_low(sorted(values)))
-    return seeds
 
 
 def prune_trial(

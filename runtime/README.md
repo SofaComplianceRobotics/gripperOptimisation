@@ -20,9 +20,7 @@ runtime/
 │   │       └── preview.png        ← offscreen render of the gripper
 │   └── previews/                  ← flat copy of all previews (gen_XXXX_trial_XX.png)
 ├── gripper_opt.db                     ← Optuna SQLite database (the CMA-ES state)
-├── session_config.json                ← written by the web UI before launching a recording scene
-├── random_cube_pick_seed_weights.json ← warm-start indices for the binary-search weight ladder
-└── random_cube_pick_weight_search.json ← full binary-search state per slot (progress + history)
+└── session_config.json                ← written by the web UI before launching a recording scene
 ```
 
 ---

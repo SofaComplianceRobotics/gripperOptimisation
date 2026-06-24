@@ -9,8 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from labtests.random_cube_pick.carryover import seed_file_path
-from optimization.config import LAB_ROOT, TRIALS_DIR, PREVIEWS_DIR, PRINT_CLEANUP_LOGS
+from optimization.config import TRIALS_DIR, PREVIEWS_DIR, PRINT_CLEANUP_LOGS
 
 
 def reset_trials_dir() -> None:
@@ -20,15 +19,6 @@ def reset_trials_dir() -> None:
         print(f"[reset] Cleared {TRIALS_DIR}")
     TRIALS_DIR.mkdir(parents=True)
     PREVIEWS_DIR.mkdir()
-
-    # The random_cube_pick carryover seed lives outside TRIALS_DIR, so it
-    # survives the wipe above. Clear it too, otherwise generation 1 of the new
-    # run inherits the previous run's converged ladder indices instead of
-    # starting fresh.
-    seed_path = seed_file_path(LAB_ROOT)
-    if seed_path.exists():
-        seed_path.unlink()
-        print(f"[reset] Cleared {seed_path.name}")
 
 
 def delete_after_delay(path: Path, delay: float) -> None:

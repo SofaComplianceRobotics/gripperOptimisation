@@ -157,8 +157,7 @@ def _finalize_trial_score(
     # Read each run slot's score together with the test name the slot recorded
     # for itself. Grouping by the slot's own test name — instead of positionally
     # zipping against the launch plan — keeps scores attributed to the right test
-    # even when ladder probes relaunch themselves (growing the launch plan) or
-    # gated tests are launched out of slot order.
+    # even when gated tests are launched out of slot order.
     run_results: list[tuple[str, float, int | None]] = []
     for _p, _path, run_slot in runs:
         run_data = read_trial_run(trial_state_path, run_slot) or {}

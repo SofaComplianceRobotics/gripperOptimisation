@@ -11,27 +11,20 @@ from pathlib import Path
 
 import optuna
 
-from labtests.random_cube_pick.carryover import save_seed_indices
-from labtests.registry import get_test_spec
 from optimization.algorithm import _finalize_trial_score
 from optimization.generation.plan import (
-    compute_random_cube_pick_seed_indices,
     prune_trial,
     trial_has_ungated_positive_run,
 )
 from optimization.generation.launch import _relaunch_run
 from optimization.geom_pipeline import render_stl_preview
 from optimization.config import (
-    LAB_ROOT,
-    MAX_RUN_RELAUNCHES,
-    N_REPEATS,
     RUN_PLAN,
     SELECTED_TEST_NAMES,
     SELECTED_TEST_WEIGHTS,
     SOFA_REALTIME_TIMEOUT,
 )
 from optimization._trial_state import (
-    read_trial_run,
     read_trial_state,
     update_trial_run,
 )
@@ -50,7 +43,6 @@ def finalize_generation(
     state: TrialState,
     env: dict,
     gen_dir: Path,
-    trial_state_paths_by_trial: list[Path],
     launch_result: dict,
 ) -> None:
     """Finalize a generation after its trials have been launched.
@@ -61,7 +53,6 @@ def finalize_generation(
         state: Shared optimization state.
         env: Environment variables for the SOFA subprocesses.
         gen_dir: Directory for the current generation.
-        trial_state_paths_by_trial: Trial state files for the generation.
         launch_result: Output from launch_generation_trials.
     """
     processes = launch_result["processes"]
@@ -71,21 +62,9 @@ def finalize_generation(
     try:
         finalized: set[int] = set()
         gen_scores = prelaunch_scores.copy()
-        # Per (trial, run_slot) count of legitimate ladder-probe relaunches, so a
-        # ladder that never converges can't loop forever (see MAX_RUN_RELAUNCHES).
-        relaunch_counts: dict[tuple[int, int], int] = {}
         bar_width = 28
         start_time = time.time()
         last_print = 0.0
-
-        terminal_run_states = {
-            "done",
-            "failed",
-            "error",
-            "pruned",
-            "skipped",
-            "cancelled",
-        }
 
         while len(finalized) < len(processes):
             for (
@@ -102,7 +81,7 @@ def finalize_generation(
 
                 trial_has_active_run = False
                 now = time.time()
-                for run_idx, (proc, _path, run_slot) in enumerate(list(runs)):
+                for proc, _path, run_slot in list(runs):
                     if proc.poll() is None:
                         launch_ts = launch_times_by_slot.get(run_slot)
                         if (
@@ -122,73 +101,8 @@ def finalize_generation(
                         trial_has_active_run = True
                         continue
 
-                    run_data = read_trial_run(trial_state_path, run_slot) or {}
-                    run_state = str(run_data.get("state", "")).lower()
-                    test_name = str(run_data.get("test_name", ""))
-
-                    if (
-                        test_name == "random_cube_pick"
-                        and run_state not in terminal_run_states
-                    ):
-                        key = (trial_index, run_slot)
-                        # A genuine ladder probe re-sets probe_finished before it
-                        # self-terminates (relaunch to advance the ladder). A run
-                        # that exits without it crashed mid-simulation — fail it
-                        # immediately rather than retrying a deterministic crash.
-                        if not run_data.get("probe_finished"):
-                            reason = (
-                                "SOFA exited mid-simulation without completing a "
-                                "probe (crash, likely an unstable geometry)"
-                            )
-                            update_trial_run(
-                                trial_state_path,
-                                run_slot,
-                                {"state": "failed", "score": None, "reason": reason},
-                            )
-                            print(
-                                f"\n[crash] Gen {gen_index:04d} Trial "
-                                f"{trial_index:02d} Run {run_slot}: {reason}; "
-                                f"marked failed."
-                            )
-                            # Run is now terminal; don't relaunch or mark active.
-                        elif relaunch_counts.get(key, 0) >= MAX_RUN_RELAUNCHES:
-                            update_trial_run(
-                                trial_state_path,
-                                run_slot,
-                                {
-                                    "state": "failed",
-                                    "score": None,
-                                    "reason": (
-                                        f"exceeded {MAX_RUN_RELAUNCHES} probe "
-                                        f"relaunches without ladder convergence"
-                                    ),
-                                },
-                            )
-                            print(
-                                f"\n[relaunch-cap] Gen {gen_index:04d} Trial "
-                                f"{trial_index:02d} Run {run_slot}: ladder did not "
-                                f"converge in {MAX_RUN_RELAUNCHES} relaunches; failed."
-                            )
-                        else:
-                            relaunch_counts[key] = relaunch_counts.get(key, 0) + 1
-                            test_run_index = int(
-                                run_data.get("test_run_index", run_slot)
-                            )
-                            test_run_total = int(run_data.get("test_run_total", 3))
-                            _relaunch_run(
-                                gen_index=gen_index,
-                                trial_index=trial_index,
-                                run_slot=run_slot,
-                                test_name=test_name,
-                                test_run_index=test_run_index,
-                                test_run_total=test_run_total,
-                                trial_state_path=trial_state_path,
-                                collision_stl=collision_stl,
-                                launch_times_by_slot=launch_times_by_slot,
-                                runs=runs,
-                                env=env,
-                            )
-                            trial_has_active_run = True
+                    # Crashed/non-terminal runs are left as-is: they score -inf
+                    # and floor to 0 within their own test at finalization.
 
                 if trial_has_active_run:
                     continue
@@ -322,8 +236,6 @@ def finalize_generation(
                     visual_stl_copy, trial_dir, gen_index, trial_index, failed_preview
                 )
 
-        seeds = compute_random_cube_pick_seed_indices(trial_state_paths_by_trial)
-        save_seed_indices(LAB_ROOT, seeds)
         write_gen_summary(gen_dir, gen_index, gen_scores)
         cleanup_generation_status_files(gen_dir)
 

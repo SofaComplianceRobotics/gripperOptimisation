@@ -62,7 +62,7 @@ def register_scene_callbacks(app, catalog: dict) -> None:
                 "LAB_SHAPEOPT_TEST": watch_test,
                 "LAB_SHAPEOPT_TESTS": watch_test,
                 "LAB_SHAPEOPT_TEST_WEIGHTS": json.dumps({watch_test: 100}),
-                "OPTUNA_RUN_SLOT": str(watch_slot or "0"),
+                "OPTUNA_RUN_SLOT": str(watch_slot or "1"),
             }
             default_stl = LAB_ROOT / "runtime" / "exports" / GRIPPER_COLLISION_STL
             if default_stl.exists():

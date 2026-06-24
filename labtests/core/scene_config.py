@@ -45,16 +45,23 @@ class OptunaMeta:
 
     @classmethod
     def from_env(cls) -> "OptunaMeta":
-        """Construct from the standard OPTUNA_* environment variables."""
-        trial_state_path = os.environ.get("OPTUNA_TRIAL_STATE_PATH")
-        if trial_state_path is None:
-            return cls(trial_state_path=None, run_slot=0, gen=0, trial=0, run=0)
+        """Construct from the standard OPTUNA_* environment variables.
+
+        Each value is read independently so a manual launch (which sets
+        OPTUNA_RUN_SLOT to pick a cube size but has no trial-state file to write
+        to) still honours the selected slot. Missing vars default to 0.
+        """
+
+        def _int_env(name: str) -> int:
+            raw = os.environ.get(name)
+            return int(raw) if raw not in (None, "") else 0
+
         return cls(
-            trial_state_path=trial_state_path,
-            run_slot=int(os.environ["OPTUNA_RUN_SLOT"]),
-            gen=int(os.environ["OPTUNA_GEN"]),
-            trial=int(os.environ["OPTUNA_TRIAL"]),
-            run=int(os.environ["OPTUNA_RUN"]),
+            trial_state_path=os.environ.get("OPTUNA_TRIAL_STATE_PATH"),
+            run_slot=_int_env("OPTUNA_RUN_SLOT"),
+            gen=_int_env("OPTUNA_GEN"),
+            trial=_int_env("OPTUNA_TRIAL"),
+            run=_int_env("OPTUNA_RUN"),
         )
 
     @property

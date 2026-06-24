@@ -49,11 +49,11 @@ def build_scenes_tab(catalog: dict) -> html.Div:
                             dcc.Dropdown(
                                 id="scene-watch-slot",
                                 options=[
-                                    {"label": "5 cm — run 1", "value": "0"},
-                                    {"label": "8 cm — run 2", "value": "1"},
-                                    {"label": "20 cm — run 3", "value": "2"},
+                                    {"label": "8 cm — run 1", "value": "1"},
+                                    {"label": "10 cm — run 2", "value": "2"},
+                                    {"label": "12 cm — run 3", "value": "3"},
                                 ],
-                                value="0",
+                                value="1",
                                 clearable=False,
                                 style={"width": "200px"},
                             ),

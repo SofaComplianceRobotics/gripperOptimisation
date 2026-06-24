@@ -1,7 +1,7 @@
 {
   "label": "Random Cube Pick: 3 runs",
   "short_label": "random",
-  "description": "Deterministic 3-size ladder that searches the max pickup weight per size",
+  "description": "Lifts 3 cube sizes (8/10/12 cm) once each at the grasp_hold weight, scored by hold time",
   "default_selected": false,
   "run_count": 3,
   "score_aggregation": "sum"
