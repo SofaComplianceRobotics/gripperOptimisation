@@ -72,8 +72,8 @@
       "low_index": 1,
       "high_index": -1,
       "last_index": 1,
-      "last_weight": 0.04,
-      "last_outcome": "failure",
+      "last_weight": 0.07,
+      "last_outcome": "pending",
       "last_score": null,
       "attempts": [
         {
@@ -134,13 +134,19 @@
           "outcome": "failure",
           "updated_at": 1780561524.256824,
           "score": null
+        },
+        {
+          "index": 1,
+          "weight": 0.07,
+          "outcome": "pending",
+          "updated_at": 1782302120.3710713
         }
       ],
-      "updated_at": 1780561524.256824
+      "updated_at": 1782302120.3710713
     }
   },
   "weight_min": 0.02,
   "weight_max": 0.2,
   "weight_step": 0.02,
-  "updated_at": 1780561524.256824
+  "updated_at": 1782302120.3710713
 }

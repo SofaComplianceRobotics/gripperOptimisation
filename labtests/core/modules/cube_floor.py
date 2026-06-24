@@ -86,6 +86,11 @@ def setup(
         name="cube_mass",
         vertexMass=[cube_mass, 1.0, cube_inertia],
     )
+    cube.addObject(
+        "PartialFixedConstraint",
+        indices="0",
+        fixedDirections="0 0 0 1 1 1",  # tx ty tz rx ry rz → 1 = locked
+    )
 
     visu_cube = cube.addChild("Visual")
     visu_cube.addObject(

@@ -15,7 +15,7 @@ editing code. With no env vars set, scenes run standalone on these values.
 # (~31deg threshold) wedges immediately. 1.5 (~56deg threshold) matches real
 # silicone pads and also stands in for the conforming grip the rigid collision
 # surface cannot reproduce.
-FRICTION_COEF = 1.5
+FRICTION_COEF = 1.2
 
 # ─────────────────────────────────────────────
 # Motor playback
@@ -44,7 +44,7 @@ PICKUP_ABOVE_SPAWN_TOL = 1.0
 # barely-closed grip, while the fingers visibly bend against the immovable
 # floor). 0.03 kg sits in the stable-and-grippable window; the mass ramp
 # (CUBE_MASS_MAX over CUBE_MASS_RAMP_TIME) still does the overload test from here.
-CUBE_MASS_START = 0.03
+CUBE_MASS_START = 0.02
 CUBE_MASS_MAX = 1.0  # kg reached by the end of the overload ramp
 CUBE_MASS_RAMP_TIME = 8.0  # seconds to ramp from start mass to max mass
 OVERLOAD_MAX_TIME = 5.0  # seconds of post-recording overload simulation
