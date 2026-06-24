@@ -211,9 +211,9 @@ def build_env() -> dict:
 
     sofa_site_packages = os.environ["SOFA_SITE_PACKAGES"]
 
-    # Critical: do not inherit parent PYTHONPATH (often a Python 3.10 env from
-    # EmioLabs launcher). SofaPython3 in custom builds can run a different Python
-    # version and must use its own site-packages to avoid startup crashes.
+    # Critical: do not inherit the parent PYTHONPATH (the EmioLabs launcher's
+    # own Python env). SofaPython3 must import from its build's site-packages
+    # to avoid startup crashes, so set PYTHONPATH explicitly here.
     env["PYTHONPATH"] = ";".join(
         [
             sofa_site_packages,

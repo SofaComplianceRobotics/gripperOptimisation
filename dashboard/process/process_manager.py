@@ -121,8 +121,8 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
     Returns:
         A status string describing the launch outcome.
     """
-    # Interactive scenes require the emiolabs SOFA (ImGui + emiolabs plugins).
-    # The custom batch SOFA used for optimisation does not have these.
+    # Interactive scenes run on the emio-labs SOFA with the ImGui GUI — the same
+    # build the optimiser uses headless, so what you see here matches a trial.
     runsofa = os.environ["EMIOLABS_RUNSOFA_EXE"]
     if not os.path.isfile(runsofa):
         return f"runSofa.exe not found at: {runsofa}"
@@ -133,13 +133,14 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
 
     env = os.environ.copy()
 
-    # Override SOFA_ROOT / SOFAPYTHON3_ROOT so the emiolabs runSofa.exe loads its own
-    # Python packages instead of the custom build's — prevents 'No module named Sofa.Helper'
+    # Point SOFA_ROOT / SOFAPYTHON3_ROOT at the emiolabs build so runSofa.exe
+    # self-resolves its own bundled Python packages.
     env["SOFA_ROOT"] = emiolabs_sofa_root
     env["SOFAPYTHON3_ROOT"] = emiolabs_sofa_root
     env["SHAPEOPT_FORCE_PAUSED"] = "1"
 
-    # Drop vars that reference the custom Python 3.12 / batch-SOFA build
+    # Let the GUI runSofa self-resolve its Python; clear the explicit paths the
+    # optimiser sets for its headless launches.
     for _k in ("SOFA_SITE_PACKAGES", "SOFA_PYTHON_PATH", "RUNSOFA_EXE"):
         env.pop(_k, None)
 
