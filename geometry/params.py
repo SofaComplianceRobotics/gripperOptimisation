@@ -91,7 +91,7 @@ class ModelParams:
         default=3.0, metadata={"check": "non_negative"}
     )
     leg_attachement_tilt_angle: float = field(
-        default=15.0, metadata={"opt": {"type": "float", "min": 0, "max": 30.0}}
+        default=8.6, metadata={"opt": {"type": "float", "min": 0, "max": 30.0}}
     )
     leg_attachement_lift: float = 2.5
     leg_attachement_drop_overlap: float = field(
@@ -127,22 +127,22 @@ class ModelParams:
     )
     # Bézier spline in polar form — absolute XY computed by pincer_points property
     p0_hout_dist: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 32.0}}
+        default=1.6, metadata={"opt": {"type": "float", "min": 0.0, "max": 32.0}}
     )
     p0_hout_angle_deg: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": -90.0, "max": 90.0}}
+        default=7.2, metadata={"opt": {"type": "float", "min": -90.0, "max": 90.0}}
     )
     p1_dist: float = field(
-        default=40.0, metadata={"opt": {"type": "float", "min": 36, "max": 48}}
+        default=45.0, metadata={"opt": {"type": "float", "min": 36, "max": 48}}
     )
     p1_angle_deg: float = field(
-        default=-40.0, metadata={"opt": {"type": "float", "min": -70.0, "max": 0}}
+        default=-33.8, metadata={"opt": {"type": "float", "min": -70.0, "max": 0}}
     )
     p1_hin_dist: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0.0, "max": 32.0}}
+        default=2.2, metadata={"opt": {"type": "float", "min": 0.0, "max": 32.0}}
     )
     p1_hin_angle_deg: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": -10.0, "max": 260.0}}
+        default=221.1, metadata={"opt": {"type": "float", "min": -10.0, "max": 260.0}}
     )
 
     def cylinder_height_at(self, theta_deg: float) -> float:
