@@ -84,6 +84,34 @@ if (-not $SourceOnly) {
     Get-ChildItem $BundleSP -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match '\.cp3(?!10)\d\d-' } |
         Remove-Item -Force -ErrorAction SilentlyContinue
+
+    # --- 4b. gmsh native DLL --------------------------------------------------
+    # gmsh ships its native library as a wheel data file (.data/data/lib/), which
+    # pip --target drops. Place it next to gmsh.py so gmsh.py's first search path
+    # finds it. (OCP, vtk, casadi keep their libs inside the package, so only
+    # gmsh needs this.)
+    if (Test-Path (Join-Path $BundleSP "gmsh.py")) {
+        $gmshSpec = ((Get-Content $Requirements) | Where-Object { $_ -match '^\s*gmsh\s*==' }).Trim()
+        if (-not $gmshSpec) { $gmshSpec = "gmsh" }
+        $gmshWheelDir = Join-Path $StageRoot "_gmsh_wheel"
+        New-Item -ItemType Directory -Force -Path $gmshWheelDir | Out-Null
+        & $SofaPython -m pip download $gmshSpec --no-deps -q -d $gmshWheelDir
+        if ($LASTEXITCODE -ne 0) { throw "gmsh wheel download failed" }
+        $whl = Get-ChildItem $gmshWheelDir -Filter "gmsh-*.whl" | Select-Object -First 1
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $wz = [System.IO.Compression.ZipFile]::OpenRead($whl.FullName)
+        $placed = $false
+        foreach ($entry in $wz.Entries) {
+            if ($entry.FullName -match '\.data/data/.*/(gmsh.*\.dll)$') {
+                $dest = Join-Path $BundleSP $matches[1]
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $dest, $true)
+                Write-Host "Placed gmsh native lib next to gmsh.py: $($matches[1])"
+                $placed = $true
+            }
+        }
+        $wz.Dispose()
+        if (-not $placed) { throw "gmsh native DLL not found in $($whl.Name)" }
+    }
 }
 
 # --- 5. Zip ------------------------------------------------------------------
