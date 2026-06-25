@@ -20,19 +20,58 @@ for _key in ("PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE", "PYTHONEXECUTABLE"
 # runSofa.exe, the plugin tree rooted at SOFA_ROOT, the SofaPython3
 # site-packages and the bundled Python (which provides python310.dll) must all
 # come from this same build or plugins fail to load with "The specified module
-# could not be found" (ABI mismatch). SOFA_ROOT is FORCED (not setdefault) so a
-# pre-existing machine SOFA_ROOT can't desync it from this build's runSofa.exe.
-_EMIOLABS_SOFA_ROOT = (
-    r"C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa"
+# could not be found" (ABI mismatch).
+
+
+def _resolve_sofa_root() -> Path:
+    """Locate the emio-labs SOFA build wherever it was installed.
+
+    Resolution order, most reliable first:
+      1. The build that owns the running interpreter. When launched by the
+         emio-labs button, sys.executable is <sofa>/bin/python/python.exe, so
+         the SOFA build whose ABI the plugins match is found directly.
+      2. An explicit EMIOLABS_SOFA_ROOT override.
+      3. The default per-user install at %LOCALAPPDATA%\\Programs\\emio-labs.
+
+    A generic, possibly stale machine-wide SOFA_ROOT is intentionally ignored
+    so it cannot desync the runtime from this build's runSofa.exe.
+    """
+    candidates = []
+
+    for parent in Path(sys.executable).resolve().parents:
+        if parent.name.lower() == "sofa":
+            candidates.append(parent)
+            break
+
+    override = os.environ.get("EMIOLABS_SOFA_ROOT")
+    if override:
+        candidates.append(Path(override))
+
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        candidates.append(
+            Path(local_appdata) / "Programs" / "emio-labs" / "resources" / "sofa"
+        )
+
+    for candidate in candidates:
+        if (candidate / "bin" / "runSofa.exe").is_file():
+            return candidate
+
+    raise FileNotFoundError(
+        "Could not locate the emio-labs SOFA build (expected bin/runSofa.exe). "
+        "Install emio-labs, or set EMIOLABS_SOFA_ROOT to its resources/sofa folder."
+    )
+
+
+_EMIOLABS_SOFA_ROOT = _resolve_sofa_root()
+os.environ["SOFA_ROOT"] = str(_EMIOLABS_SOFA_ROOT)
+os.environ["RUNSOFA_EXE"] = str(_EMIOLABS_SOFA_ROOT / "bin" / "runSofa.exe")
+os.environ["SOFA_SITE_PACKAGES"] = str(
+    _EMIOLABS_SOFA_ROOT / "plugins" / "SofaPython3" / "lib" / "python3" / "site-packages"
 )
-os.environ["SOFA_ROOT"] = _EMIOLABS_SOFA_ROOT
-os.environ["RUNSOFA_EXE"] = rf"{_EMIOLABS_SOFA_ROOT}\bin\runSofa.exe"
-os.environ["SOFA_SITE_PACKAGES"] = (
-    rf"{_EMIOLABS_SOFA_ROOT}\plugins\SofaPython3\lib\python3\site-packages"
-)
-os.environ["SOFA_PYTHON_PATH"] = rf"{_EMIOLABS_SOFA_ROOT}\bin\python"
+os.environ["SOFA_PYTHON_PATH"] = str(_EMIOLABS_SOFA_ROOT / "bin" / "python")
 os.environ.setdefault(
-    "EMIOLABS_RUNSOFA_EXE", rf"{_EMIOLABS_SOFA_ROOT}\bin\runSofa.exe"
+    "EMIOLABS_RUNSOFA_EXE", str(_EMIOLABS_SOFA_ROOT / "bin" / "runSofa.exe")
 )
 
 os.environ.setdefault("SOFA_GUI", "batch")

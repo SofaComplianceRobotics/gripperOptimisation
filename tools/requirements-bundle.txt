@@ -1,0 +1,18 @@
+# Lab ShapeOPT runtime dependencies.
+#
+# Pinned to the versions verified working under the emio-labs SOFA Python 3.10.
+# Installed into runtime/modules/site-packages by build_bundle.ps1 so the lab
+# is self-contained and needs no setup on the target machine.
+#
+# Sofa / SofaPython3 is provided by the emio-labs install, not pip.
+# OCP, plotly, ezdxf, nlopt, vtk are pulled in transitively.
+
+cadquery==2.7.0
+gmsh==4.15.0
+svg.path==7.0
+numpy==2.2.6
+scipy==1.15.3
+matplotlib==3.10.8
+optuna==4.8.0
+dash==4.1.0
+pyvista==0.48.2
