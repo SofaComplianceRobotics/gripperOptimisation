@@ -47,7 +47,7 @@ def aggregate_trial_scores(
     names: list[str] | None = None,
     max_scores: dict[str, float] | None = None,
     aggregation: str = "mean",
-) -> tuple[float, float, float, float]:
+) -> tuple[float, float, float]:
     """Aggregate multiple scores using the configured method.
 
     When ``weights``, ``names``, and ``max_scores`` are all provided, computes
@@ -69,19 +69,18 @@ def aggregate_trial_scores(
             normalization when ``weights`` is given.
 
     Returns:
-        Tuple of (aggregate_score, consistency_penalty, final_score, median_score).
-        ``consistency_penalty`` is always 0.0 (removed). ``final_score`` equals
-        ``aggregate_score``. ``median_score`` is the raw un-normalized median.
+        Tuple of (aggregate_score, final_score, median_score). ``final_score``
+        equals ``aggregate_score``. ``median_score`` is the raw un-normalized median.
     """
     if not valid_scores:
-        return 0.0, 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0
 
     avg_score = sum(valid_scores) / len(valid_scores)
     median_score = statistics.median(valid_scores)
 
     if aggregation == "sum":
         aggregate_score = sum(valid_scores)
-        return aggregate_score, 0.0, aggregate_score, median_score
+        return aggregate_score, aggregate_score, median_score
 
     if aggregation == "exponential_coverage":
         # Reward grippers that can handle ALL cube sizes, not just one.
@@ -94,7 +93,7 @@ def aggregate_trial_scores(
         n_grasped = sum(1 for s in valid_scores if s > 0)
         multiplier = 1.5 ** (n_grasped - 1) if n_grasped > 0 else 0.0
         aggregate_score = sum(valid_scores) * multiplier
-        return aggregate_score, 0.0, aggregate_score, median_score
+        return aggregate_score, aggregate_score, median_score
 
     # Weighted + normalized aggregation — only when combining per-test scores.
     if (
@@ -115,7 +114,7 @@ def aggregate_trial_scores(
     else:
         aggregate_score = avg_score
 
-    return aggregate_score, 0.0, aggregate_score, median_score
+    return aggregate_score, aggregate_score, median_score
 
 
 def write_gen_summary(gen_dir, gen_index: int, scores: list[float]) -> None:
@@ -200,8 +199,3 @@ def write_progress(
     }
 
     PROGRESS_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-
-def cleanup_generation_status_files(gen_dir) -> None:
-    """Retain per-run status files so the live monitor shows finished runs on reopen."""
-    return

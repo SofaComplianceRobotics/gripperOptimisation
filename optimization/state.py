@@ -2,11 +2,7 @@
 
 from pathlib import Path
 
-from optimization._trial_state import (
-    read_trial_run,
-    read_trial_state,
-    update_trial_summary,
-)
+from optimization._trial_state import update_trial_summary
 from labtests.registry import get_test_spec
 
 
@@ -84,18 +80,6 @@ class TrialState:
         }
 
 
-def _load_trial_data(path: Path) -> dict:
-    """Read trial results from filesystem.
-
-    Args:
-        path: Path to trial_state.json.
-
-    Returns:
-        Trial state as a dict, or {} on any read error.
-    """
-    return read_trial_state(path)
-
-
 def _save_trial_checkpoint(path: Path, data: dict) -> None:
     """Persist trial summary fields to JSON.
 
@@ -104,26 +88,3 @@ def _save_trial_checkpoint(path: Path, data: dict) -> None:
         data: Fields to merge into the existing trial state document.
     """
     update_trial_summary(path, data)
-
-
-def _compute_rolling_stats(all_scores: list[float], window: int = 20) -> dict:
-    """Calculate rolling performance metrics over recent trials.
-
-    Standalone function for use outside a TrialState instance.
-
-    Args:
-        all_scores: Full score history across all trials.
-        window: How many recent scores to include.
-
-    Returns:
-        Dict with rolling_avg, rolling_best, and window keys.
-    """
-    recent = all_scores[-window:] if all_scores else []
-    valid = [s for s in recent if s != float("-inf")]
-    if not valid:
-        return {"rolling_avg": None, "rolling_best": None, "window": window}
-    return {
-        "rolling_avg": round(sum(valid) / len(valid), 4),
-        "rolling_best": round(max(valid), 4),
-        "window": len(valid),
-    }

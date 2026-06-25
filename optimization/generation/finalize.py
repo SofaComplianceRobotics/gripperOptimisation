@@ -28,10 +28,7 @@ from optimization._trial_state import (
     read_trial_state,
     update_trial_run,
 )
-from optimization.scoring import (
-    cleanup_generation_status_files,
-    write_gen_summary,
-)
+from optimization.scoring import write_gen_summary
 from optimization.utils import cleanup_collision_stls
 from optimization.state import TrialState
 
@@ -237,7 +234,6 @@ def finalize_generation(
                 )
 
         write_gen_summary(gen_dir, gen_index, gen_scores)
-        cleanup_generation_status_files(gen_dir)
 
     finally:
         cleanup_collision_stls(collision_stls_by_trial)

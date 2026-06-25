@@ -7,20 +7,6 @@ import time
 from pathlib import Path
 
 
-def write_run_status(path: Path, data: dict) -> None:
-    """Write one run status JSON file for the live monitor window.
-
-    Uses atomic file operations to prevent partially written/empty files.
-
-    Args:
-        path: Status file path.
-        data: Status payload.
-    """
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    _replace_with_retry(tmp_path, path)
-
-
 def _acquire_lock(lock_path: Path, timeout_s: float = 5.0) -> bool:
     """Acquire a simple cross-process file lock using exclusive create."""
     deadline = time.time() + timeout_s

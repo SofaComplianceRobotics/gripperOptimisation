@@ -101,10 +101,6 @@ def _relaunch_run(
             "sim_time": 0.0,
             "score": None,
             "reason": "",
-            # Clear any probe flag from the previous attempt so finalize can tell
-            # a genuine probe completion (which re-sets it) from a crash that
-            # exits without completing a probe.
-            "probe_finished": False,
         },
     )
     proc = launch_sofa(

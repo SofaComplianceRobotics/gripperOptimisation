@@ -35,17 +35,17 @@ RECORD_FILE = str(
 )
 
 # Cube scales lifted per run, in fixed order. The run is keyed off the per-test
-# run index (1/3, 2/3, 3/3), so the size sequence is always 8 → 10 → 12 no
+# run index (1/3, 2/3, 3/3), so the size sequence is always 8 → 12 → 14 no
 # matter where the test lands in the global run order.
 CUBE_SIZES = (
     [8.0, 8.0, 8.0],
-    [10.0, 10.0, 10.0],
     [12.0, 12.0, 12.0],
+    [14.0, 14.0, 14.0],
 )
 
 
 def _cube_scale_for_run() -> list:
-    """Return the cube scale for this run, ordered 8 → 10 → 12.
+    """Return the cube scale for this run, ordered 8 → 12 → 14.
 
     Keyed off LAB_SHAPEOPT_TEST_RUN_INDEX (the 1-based per-test index the
     optimizer sets), so the size depends only on which of the three test runs

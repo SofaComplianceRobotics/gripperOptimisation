@@ -69,7 +69,6 @@ EARLY_STOP_SIM_TIME = 1.5
 # Final score/pruned writes always bypass this throttle.
 STATUS_WRITE_INTERVAL = 0.25
 DROP_PENALTY = 50.0  # score if the cube is dropped after at least one pickup
-EARLY_CONTACT_STOP_TIME = 0.6
 EARLY_CONTACT_PENALTY = -1.0
 NO_PICKUP_PENALTY = 0.0
 

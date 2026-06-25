@@ -52,9 +52,6 @@ def generation_progress_fraction(trial_state_paths_by_trial: list[Path]) -> floa
                     trial_total += 1.0
                     continue
 
-                if data.get("probe_finished") and data.get("score") is None:
-                    continue
-
                 cur = float(data.get("current_frame", 0))
                 total_frames = data.get("total_frames")
                 if isinstance(total_frames, int) and total_frames > 0:

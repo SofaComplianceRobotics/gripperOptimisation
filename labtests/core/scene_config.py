@@ -104,7 +104,6 @@ class PlaybackConfig:
     cube_mass_start: float
     cube_mass_max: float
     cube_mass_ramp_time: float
-    early_contact_stop_time: float
     early_contact_penalty: float
     no_pickup_penalty: float
     undercube_penalty: float
@@ -156,7 +155,6 @@ class PlaybackConfig:
             cube_mass_ramp_time=_env_float(
                 "CUBE_MASS_RAMP_TIME", defaults.CUBE_MASS_RAMP_TIME
             ),
-            early_contact_stop_time=defaults.EARLY_CONTACT_STOP_TIME,
             early_contact_penalty=_env_float(
                 "EARLY_CONTACT_PENALTY", defaults.EARLY_CONTACT_PENALTY
             ),

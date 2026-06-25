@@ -55,51 +55,6 @@ def build_cmaes_study(db_path: Path) -> optuna.Study:
     )
 
 
-def _compute_next_parameters(study: optuna.Study) -> "optuna.trial.Trial":
-    """Generate parameters for the next trial using the CMA-ES sampler.
-
-    Args:
-        study: Active Optuna study.
-
-    Returns:
-        A new Optuna trial with sampled parameter values.
-    """
-    return _apply_mutations(study)
-
-
-def _apply_mutations(study: optuna.Study) -> "optuna.trial.Trial":
-    """Sample the next candidate via CMA-ES Gaussian mutation.
-
-    Gaussian perturbations around the current distribution mean are applied
-    internally by Optuna's CmaEsSampler on each study.ask() call.
-
-    Args:
-        study: Active Optuna study.
-
-    Returns:
-        A new Optuna trial with mutated parameter values.
-    """
-    return study.ask()
-
-
-def _select_best_parents(
-    study: optuna.Study, n: int
-) -> "list[optuna.trial.FrozenTrial]":
-    """Return the top-n completed trials ranked by score.
-
-    Used to inspect which parameter sets CMA-ES is converging toward.
-
-    Args:
-        study: Active Optuna study.
-        n: Number of top performers to return.
-
-    Returns:
-        List of up to n FrozenTrial objects in descending score order.
-    """
-    completed = [t for t in study.trials if t.value is not None]
-    return sorted(completed, key=lambda t: t.value or float("-inf"), reverse=True)[:n]
-
-
 def _finalize_trial_score(
     trial_index: int,
     trial: "optuna.trial.Trial",
@@ -203,7 +158,7 @@ def _finalize_trial_score(
         scores_for_test = [0.0 if s == float("-inf") else s for s in raw_scores]
         crashed_runs = sum(1 for s in raw_scores if s == float("-inf"))
         test_names_in_order.append(test_name)
-        test_aggregate, _, _, test_median = aggregate_trial_scores(
+        test_aggregate, _, test_median = aggregate_trial_scores(
             scores_for_test,
             aggregation=test_aggregations.get(test_name, "mean"),
         )
@@ -271,7 +226,7 @@ def _finalize_trial_score(
     }
 
     # Combine only the active tests. Gated tests are ignored until the gate opens.
-    aggregate_score, _, final_score, median_score = aggregate_trial_scores(
+    aggregate_score, final_score, median_score = aggregate_trial_scores(
         counted_scores,
         weights=counted_weights,
         names=counted_names,

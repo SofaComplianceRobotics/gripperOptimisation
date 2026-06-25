@@ -1,6 +1,6 @@
 [Window.Program]
-programDirPath = C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\assets\labs\lab_optimisation
-programFilename = pick_&_place_loop.crprog
+programDirPath = C:\Users\Cesar\emio-labs\v25.12.00\assets\labs\lab_shapeOPT\runtime\recordings\grasp_hold
+programFilename = random_pick.crprog
 open = true
 dockId = 6
 

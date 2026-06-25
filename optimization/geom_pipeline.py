@@ -4,11 +4,9 @@ geom_pipeline.py — Geometry generation, STL rendering, and preview handling.
 Manages the full pipeline from trial parameters to visual STL and preview images.
 """
 
-import json
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pyvista as pv  # type: ignore
@@ -19,10 +17,10 @@ from optimization.config import (
     CENTERPARTS_DIR,
     GENERATE_SCRIPT,
     GEOMETRY_EXPORT_TIMEOUT,
-    HARD_FAIL_SCORE,
     PARAM_SPECS,
     PREVIEWS_DIR,
 )
+from optimization._scoring_io import write_jsonc
 
 FLOAT_SUGGEST_STEP = 0.1
 
@@ -70,16 +68,6 @@ def resolve_failed_preview_image(candidates: tuple[Path, ...]) -> Path:
         "Missing failed preview placeholder image. Expected "
         "failed_generation.png in the lab root."
     )
-
-
-def write_jsonc(path: Path, data: dict) -> None:
-    """Write a dict as plain JSON to a .jsonc file.
-
-    Args:
-        path: Destination file path.
-        data: Data to serialize.
-    """
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def params_from_trial(trial) -> dict:
