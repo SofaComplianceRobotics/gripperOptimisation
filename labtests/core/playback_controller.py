@@ -19,7 +19,7 @@ Four override hooks:
     _initial_cube_mass()            starting mass          (default: cfg.cube_mass_start)
     _update_overload_mass()         per-frame mass update  (default: ramp to cfg.cube_mass_max)
     _finish_run(score, reason)      stop logic             (default: write score or pruned)
-    _on_horizon_complete(t)         end-of-frames action   (default: write_pruned_and_stop)
+    _on_horizon_complete(t)         end-of-frames action   (default: score by hold time)
 """
 
 from __future__ import annotations
@@ -175,12 +175,25 @@ def make_playback_controller(SofaController):
             )
 
         def _on_horizon_complete(self, sim_time: float) -> None:
-            """Handle end-of-frames; default writes a pruned result.
+            """Handle end-of-frames; score by hold time if the cube was held.
+
+            Reaching the horizon with the cube still up is a successful hold, so
+            it is scored by hold time. If the cube was never picked up, the
+            no-pickup penalty applies.
 
             Args:
                 sim_time: Simulation time when the horizon was reached.
             """
-            self._finish_run(None, f"horizon complete t={sim_time:.2f}s", pruned=True)
+            if self.was_picked_up:
+                score, reason = self._compute_score()
+                self._finish_run(
+                    score, f"horizon complete t={sim_time:.2f}s held — {reason}"
+                )
+            else:
+                self._finish_run(
+                    self.cfg.no_pickup_penalty,
+                    f"horizon complete t={sim_time:.2f}s — never picked up",
+                )
 
         def _finish_run(
             self, score: float | None, reason: str, *, pruned: bool = False

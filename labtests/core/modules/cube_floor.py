@@ -70,8 +70,22 @@ def setup(
     inertia_xx = (side_y**2 + side_z**2) / 12.0
     inertia_yy = (side_x**2 + side_z**2) / 12.0
     inertia_zz = (side_x**2 + side_y**2) / 12.0
+    # Anti-flip resistance: scale the rotational inertia up so off-centre
+    # contact impulses during the grab can't spin the cube out of the grip,
+    # while sustained torque (gravity on an off-centre hold) can still rotate
+    # it. 1.0 = true solid-box inertia; raise to resist tipping, lower toward
+    # 1.0 if the cube feels unnaturally locked.
+    rotation_resistance = 5.0
     cube_inertia = [
-        inertia_xx, 0.0, 0.0, 0.0, inertia_yy, 0.0, 0.0, 0.0, inertia_zz
+        inertia_xx * rotation_resistance,
+        0.0,
+        0.0,
+        0.0,
+        inertia_yy * rotation_resistance,
+        0.0,
+        0.0,
+        0.0,
+        inertia_zz * rotation_resistance,
     ]
 
     cube = simulation.addChild("Cube")
@@ -85,11 +99,6 @@ def setup(
         "UniformMass",
         name="cube_mass",
         vertexMass=[cube_mass, 1.0, cube_inertia],
-    )
-    cube.addObject(
-        "PartialFixedConstraint",
-        indices="0",
-        fixedDirections="0 0 0 1 1 1",  # tx ty tz rx ry rz → 1 = locked
     )
 
     visu_cube = cube.addChild("Visual")

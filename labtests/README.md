@@ -156,7 +156,7 @@ The default `BasePlaybackController` scores by hold time — how many seconds th
 |---|---|---|
 | `_initial_cube_mass()` | Once at init | Returns `cfg.cube_mass_start` |
 | `_update_overload_mass()` | Every frame during overload | Ramps mass from start to max |
-| `_on_horizon_complete(sim_time)` | When recording finishes | Calls `write_pruned_and_stop` |
+| `_on_horizon_complete(sim_time)` | When recording finishes | Scores by hold time |
 
 Inside a subclass you also have: `self.hold_time`, `self.writer`, `self.cfg`.
 

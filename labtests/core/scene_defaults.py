@@ -47,7 +47,7 @@ PICKUP_ABOVE_SPAWN_TOL = 1.0
 CUBE_MASS_START = 0.02
 CUBE_MASS_MAX = 1.0  # kg reached by the end of the overload ramp
 CUBE_MASS_RAMP_TIME = 8.0  # seconds to ramp from start mass to max mass
-OVERLOAD_MAX_TIME = 5.0  # seconds of post-recording overload simulation
+OVERLOAD_MAX_TIME = 1.0  # seconds of post-recording overload simulation
 
 # ─────────────────────────────────────────────
 # Pickup / drop thresholds
@@ -63,7 +63,7 @@ PICKUP_Y_THRESHOLD = -215.0  # cube Y above this = considered picked up
 # threshold before this time, or the run stops as a no-pickup failure.
 # Covers the grab portion (~first quarter) of the 20.25 s grasp trajectory
 # at PLAYBACK_TIME_SCALE = 1.0 — rescale both together.
-EARLY_STOP_SIM_TIME = 5.0
+EARLY_STOP_SIM_TIME = 1.5
 
 # Wall-clock seconds between live status writes to trial_state.json.
 # Final score/pruned writes always bypass this throttle.

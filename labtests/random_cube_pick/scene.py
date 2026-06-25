@@ -17,6 +17,7 @@ comes from core.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -33,8 +34,9 @@ RECORD_FILE = str(
     LAB_ROOT / "runtime" / "recordings" / "random_cube_pick" / "motor_recording.json"
 )
 
-# Cube scales lifted per run slot. Slots are 1-indexed (the optimizer launches
-# slots 1..3); slot 0 (standalone, no optimizer) falls back to the first size.
+# Cube scales lifted per run, in fixed order. The run is keyed off the per-test
+# run index (1/3, 2/3, 3/3), so the size sequence is always 8 → 10 → 12 no
+# matter where the test lands in the global run order.
 CUBE_SIZES = (
     [8.0, 8.0, 8.0],
     [10.0, 10.0, 10.0],
@@ -42,9 +44,22 @@ CUBE_SIZES = (
 )
 
 
-def _cube_scale_for_slot(run_slot: int) -> list:
-    """Return the cube scale for a 1-indexed run slot."""
-    return list(CUBE_SIZES[max(0, int(run_slot) - 1) % len(CUBE_SIZES)])
+def _cube_scale_for_run() -> list:
+    """Return the cube scale for this run, ordered 8 → 10 → 12.
+
+    Keyed off LAB_SHAPEOPT_TEST_RUN_INDEX (the 1-based per-test index the
+    optimizer sets), so the size depends only on which of the three test runs
+    this is — not on the global run slot. Falls back to OPTUNA_RUN_SLOT for
+    manual launches, then to the first size if neither is set.
+    """
+    raw = os.environ.get("LAB_SHAPEOPT_TEST_RUN_INDEX") or os.environ.get(
+        "OPTUNA_RUN_SLOT"
+    )
+    try:
+        index = int(raw)
+    except (TypeError, ValueError):
+        index = 1
+    return list(CUBE_SIZES[max(0, index - 1) % len(CUBE_SIZES)])
 
 
 def createScene(rootnode):
@@ -61,7 +76,7 @@ def createScene(rootnode):
     from labtests.core.scoring import ScoreWriter
 
     cfg = PlaybackConfig.from_env(LAB_ROOT)
-    cube_scale = _cube_scale_for_slot(cfg.meta.run_slot)
+    cube_scale = _cube_scale_for_run()
 
     print(
         f"[cube] random_cube_pick slot={cfg.meta.run_slot} gen={cfg.meta.gen} "
@@ -97,27 +112,8 @@ def createScene(rootnode):
     )
 
     Base = make_playback_controller(Sofa.Core.Controller)
-
-    class PlaybackController(Base):
-        """grasp_hold controller, but holding the cube to the end of the timeline
-        is a scored success (hold time), not a pruned run. The base prunes at the
-        horizon because grasp_hold's overload ramp is expected to force a drop
-        first; here the cube can simply be held the whole way."""
-
-        def _on_horizon_complete(self, sim_time: float) -> None:
-            if self.was_picked_up:
-                score, reason = self._compute_score()
-                self._finish_run(
-                    score, f"horizon complete t={sim_time:.2f}s held — {reason}"
-                )
-            else:
-                self._finish_run(
-                    self.cfg.no_pickup_penalty,
-                    f"horizon complete t={sim_time:.2f}s — never picked up",
-                )
-
     nodes.simulation.addObject(
-        PlaybackController(
+        Base(
             name="PlaybackController",
             rootnode=rootnode,
             playback=playback,

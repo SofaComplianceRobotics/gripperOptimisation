@@ -35,7 +35,7 @@ Factory that returns `BasePlaybackController` bound to the live SOFA controller 
 |---|---|
 | `_initial_cube_mass()` | Returns `cfg.cube_mass_start` |
 | `_update_overload_mass()` | Ramps mass from start → max during overload phase |
-| `_on_horizon_complete(sim_time)` | Writes pruned result |
+| `_on_horizon_complete(sim_time)` | Scores by hold time (no-pickup penalty if never picked up) |
 | `_finish_run(score, reason, pruned)` | Delegates to `write_score_and_stop` or `write_pruned_and_stop` |
 
 **`plugins.py`** — `add_required_plugins(simulation_node)`

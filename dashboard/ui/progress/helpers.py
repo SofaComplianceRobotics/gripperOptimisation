@@ -3,31 +3,43 @@
 from dashboard.data.cache import TRIALS_DIR, _load_trial_state
 
 # ── Caches ─────────────────────────────────────────────────────
-_MAX_SCORE_CACHE: dict[str, float] = {}
+_RUN_MAX_SCORE_CACHE: dict[str, float] = {}
 
 
-def _get_test_max_score(test_name: str) -> float:
-    """Return the maximum score configured for a named test.
+def _get_run_max_score(test_name: str) -> float:
+    """Return the maximum score a single run of a test can reach.
+
+    The catalog's ``max_score`` is the test-total ceiling. For ``sum``
+    aggregated tests (e.g. random_cube_pick, which sums hold-time over its
+    per-size runs) that total spans every run, so a single run's bar must be
+    scaled by the per-run ceiling ``max_score / run_count`` instead — which is
+    ``recorded_duration + overload - early_stop`` for one sim. Other
+    aggregations score each run against the full ceiling, so the total is used
+    as-is.
 
     Args:
         test_name: Name of the test to query.
 
     Returns:
-        The configured maximum score (defaults to 1.0 on error).
+        The per-run maximum score (defaults to 1.0 on error).
     """
     if not test_name:
         return 1.0
-    if test_name in _MAX_SCORE_CACHE:
-        return _MAX_SCORE_CACHE[test_name]
+    if test_name in _RUN_MAX_SCORE_CACHE:
+        return _RUN_MAX_SCORE_CACHE[test_name]
     try:
         from labtests.registry import get_test_catalog
 
-        catalog = get_test_catalog()
-        spec = catalog.get(test_name)
-        result = spec.max_score if spec else 1.0
+        spec = get_test_catalog().get(test_name)
+        if spec is None:
+            result = 1.0
+        elif spec.score_aggregation == "sum" and spec.run_count > 1:
+            result = spec.max_score / spec.run_count
+        else:
+            result = spec.max_score
     except Exception:
         result = 1.0
-    _MAX_SCORE_CACHE[test_name] = result
+    _RUN_MAX_SCORE_CACHE[test_name] = result
     return result
 
 

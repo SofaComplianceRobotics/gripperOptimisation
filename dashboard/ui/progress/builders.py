@@ -14,7 +14,7 @@ from dashboard.data.cache import _load_trial_state
 from dashboard.plotting.colors import C_BANNER
 
 from .helpers import (
-    _get_test_max_score,
+    _get_run_max_score,
     _state_color,
     _get_live_score,
     _get_trial_actual_state,
@@ -57,7 +57,7 @@ def _build_progress_card(trial_record: dict) -> html.Div:
             bar_color = _state_color(run_state)
 
             test_name = run.get("test_name") or run.get("run_label") or "run"
-            max_score = _get_test_max_score(test_name)
+            max_score = _get_run_max_score(test_name)
 
             live_val, is_final = _get_live_score(run)
             if live_val is not None and run_state not in {"not-started"}:

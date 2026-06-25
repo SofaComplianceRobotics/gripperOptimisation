@@ -16,9 +16,11 @@ Three runs per trial, one cube size per run, each lifted once at the standard
 | 2 | 10 × 10 × 10 mm |
 | 3 | 12 × 12 × 12 mm |
 
-Each run is scored by hold time exactly like `grasp_hold` (max 8.06 per run).
-The trial score is the sum across the three sizes (`score_aggregation: sum`),
-for a maximum of 24.18 points.
+Each run is scored by hold time exactly like `grasp_hold`. The trial score is
+the sum across the three sizes (`score_aggregation: sum`). `MAX_SCORE` is
+derived in `scoring.py` from the recording length plus overload time (minus the
+pre-pickup gate), so a perfect hold across all three sizes normalizes to 1.0
+regardless of how the scene timing is tuned.
 
 ---
 
@@ -27,8 +29,5 @@ for a maximum of 24.18 points.
 - Picks `cube_scale` for the current slot from `CUBE_SIZES` (slots are
   1-indexed; the optimizer launches slots 1..3).
 - Cube mass, overload ramp and hold-time scoring all come from core, same as
-  `grasp_hold`.
-- Overrides `_on_horizon_complete()` only: holding the cube to the end of the
-  timeline is scored by hold time (a success), not pruned. The base prunes at
-  the horizon because `grasp_hold` expects its overload ramp to force a drop
-  first; here the gripper can simply hold the cube the whole way.
+  `grasp_hold`. Holding the cube to the end of the timeline is scored by hold
+  time (a success).
