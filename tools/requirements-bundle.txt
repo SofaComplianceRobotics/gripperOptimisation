@@ -14,5 +14,6 @@ numpy==2.2.6
 scipy==1.15.3
 matplotlib==3.10.8
 optuna==4.8.0
+cmaes==0.13.0
 dash==4.1.0
 pyvista==0.48.2
