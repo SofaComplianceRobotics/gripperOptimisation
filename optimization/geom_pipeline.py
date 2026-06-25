@@ -19,6 +19,7 @@ from optimization.config import (
     GEOMETRY_EXPORT_TIMEOUT,
     PARAM_SPECS,
     PREVIEWS_DIR,
+    SOFA_PYTHON_EXE,
 )
 from optimization._scoring_io import write_jsonc
 
@@ -139,7 +140,7 @@ def generate_stl_for_trial(trial_dir: Path, config: dict) -> tuple[Path, Path]:
 
     try:
         result = subprocess.run(
-            [sys.executable, GENERATE_SCRIPT, "--config", str(config_path)],
+            [SOFA_PYTHON_EXE, GENERATE_SCRIPT, "--config", str(config_path)],
             cwd=str(LAB_ROOT),
             capture_output=True,
             text=True,

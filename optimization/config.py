@@ -130,6 +130,16 @@ SOFA_ROOT = os.environ["SOFA_ROOT"]
 SOFA_PYTHON_PATH = os.environ["SOFA_PYTHON_PATH"]
 RUNSOFA_EXE = os.environ["RUNSOFA_EXE"]
 
+# Interpreter for generation/optimization subprocesses. Always the emio-labs
+# bundled Python, never sys.executable: a machine may have its own Python on
+# PATH that starts the dashboard, and its gmsh/cadquery can differ or fail to
+# load. Falls back to the current interpreter only if the bundled one is absent.
+import sys as _sys
+
+SOFA_PYTHON_EXE = os.path.join(SOFA_PYTHON_PATH, "python.exe")
+if not os.path.isfile(SOFA_PYTHON_EXE):
+    SOFA_PYTHON_EXE = _sys.executable
+
 
 # ─────────────────────────────────────────────
 # CMA-ES Optimizer Settings

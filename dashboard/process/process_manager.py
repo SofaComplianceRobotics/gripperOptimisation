@@ -17,6 +17,21 @@ RECORDING_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_recording.py"
 SESSION_CONFIG_FILE = LAB_ROOT / "runtime" / "session_config.json"
 _LOG_DIR = LAB_ROOT / "runtime" / "logs"
 
+
+def _sofa_python_exe() -> str:
+    """Path to the emio-labs bundled Python for generation/optimization subprocesses.
+
+    Never sys.executable: a machine may have its own Python on PATH that starts
+    the dashboard, and its gmsh/cadquery can differ or fail to load. Falls back
+    to the current interpreter only if the bundled one is absent.
+
+    Returns:
+        Absolute path to the bundled python.exe, or sys.executable as fallback.
+    """
+    python_dir = os.environ.get("SOFA_PYTHON_PATH", "")
+    exe = os.path.join(python_dir, "python.exe") if python_dir else ""
+    return exe if exe and os.path.isfile(exe) else sys.executable
+
 # Running subprocesses keyed by role ("optimize", "generate")
 _PROCS: dict[str, subprocess.Popen | None] = {
     "optimize": None,
@@ -58,7 +73,7 @@ def _start_proc(name: str, script: Path, env: dict | None = None) -> str:
         # Force UTF-8 stdout in the subprocess so unicode characters don't crash on Windows
         run_env["PYTHONIOENCODING"] = "utf-8"
         proc = subprocess.Popen(
-            [sys.executable, str(script)],
+            [_sofa_python_exe(), str(script)],
             stdout=log_file,
             stderr=subprocess.STDOUT,
             cwd=str(script.parent),
