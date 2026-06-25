@@ -149,7 +149,7 @@ PRINT_CLEANUP_LOGS = False  # avoid interleaving with live progress bar output
 GEN_PROGRESS_POLL_INTERVAL = 0.25  # seconds between frame-progress writes
 GEOMETRY_EXPORT_TIMEOUT = 20.0  # seconds before generate_gripper.py is considered stuck
 MAX_ACTIVE_SOFA_PROCS = 12  # throttle to avoid starving geometry export
-CMAES_STARTUP_TRIALS = 50  # random warm-up before CMA-ES adaptation
+CMAES_STARTUP_TRIALS = 20  # random warm-up before CMA-ES adaptation
 CMAES_SIGMA0 = 1.0  # initial global step size (exploration pressure)
 HARD_FAIL_SCORE = float(os.environ["HARD_FAIL_SCORE"])  # generation-failure score
 # ─────────────────────────────────────────────
