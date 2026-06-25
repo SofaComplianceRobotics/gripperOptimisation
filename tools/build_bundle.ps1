@@ -9,11 +9,17 @@ pip, no venv, no further setup.
 Usage:
     powershell -ExecutionPolicy Bypass -File tools\build_bundle.ps1
     powershell -ExecutionPolicy Bypass -File tools\build_bundle.ps1 -SofaRoot "D:\emio-labs\resources\sofa"
+    powershell -ExecutionPolicy Bypass -File tools\build_bundle.ps1 -SourceOnly
+
+-SourceOnly skips the dependencies and produces a small lab_shapeOPT_source.zip
+containing just the lab source. Extract it over an existing install to update
+the code without touching runtime\modules\site-packages.
 #>
 
 param(
     [string]$SofaRoot = "$env:LOCALAPPDATA\Programs\emio-labs\resources\sofa",
-    [string]$OutDir   = "$PSScriptRoot\..\dist"
+    [string]$OutDir   = "$PSScriptRoot\..\dist",
+    [switch]$SourceOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,12 +28,15 @@ $LabRoot      = (Resolve-Path "$PSScriptRoot\..").Path
 $SofaPython   = Join-Path $SofaRoot "bin\python\python.exe"
 $Requirements = Join-Path $PSScriptRoot "requirements-bundle.txt"
 
-if (-not (Test-Path $SofaPython)) {
-    throw "SOFA python not found at $SofaPython. Pass -SofaRoot <emio-labs>\resources\sofa."
+if ($SourceOnly) {
+    Write-Host "Building source-only patch (no dependencies)"
+} else {
+    if (-not (Test-Path $SofaPython)) {
+        throw "SOFA python not found at $SofaPython. Pass -SofaRoot <emio-labs>\resources\sofa."
+    }
+    $pyVer = (& $SofaPython -c "import sys;print('%d.%d'%sys.version_info[:2])").Trim()
+    Write-Host "Building with SOFA python $pyVer at $SofaPython"
 }
-
-$pyVer = (& $SofaPython -c "import sys;print('%d.%d'%sys.version_info[:2])").Trim()
-Write-Host "Building with SOFA python $pyVer at $SofaPython"
 
 # --- 1. Clean staging dir (zip root is the lab folder itself) ---------------
 $StageRoot = Join-Path $env:TEMP "lab_shapeOPT_bundle"
@@ -59,25 +68,28 @@ foreach ($f in $files) {
 Write-Host "Staged $copied source files"
 
 # --- 3. Install lab deps for Python 3.10 into the bundle's site-packages -----
-$BundleSP = Join-Path $Stage "runtime\modules\site-packages"
-New-Item -ItemType Directory -Force -Path $BundleSP | Out-Null
-Write-Host "Installing dependencies into runtime\modules\site-packages ..."
-& $SofaPython -m pip install --no-cache-dir --target $BundleSP -r $Requirements
-if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+if (-not $SourceOnly) {
+    $BundleSP = Join-Path $Stage "runtime\modules\site-packages"
+    New-Item -ItemType Directory -Force -Path $BundleSP | Out-Null
+    Write-Host "Installing dependencies into runtime\modules\site-packages ..."
+    & $SofaPython -m pip install --no-cache-dir --target $BundleSP -r $Requirements
+    if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
-# --- 4. Slim the installed packages -----------------------------------------
-Get-ChildItem $BundleSP -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue |
-    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-Get-ChildItem $BundleSP -Recurse -File -Include *.pyc -ErrorAction SilentlyContinue |
-    Remove-Item -Force -ErrorAction SilentlyContinue
-# Keep only the 3.10 ABI; drop any other-version compiled extensions.
-Get-ChildItem $BundleSP -Recurse -File -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -match '\.cp3(?!10)\d\d-' } |
-    Remove-Item -Force -ErrorAction SilentlyContinue
+    # --- 4. Slim the installed packages -------------------------------------
+    Get-ChildItem $BundleSP -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    Get-ChildItem $BundleSP -Recurse -File -Include *.pyc -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    # Keep only the 3.10 ABI; drop any other-version compiled extensions.
+    Get-ChildItem $BundleSP -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '\.cp3(?!10)\d\d-' } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
 
 # --- 5. Zip ------------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-$Zip = Join-Path $OutDir "lab_shapeOPT_bundle.zip"
+$zipName = if ($SourceOnly) { "lab_shapeOPT_source.zip" } else { "lab_shapeOPT_bundle.zip" }
+$Zip = Join-Path $OutDir $zipName
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
 Write-Host "Compressing (this can take a minute) ..."
 Compress-Archive -Path $Stage -DestinationPath $Zip
@@ -85,4 +97,8 @@ Compress-Archive -Path $Stage -DestinationPath $Zip
 $sizeMB = [math]::Round((Get-Item $Zip).Length / 1MB, 1)
 Write-Host ""
 Write-Host "Bundle written: $Zip ($sizeMB MB)"
-Write-Host "Unzip into <emio-labs>\v25.12.00\assets\labs\ to get assets\labs\lab_shapeOPT."
+if ($SourceOnly) {
+    Write-Host "Extract OVER an existing assets\labs\lab_shapeOPT to update the code (deps untouched)."
+} else {
+    Write-Host "Unzip into <emio-labs>\v25.12.00\assets\labs\ to get assets\labs\lab_shapeOPT."
+}
