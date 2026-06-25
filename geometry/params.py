@@ -44,34 +44,34 @@ class ModelParams:
 
     # Ring
     cylinder_radius: float = field(
-        default=26.5,
+        default=27.2,
         metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
     )
     cylinder_hole_thickness: float = field(
-        default=3.0,
+        default=3.4,
         metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
     )
     cylinder_height_A: float = field(
-        default=1.0,
+        default=1.5,
         metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
     )
     cylinder_height_B: float = field(
-        default=1.0,
+        default=4.3,
         metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
     )
     cylinder_height_C: float = field(
-        default=1.0,
+        default=3.6,
         metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
     )
     cylinder_plateau_A_deg: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=10.8, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
     )
     cylinder_plateau_B_deg: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=5.6, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
     )
     # Effective max = 45 - max(plateau_A, plateau_B); clamped in the optimizer after sampling.
     cylinder_plateau_C_deg: float = field(
-        default=0.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=30.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
     )
 
     # Leg attachment
@@ -100,14 +100,14 @@ class ModelParams:
 
     # Pincers
     pincer_profile_width: float = field(
-        default=5.0,
+        default=5.5,
         metadata={
             "opt": {"type": "float", "min": 0, "max": 0},
             "check": "positive",
         },
     )
     pincer_profile_height: float = field(
-        default=10.0,
+        default=13.8,
         metadata={
             "opt": {"type": "float", "min": 0, "max": 0},
             "check": "positive",
