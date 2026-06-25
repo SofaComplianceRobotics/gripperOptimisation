@@ -79,7 +79,22 @@ def build_base_scene(
     rootnode.VisualStyle.displayFlags.value = ["hideBehavior", "hideWireframe"]
 
     if not inverse:
+        # SOFA builds differ in the intersection method addHeader installs. Some
+        # use the LocalMinDistance component, which prunes contacts to local
+        # minima and leaves a flat cube resting on too few points, so it tips and
+        # tunnels through the floor. Normalize to MinProximityIntersection, which
+        # keeps the broader contact set a stable flat cube-floor grasp needs.
         local_min_dist = rootnode.getObject("LocalMinDistance")
+        if local_min_dist is not None and local_min_dist.getClassName() == "LocalMinDistance":
+            rootnode.removeObject(local_min_dist)
+            rootnode.addObject(
+                "MinProximityIntersection",
+                name="LocalMinDistance",
+                alarmDistance=5.0,
+                contactDistance=1.0,
+            )
+            local_min_dist = rootnode.getObject("LocalMinDistance")
+
         if local_min_dist is not None:
             # alarmDistance must stay above the cube's per-step fall distance at
             # floor impact (~4.4mm after the spawn-clearance drop) so contacts
