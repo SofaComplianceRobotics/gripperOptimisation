@@ -85,7 +85,9 @@ def build_base_scene(
         # tunnels through the floor. Normalize to MinProximityIntersection, which
         # keeps the broader contact set a stable flat cube-floor grasp needs.
         local_min_dist = rootnode.getObject("LocalMinDistance")
-        if local_min_dist is not None and local_min_dist.getClassName() == "LocalMinDistance":
+        _isect_class = None if local_min_dist is None else local_min_dist.getClassName()
+        print(f"[collision] intersection method on load: {_isect_class}")
+        if local_min_dist is not None and _isect_class == "LocalMinDistance":
             rootnode.removeObject(local_min_dist)
             rootnode.addObject(
                 "MinProximityIntersection",
@@ -94,6 +96,7 @@ def build_base_scene(
                 contactDistance=1.0,
             )
             local_min_dist = rootnode.getObject("LocalMinDistance")
+            print(f"[collision] swapped intersection -> {local_min_dist.getClassName()}")
 
         if local_min_dist is not None:
             # alarmDistance must stay above the cube's per-step fall distance at
