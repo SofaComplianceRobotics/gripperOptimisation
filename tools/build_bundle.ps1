@@ -67,6 +67,19 @@ foreach ($f in $files) {
 }
 Write-Host "Staged $copied source files"
 
+# --- 2b. Stage runtime/recordings ------------------------------------------
+# Fixed benchmark inputs (motor-playback trajectories) the scenes and optimizer
+# require. They live under runtime/ and are git-ignored, so the source copy
+# above skips them; copy them explicitly so the bundle works out of the box.
+$recSrc = Join-Path $LabRoot "runtime\recordings"
+if (Test-Path $recSrc) {
+    $recDst = Join-Path $Stage "runtime\recordings"
+    New-Item -ItemType Directory -Force -Path (Split-Path $recDst) | Out-Null
+    Copy-Item $recSrc $recDst -Recurse -Force
+    $recCount = (Get-ChildItem $recDst -Recurse -File | Measure-Object).Count
+    Write-Host "Staged $recCount recording file(s)"
+}
+
 # --- 3. Install lab deps for Python 3.10 into the bundle's site-packages -----
 if (-not $SourceOnly) {
     $BundleSP = Join-Path $Stage "runtime\modules\site-packages"
