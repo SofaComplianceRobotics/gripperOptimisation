@@ -159,8 +159,8 @@ PRINT_CLEANUP_LOGS = False  # avoid interleaving with live progress bar output
 GEN_PROGRESS_POLL_INTERVAL = 0.25  # seconds between frame-progress writes
 GEOMETRY_EXPORT_TIMEOUT = 20.0  # seconds before generate_gripper.py is considered stuck
 MAX_ACTIVE_SOFA_PROCS = 12  # throttle to avoid starving geometry export
-CMAES_STARTUP_TRIALS = 20  # random warm-up before CMA-ES adaptation
-CMAES_SIGMA0 = 1.0  # initial global step size (exploration pressure)
+CMAES_STARTUP_TRIALS = 10  # random warm-up before CMA-ES adaptation
+CMAES_SIGMA0 = 0.3  # initial global step size (exploration pressure)
 HARD_FAIL_SCORE = float(os.environ["HARD_FAIL_SCORE"])  # generation-failure score
 # ─────────────────────────────────────────────
 # Tunable Parameter Specifications
@@ -179,7 +179,9 @@ PARAM_SPECS: list[dict] = param_specs(BASE_PARAMS)
 # Scene physics and scoring defaults live in labtests/core/scene_defaults.py
 # — scenes read them directly; env vars are optional per-process overrides.
 # ─────────────────────────────────────────────
-SOFA_REALTIME_TIMEOUT = 200.0  # wall-clock seconds before any SOFA run prunes the whole gripper
+SOFA_REALTIME_TIMEOUT = (
+    200.0  # wall-clock seconds before any SOFA run prunes the whole gripper
+)
 # ─────────────────────────────────────────────
 # Global State
 # ─────────────────────────────────────────────
