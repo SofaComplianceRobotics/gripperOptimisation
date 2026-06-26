@@ -28,8 +28,11 @@ def _sofa_python_exe() -> str:
     Returns:
         Absolute path to the bundled python.exe, or sys.executable as fallback.
     """
-    python_dir = os.environ.get("SOFA_PYTHON_PATH", "")
-    exe = os.path.join(python_dir, "python.exe") if python_dir else ""
+    from launcher.bootstrap import find_bundled_python
+
+    exe = os.environ.get("SOFA_PYTHON_EXE") or find_bundled_python(
+        os.environ.get("SOFA_PYTHON_PATH", "")
+    )
     return exe if exe and os.path.isfile(exe) else sys.executable
 
 # Running subprocesses keyed by role ("optimize", "generate")
@@ -140,7 +143,7 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
     # build the optimiser uses headless, so what you see here matches a trial.
     runsofa = os.environ["EMIOLABS_RUNSOFA_EXE"]
     if not os.path.isfile(runsofa):
-        return f"runSofa.exe not found at: {runsofa}"
+        return f"runSofa executable not found at: {runsofa}"
 
     # Derive the emiolabs SOFA root from the executable path (bin/runSofa.exe → sofa/)
     emiolabs_sofa_root = str(Path(runsofa).parents[1])
@@ -163,7 +166,7 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
     pythonpath = env.get("PYTHONPATH", "")
     lab_root_str = str(LAB_ROOT)
     if lab_root_str not in pythonpath:
-        env["PYTHONPATH"] = f"{lab_root_str};{pythonpath}".rstrip(";")
+        env["PYTHONPATH"] = f"{lab_root_str}{os.pathsep}{pythonpath}".rstrip(os.pathsep)
 
     if extra_env:
         env.update(extra_env)

@@ -136,8 +136,12 @@ RUNSOFA_EXE = os.environ["RUNSOFA_EXE"]
 # load. Falls back to the current interpreter only if the bundled one is absent.
 import sys as _sys
 
-SOFA_PYTHON_EXE = os.path.join(SOFA_PYTHON_PATH, "python.exe")
-if not os.path.isfile(SOFA_PYTHON_EXE):
+from launcher.bootstrap import find_bundled_python as _find_bundled_python
+
+SOFA_PYTHON_EXE = os.environ.get("SOFA_PYTHON_EXE") or _find_bundled_python(
+    SOFA_PYTHON_PATH
+)
+if not SOFA_PYTHON_EXE or not os.path.isfile(SOFA_PYTHON_EXE):
     SOFA_PYTHON_EXE = _sys.executable
 
 
@@ -216,17 +220,28 @@ def build_env() -> dict:
         os.path.join(SOFA_ROOT, "bin", "Release"),
         os.path.join(SOFA_ROOT, "bin", "RelWithDebInfo"),
         os.path.join(SOFA_ROOT, "bin"),
+        os.path.join(SOFA_ROOT, "lib"),
         SOFA_PYTHON_PATH,
         env.get("PATH", ""),
     ]
-    env["PATH"] = ";".join([p for p in path_chunks if p])
+    env["PATH"] = os.pathsep.join([p for p in path_chunks if p])
+
+    # On Linux the dynamic loader uses LD_LIBRARY_PATH, not PATH, to find the
+    # SOFA shared objects and their dependencies.
+    if os.name != "nt":
+        ld_chunks = [
+            os.path.join(SOFA_ROOT, "lib"),
+            os.path.join(SOFA_ROOT, "bin"),
+            env.get("LD_LIBRARY_PATH", ""),
+        ]
+        env["LD_LIBRARY_PATH"] = os.pathsep.join([p for p in ld_chunks if p])
 
     sofa_site_packages = os.environ["SOFA_SITE_PACKAGES"]
 
     # Critical: do not inherit the parent PYTHONPATH (the EmioLabs launcher's
     # own Python env). SofaPython3 must import from its build's site-packages
     # to avoid startup crashes, so set PYTHONPATH explicitly here.
-    env["PYTHONPATH"] = ";".join(
+    env["PYTHONPATH"] = os.pathsep.join(
         [
             sofa_site_packages,
             os.path.join(SOFA_ROOT, "plugins", "STLIB"),

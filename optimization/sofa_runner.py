@@ -186,9 +186,15 @@ def launch_sofa(
     else:
         gui_mode = "batch" if HEADLESS else "imgui"
 
-    creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-    if hasattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS"):
-        creation_flags |= subprocess.BELOW_NORMAL_PRIORITY_CLASS
+    # Detach/priority flags exist only on Windows; on other platforms
+    # creationflags must be 0.
+    creation_flags = 0
+    if os.name == "nt":
+        creation_flags = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        )
+        if hasattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS"):
+            creation_flags |= subprocess.BELOW_NORMAL_PRIORITY_CLASS
 
     # Capture SOFA's stdout/stderr to a per-run log so early crashes are
     # diagnosable. Previously sent to DEVNULL, which hid the reason a run

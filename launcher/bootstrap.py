@@ -7,9 +7,34 @@ in scene scripts and launchers.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Tuple
+
+
+def exe_name(base: str) -> str:
+    """Platform executable name: 'base.exe' on Windows, 'base' elsewhere."""
+    return f"{base}.exe" if os.name == "nt" else base
+
+
+def find_bundled_python(python_dir) -> str:
+    """Locate the bundled Python interpreter inside an emio-labs python dir.
+
+    Handles the Windows layout (<dir>/python.exe) and the Linux prefix layout
+    (<dir>/bin/python3). Returns "" if none is found.
+    """
+    python_dir = Path(python_dir)
+    relatives = (
+        ["python.exe"]
+        if os.name == "nt"
+        else ["bin/python3", "bin/python", "python3", "python"]
+    )
+    for rel in relatives:
+        exe = python_dir / rel
+        if exe.is_file():
+            return str(exe)
+    return ""
 
 
 def bootstrap_lab(script_file: str) -> Tuple[Path, Path, Path, Path]:
