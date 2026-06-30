@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from dash import Input, Output, ctx
@@ -19,6 +21,16 @@ from dashboard.process.process_manager import (
 
 LAB_ROOT = Path(__file__).resolve().parents[2]
 CENTERPARTS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / CENTERPARTS_DIRNAME
+
+
+def _open_in_os(path: Path) -> None:
+    """Open a file with the OS default application on any platform."""
+    if sys.platform == "win32":
+        os.startfile(str(path))
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
 
 
 def register_generation_callbacks(app, _catalog: dict) -> None:
@@ -96,7 +108,7 @@ def register_generation_callbacks(app, _catalog: dict) -> None:
         if not path.exists():
             return f"{path.name} not found — generate first."
         try:
-            os.startfile(str(path))
+            _open_in_os(path)
             return f"Opened {path.name}."
         except Exception as exc:
             return f"Could not open {path.name}: {exc}"
