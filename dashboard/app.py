@@ -31,6 +31,7 @@ from dashboard.callbacks.config import register_config_callbacks
 from dashboard.callbacks.generation import register_generation_callbacks
 from dashboard.callbacks.monitoring import register_monitoring_callbacks
 from dashboard.callbacks.optimize import register_optimise_callbacks
+from dashboard.callbacks.playground import register_playground_callbacks
 from dashboard.callbacks.scenes import register_scene_callbacks
 from dashboard.ui.tabs import (
     build_config_tab,
@@ -38,6 +39,7 @@ from dashboard.ui.tabs import (
     build_optimise_tab,
     build_param_bounds_tab,
     build_performance_tab,
+    build_playground_tab,
     build_progress_tab,
     build_scenes_tab,
 )
@@ -82,6 +84,7 @@ def create_app() -> Dash:
         ("Performance", "performance", build_performance_tab()),
         ("Progress", "progress", build_progress_tab()),
         ("Parameter Bounds", "bounds", build_param_bounds_tab()),
+        ("Playground", "playground", build_playground_tab()),
     ]
 
     app.layout = html.Div(
@@ -126,6 +129,7 @@ def create_app() -> Dash:
     register_scene_callbacks(app, catalog)
     register_optimise_callbacks(app)
     register_monitoring_callbacks(app)
+    register_playground_callbacks(app)
 
     return app
 
