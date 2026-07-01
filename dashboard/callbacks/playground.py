@@ -13,7 +13,8 @@ import random
 import plotly.graph_objects as go
 from dash import Input, Output, State
 
-from dashboard.playground.objectives import make_landscape, score_at, score_grid, score_line
+from dashboard.playground.objectives import (
+    axis_profiles, make_landscape, score_at, score_grid, score_line)
 from dashboard.playground.optimizers import ALGO_ORDER, ALGO_PARAMS, run_optimization
 
 # Distinct colours for accumulated runs, cycled by run index.
@@ -147,18 +148,64 @@ def _scatter3d_figure(map_data: dict, runs: list[dict], path_idx, frame: int) ->
     return fig
 
 
-def _placeholder_figure(dim: int) -> go.Figure:
-    """Shown in place of the heatmap when the search space isn't 2D."""
+def _axis_strips_figure(map_data: dict, runs: list[dict], path_idx, frame: int,
+                        height: int | None = None) -> go.Figure:
+    """Per-axis score strips: one row per dimension, colour = best score reachable
+    at each coordinate (others optimal). The selected run's points-so-far are
+    overlaid cumulatively so each axis is seen converging, with a white diamond at
+    the current position. Optimistic projection — read it against the true score.
+    """
+    dim = int(map_data.get("dim", 2))
+    labels = [f"x{i}" for i in range(dim)]
+    axis_xs, axis_z = map_data.get("axis_xs"), map_data.get("axis_z")
     fig = go.Figure()
-    fig.add_annotation(
-        text=(f"Search space is {dim}-D.<br>The landscape can't be drawn beyond 2D —<br>"
-              "compare the convergence curves →"),
-        showarrow=False, font={"size": 15, "color": "#666"},
-        x=0.5, y=0.5, xref="paper", yref="paper")
+    if axis_xs and axis_z:
+        fig.add_trace(go.Heatmap(
+            x=axis_xs, y=labels, z=axis_z, colorscale="Viridis", zmin=0, zmax=1,
+            colorbar={"title": "max score"},
+            hovertemplate="%{y}<br>value: %{x:.2f}<br>best score here: %{z:.2f}<extra></extra>"))
+
+    if runs and path_idx is not None and 0 <= path_idx < len(runs):
+        pts = runs[path_idx].get("points")
+        if pts:
+            color = RUN_COLORS[path_idx % len(RUN_COLORS)]
+            f = min(int(frame or 0), len(pts) - 1)
+            mx, my = [], []
+            for k in range(0, f + 1):
+                for i in range(dim):
+                    if i < len(pts[k]):
+                        mx.append(pts[k][i])
+                        my.append(labels[i])
+            fig.add_trace(go.Scatter(
+                x=mx, y=my, mode="markers", name="points", showlegend=False,
+                marker={"color": color, "size": 7, "opacity": 0.45,
+                        "line": {"color": "white", "width": 0.5}}, hoverinfo="skip"))
+            last = pts[f]
+            fig.add_trace(go.Scatter(
+                x=[last[i] for i in range(dim) if i < len(last)],
+                y=labels[:len(last)], mode="markers", name="current", showlegend=False,
+                marker={"symbol": "diamond", "size": 12, "color": "white",
+                        "line": {"color": "#212121", "width": 2}},
+                hovertemplate="%{y}<br>current: %{x:.3f}<extra></extra>"))
+
     fig.update_layout(
-        title="Landscape (2D only)", height=580,
-        margin={"l": 40, "r": 10, "t": 40, "b": 40},
-        xaxis={"visible": False}, yaxis={"visible": False})
+        title="Per-axis score profile (best reachable at each coordinate)",
+        height=height or max(260, 80 + dim * 46),
+        margin={"l": 60, "r": 70, "t": 40, "b": 40}, uirevision="pg",
+        xaxis_title="coordinate value (0 → 1)")
+    fig.update_xaxes(range=[0, 1], fixedrange=True)
+    fig.update_yaxes(categoryorder="array", categoryarray=list(reversed(labels)),
+                     fixedrange=True)
+    return fig
+
+
+def _empty_strips_figure() -> go.Figure:
+    """Collapsed placeholder for the strip slot when the strips fill the heatmap
+    slot instead (the >3D case)."""
+    fig = go.Figure()
+    fig.update_layout(height=10, margin={"l": 0, "r": 0, "t": 0, "b": 0},
+                      xaxis={"visible": False}, yaxis={"visible": False},
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     return fig
 
 
@@ -248,6 +295,7 @@ def register_playground_callbacks(app) -> None:
         peaks = make_landscape(mode, int(n_optima or 1), float(spread or 0.0),
                                seed=seed, dim=dim)
         map_data = {"peaks": peaks, "dim": dim}
+        map_data["axis_xs"], map_data["axis_z"] = axis_profiles(peaks, dim)
         if dim == 1:
             map_data["line_x"], map_data["line_y"] = score_line(peaks)
         elif dim == 2:
@@ -350,7 +398,8 @@ def register_playground_callbacks(app) -> None:
     # landscape z is precomputed in the map store, so each redraw only rebuilds
     # the figure scaffolding plus the small point overlays.
     @app.callback(
-        [Output("pg-heatmap", "figure"), Output("pg-curve", "figure")],
+        [Output("pg-heatmap", "figure"), Output("pg-curve", "figure"),
+         Output("pg-strips", "figure")],
         [Input("pg-frame", "value"), Input("pg-runs-store", "data"),
          Input("pg-path-run", "value"), Input("pg-map-store", "data")],
     )
@@ -365,5 +414,10 @@ def register_playground_callbacks(app) -> None:
         elif dim == 3:
             heat = _scatter3d_figure(map_data, runs, path_idx, f)
         else:
-            heat = _placeholder_figure(dim)
-        return heat, _curve_figure(runs, f)
+            # No drawable landscape past 3D — the strips stand in for it.
+            heat = _axis_strips_figure(map_data, runs, path_idx, f, height=580)
+        # Strips sit under the heatmap for ≤3D; for >3D they already fill the
+        # heatmap slot, so collapse the companion to avoid drawing them twice.
+        strips = (_axis_strips_figure(map_data, runs, path_idx, f)
+                  if dim <= 3 else _empty_strips_figure())
+        return heat, _curve_figure(runs, f), strips

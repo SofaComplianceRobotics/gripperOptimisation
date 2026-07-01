@@ -94,7 +94,7 @@ def _run_cmaes(hp: dict, score_fn, budget: int, seed: int, dim: int):
     optimizer = CMA(mean=np.full(dim, 0.5), sigma=sigma0, bounds=bounds,
                     population_size=popsize, seed=seed)
 
-    xs, ys, zs, scores, ellipses = [], [], [], [], []
+    xs, ys, zs, scores, ellipses, points = [], [], [], [], [], []
     n_evals = 0
 
     while n_evals < budget:
@@ -116,6 +116,7 @@ def _run_cmaes(hp: dict, score_fn, budget: int, seed: int, dim: int):
             xs.append(px)
             ys.append(py)
             zs.append(pz)
+            points.append([float(v) for v in x])
             scores.append(float(s))
             n_evals += 1
 
@@ -124,7 +125,7 @@ def _run_cmaes(hp: dict, score_fn, budget: int, seed: int, dim: int):
         if optimizer.should_stop():
             break
 
-    return xs, ys, zs, scores, ellipses, popsize
+    return xs, ys, zs, scores, ellipses, popsize, points
 
 
 def _run_reinforce(hp: dict, score_fn, budget: int, seed: int, dim: int):
@@ -141,7 +142,7 @@ def _run_reinforce(hp: dict, score_fn, budget: int, seed: int, dim: int):
     lr = float(hp.get("learning_rate", 0.1))
     mean = np.full(dim, 0.5)
 
-    xs, ys, zs, scores, ellipses = [], [], [], [], []
+    xs, ys, zs, scores, ellipses, points = [], [], [], [], [], []
     n_evals = 0
 
     while n_evals < budget:
@@ -163,6 +164,7 @@ def _run_reinforce(hp: dict, score_fn, budget: int, seed: int, dim: int):
             xs.append(px)
             ys.append(py)
             zs.append(pz)
+            points.append([float(v) for v in xc])
             scores.append(float(s))
             n_evals += 1
 
@@ -176,7 +178,7 @@ def _run_reinforce(hp: dict, score_fn, budget: int, seed: int, dim: int):
             mean = np.clip(mean + lr * grad_mean, 0.0, 1.0)
             sigma = float(np.clip(sigma * np.exp(0.5 * lr * grad_logsig), 0.03, 0.6))
 
-    return xs, ys, zs, scores, ellipses, popsize
+    return xs, ys, zs, scores, ellipses, popsize, points
 
 
 def _run_optuna(algo: str, hp: dict, score_fn, budget: int, seed: int, dim: int):
@@ -185,7 +187,7 @@ def _run_optuna(algo: str, hp: dict, score_fn, budget: int, seed: int, dim: int)
     n_trials = effective_budget(algo, hp, budget, dim)
     study = optuna.create_study(direction="maximize", sampler=sampler)
 
-    xs, ys, zs, scores = [], [], [], []
+    xs, ys, zs, scores, points = [], [], [], [], []
 
     def objective(trial: optuna.Trial) -> float:
         point = [trial.suggest_float(f"x{i}", 0.0, 1.0) for i in range(dim)]
@@ -197,10 +199,11 @@ def _run_optuna(algo: str, hp: dict, score_fn, budget: int, seed: int, dim: int)
         xs.append(px)
         ys.append(py)
         zs.append(pz)
+        points.append([float(v) for v in point])
         scores.append(float(trial.value))
 
     study.optimize(objective, n_trials=n_trials, callbacks=[record])
-    return xs, ys, zs, scores
+    return xs, ys, zs, scores, points
 
 
 def run_optimization(
@@ -214,17 +217,18 @@ def run_optimization(
     """Run one optimization in `dim` dimensions and capture its trajectory.
 
     score_fn takes a length-`dim` vector. Returns a dict with xs, ys (first two
-    coordinates per evaluation, for the 2D heatmap), scores, best (running best),
-    plus ellipses_xy (per-generation Gaussian, 2D only) and metadata.
+    coordinates per evaluation, for the 2D heatmap), points (the full vector per
+    evaluation, for the per-axis strips), scores, best (running best), plus
+    ellipses_xy (per-generation Gaussian, 2D only) and metadata.
     """
     if algo == "cmaes":
-        xs, ys, zs, scores, ellipses_xy, popsize = _run_cmaes(hp, score_fn, budget, seed, dim)
+        xs, ys, zs, scores, ellipses_xy, popsize, points = _run_cmaes(hp, score_fn, budget, seed, dim)
         gen_size, windowed = popsize, True
     elif algo == "reinforce":
-        xs, ys, zs, scores, ellipses_xy, popsize = _run_reinforce(hp, score_fn, budget, seed, dim)
+        xs, ys, zs, scores, ellipses_xy, popsize, points = _run_reinforce(hp, score_fn, budget, seed, dim)
         gen_size, windowed = popsize, True
     else:
-        xs, ys, zs, scores = _run_optuna(algo, hp, score_fn, budget, seed, dim)
+        xs, ys, zs, scores, points = _run_optuna(algo, hp, score_fn, budget, seed, dim)
         ellipses_xy, gen_size, windowed = [], 1, False
 
     best: list[float] = []
@@ -245,6 +249,7 @@ def run_optimization(
         "xs": xs,
         "ys": ys,
         "zs": zs,
+        "points": points,
         "scores": scores,
         "best": best,
     }

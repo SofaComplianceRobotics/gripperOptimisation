@@ -7,7 +7,7 @@ best-so-far convergence curves. Wired up in dashboard/callbacks/playground.py.
 
 from dash import dcc, html
 
-from dashboard.playground.objectives import make_landscape, score_grid
+from dashboard.playground.objectives import axis_profiles, make_landscape, score_grid
 from dashboard.playground.optimizers import ALGO_LABELS
 
 ANIM_INTERVAL_MS = 160  # playback tick; server redraws each frame, so keep it relaxed
@@ -17,7 +17,9 @@ def _initial_map() -> dict:
     """Default landscape: a single centred global optimum (2D)."""
     peaks = make_landscape("default", 1, 0.0, seed=0, dim=2)
     xs, ys, z = score_grid(peaks)
-    return {"peaks": peaks, "dim": 2, "xs": xs, "ys": ys, "z": z}
+    axis_xs, axis_z = axis_profiles(peaks, 2)
+    return {"peaks": peaks, "dim": 2, "xs": xs, "ys": ys, "z": z,
+            "axis_xs": axis_xs, "axis_z": axis_z}
 
 
 def _field(label: str, component, width: str = "150px") -> html.Div:
@@ -129,6 +131,14 @@ def build_playground_tab() -> html.Div:
                 ],
                 style={"display": "flex", "gap": "0.5rem", "width": "100%", "marginTop": "0.6rem"},
             ),
+
+            # ── Per-axis score strips ────────────────────────────────
+            # One row per dimension: colour is the best score reachable at each
+            # coordinate (others optimal), with the run's visited points overlaid
+            # so you watch each axis converge. Sits under the heatmap for ≤3D and
+            # stands in for it past 3D, where the landscape can't be drawn.
+            dcc.Graph(id="pg-strips", style={"width": "100%", "marginTop": "0.4rem"},
+                      config={"displayModeBar": False}),
 
             # ── Playback transport ───────────────────────────────────
             html.Div(

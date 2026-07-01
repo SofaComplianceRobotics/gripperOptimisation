@@ -83,6 +83,34 @@ def score_line(peaks: list[dict], resolution: int = 300):
     return xs.tolist(), ys
 
 
+def axis_profiles(peaks: list[dict], dim: int, resolution: int = GRID_RESOLUTION):
+    """Per-axis marginal-max score profiles for the strip view (any dimension).
+
+    For each axis i, sweep its coordinate over [0, 1] and report the best score
+    reachable when every *other* coordinate is set optimally. Because the surface
+    is a max-of-Gaussians, that best case is, for each peak, sitting on the peak's
+    centre in the free dimensions — leaving only the i-th coordinate's penalty:
+
+        profile_i(x) = max over peaks of height * exp(-(x - center_i)^2 / 2w^2)
+
+    This is an optimistic projection (it assumes the other axes are perfect), so
+    it must be read alongside the run's true achieved score.
+
+    Returns (xs, rows) where rows[i][k] is the best score reachable on axis i at
+    coordinate xs[k].
+    """
+    xs = np.linspace(0.0, 1.0, resolution)
+    rows = []
+    for i in range(dim):
+        row = np.zeros(resolution)
+        for pk in peaks:
+            ci = pk["center"][i]
+            row = np.maximum(row, pk["height"] * np.exp(
+                -((xs - ci) ** 2) / (2.0 * pk["width"] ** 2)))
+        rows.append(row.tolist())
+    return xs.tolist(), rows
+
+
 def score_grid(peaks: list[dict], resolution: int = GRID_RESOLUTION):
     """Evaluate the landscape on a 2D grid for heatmap display (dim == 2 only).
 
