@@ -9,7 +9,7 @@ from pathlib import Path
 # ── Paths ──────────────────────────────────────────────────────
 LAB_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_FILE = LAB_ROOT / "config" / "lab_config.jsonc"
-OPTIMIZE_SCRIPT = LAB_ROOT / "optimization" / "orchestrator.py"
+OPTIMIZE_SCRIPT = LAB_ROOT / "optimize.py"
 GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper.py"
 GENERATE_FINE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper_fine.py"
 INVERSE_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_inverse.py"

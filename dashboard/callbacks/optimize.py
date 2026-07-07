@@ -242,8 +242,8 @@ def register_optimise_callbacks(app) -> None:
     def handle_optimise(_, __, check_vals, check_ids, gate_vals, gate_ids, store):
         """Validate selections and launch or stop the optimization subprocess.
 
-        Builds ``LAB_SHAPEOPT_TESTS``, ``LAB_SHAPEOPT_TEST_WEIGHTS``, and
-        ``LAB_SHAPEOPT_GATED_TESTS`` env vars from the current UI state before
+        Builds ``OPT_SELECTED_TESTS``, ``OPT_TEST_WEIGHTS``, and
+        ``OPT_GATED_TESTS`` env vars from the current UI state before
         handing off to the process manager.
 
         Args:
@@ -288,10 +288,10 @@ def register_optimise_callbacks(app) -> None:
             return f"Weights must sum to 100% (currently {total}%)."
 
         env = os.environ.copy()
-        env["LAB_SHAPEOPT_TESTS"] = ",".join(test_names)
-        env["LAB_SHAPEOPT_TEST_WEIGHTS"] = json.dumps(test_weights)
+        env["OPT_SELECTED_TESTS"] = ",".join(test_names)
+        env["OPT_TEST_WEIGHTS"] = json.dumps(test_weights)
         if gated_names:
-            env["LAB_SHAPEOPT_GATED_TESTS"] = ",".join(gated_names)
+            env["OPT_GATED_TESTS"] = ",".join(gated_names)
         return _start_proc("optimize", OPTIMIZE_SCRIPT, env)
 
     @app.callback(

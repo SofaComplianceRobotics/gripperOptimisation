@@ -28,7 +28,7 @@ for _key in ("PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE", "PYTHONEXECUTABLE"
 # runSofa, the plugin tree rooted at SOFA_ROOT, the SofaPython3 site-packages
 # and the bundled Python must all come from this same build or plugins fail to
 # load (ABI mismatch).
-_sofa = resolve_sofa_runtime()
+_sofa = resolve_sofa_runtime(prefer_env=False)
 
 os.environ["SOFA_ROOT"] = _sofa["sofa_root"]
 os.environ["RUNSOFA_EXE"] = _sofa["runsofa_exe"]

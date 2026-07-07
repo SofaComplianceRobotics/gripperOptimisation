@@ -85,30 +85,33 @@ def resolve_sofa_root() -> Path:
     )
 
 
-def resolve_sofa_runtime() -> dict:
-    """Resolve every path needed to run SOFA, honouring pre-set env overrides.
+def resolve_sofa_runtime(prefer_env: bool = True) -> dict:
+    """Resolve every path needed to run SOFA.
 
     Returns a dict with string values:
       sofa_root, runsofa_exe, python_dir, python_exe, site_packages.
 
-    Environment variables (SOFA_ROOT, RUNSOFA_EXE, SOFA_PYTHON_PATH,
-    SOFA_PYTHON_EXE, SOFA_SITE_PACKAGES) win when already set — the web
-    launcher and the test suite both rely on that — and the emio-labs build
-    is auto-located only for the missing pieces.
+    With ``prefer_env`` (the default), environment variables (SOFA_ROOT,
+    RUNSOFA_EXE, SOFA_PYTHON_PATH, SOFA_PYTHON_EXE, SOFA_SITE_PACKAGES) win
+    when already set — subprocesses launched by the web launcher and the test
+    suite both rely on that. The web launcher itself passes False so a stale
+    machine-wide SOFA_ROOT/RUNSOFA_EXE (e.g. a hand-downloaded SOFA) can never
+    desync the runtime from the emio-labs build; only the explicit
+    EMIOLABS_SOFA_ROOT override is honoured there.
     """
-    sofa_root = os.environ.get("SOFA_ROOT") or str(resolve_sofa_root())
+
+    def _env(key: str) -> str | None:
+        return os.environ.get(key) if prefer_env else None
+
+    sofa_root = _env("SOFA_ROOT") or str(resolve_sofa_root())
     root = Path(sofa_root)
 
-    runsofa_exe = os.environ.get("RUNSOFA_EXE") or str(
-        root / "bin" / exe_name("runSofa")
-    )
-    python_dir = os.environ.get("SOFA_PYTHON_PATH") or str(root / "bin" / "python")
+    runsofa_exe = _env("RUNSOFA_EXE") or str(root / "bin" / exe_name("runSofa"))
+    python_dir = _env("SOFA_PYTHON_PATH") or str(root / "bin" / "python")
     python_exe = (
-        os.environ.get("SOFA_PYTHON_EXE")
-        or find_bundled_python(python_dir)
-        or sys.executable
+        _env("SOFA_PYTHON_EXE") or find_bundled_python(python_dir) or sys.executable
     )
-    site_packages = os.environ.get("SOFA_SITE_PACKAGES") or str(
+    site_packages = _env("SOFA_SITE_PACKAGES") or str(
         root / "plugins" / "SofaPython3" / "lib" / "python3" / "site-packages"
     )
 

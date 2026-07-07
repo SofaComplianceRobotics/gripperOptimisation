@@ -59,13 +59,11 @@ def register_scene_callbacks(app, catalog: dict) -> None:
         if tid == "scene-watch-btn" and watch_test and watch_test in catalog:
             test_spec = catalog[watch_test]
             extra_env = {
-                "LAB_SHAPEOPT_TEST": watch_test,
-                "LAB_SHAPEOPT_TESTS": watch_test,
-                "LAB_SHAPEOPT_TEST_WEIGHTS": json.dumps({watch_test: 100}),
-                "OPTUNA_RUN_SLOT": str(watch_slot or "1"),
+                "OPT_TEST_NAME": watch_test,
+                "OPT_RUN_SLOT": str(watch_slot or "1"),
             }
             default_stl = LAB_ROOT / "runtime" / "exports" / GRIPPER_COLLISION_STL
             if default_stl.exists():
-                extra_env["OPTUNA_STL_PATH"] = str(default_stl)
+                extra_env["OPT_MESH"] = str(default_stl)
             return _launch_sofa_scene(test_spec.scene_file, extra_env=extra_env)
         return ""

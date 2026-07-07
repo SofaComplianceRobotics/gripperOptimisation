@@ -4,9 +4,9 @@ pytest imports this file before any test module. Three jobs:
 
 1. Put the lab root on sys.path so `import geometry.params` etc. resolve
    when pytest is run from anywhere.
-2. Provide dummy values for the env vars that optimization/config.py
-   requires at import time. Unit tests never launch SOFA, so the values
-   only need to exist, not point anywhere real.
+2. Provide dummy values for the SOFA_* env vars so sofaopt_project.py's
+   runtime resolution never probes the filesystem. Unit tests never launch
+   SOFA, so the values only need to exist, not point anywhere real.
 3. Register a stub `cadquery` module: geometry/transforms/quaternion.py
    imports cadquery but only uses it as a type annotation, and the real
    package targets Python 3.10 which cannot load in this test venv.
@@ -23,9 +23,9 @@ LAB_ROOT = Path(__file__).resolve().parents[1]
 if str(LAB_ROOT) not in sys.path:
     sys.path.insert(0, str(LAB_ROOT))
 
-# optimization/config.py reads these with os.environ[...] at module level,
-# so they must exist before any test imports it. setdefault keeps real
-# values if the shell already has them.
+# resolve_sofa_runtime() honours these before probing for an emio-labs
+# install, so they must exist before any test imports sofaopt_project.
+# setdefault keeps real values if the shell already has them.
 _ENV_DEFAULTS = {
     "SOFA_ROOT": str(LAB_ROOT / "_test_dummy_sofa"),
     "SOFA_PYTHON_PATH": str(LAB_ROOT / "_test_dummy_sofa" / "python"),
