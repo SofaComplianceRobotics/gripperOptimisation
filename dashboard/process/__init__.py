@@ -1,1 +1,1 @@
-"""Process management: running subprocesses for generation and optimization."""
+"""Subprocess management for the Generate tab and scene launchers."""

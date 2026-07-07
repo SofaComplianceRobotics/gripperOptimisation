@@ -1,4 +1,8 @@
-"""Process management: running subprocesses for generation and optimization."""
+"""Process management for the lab's own dashboard tabs.
+
+Owns the Generate-tab subprocesses and the interactive scene launchers.
+The optimizer's Run/Stop lives in sofaopt's dashboard (driven by the
+project's run_script / run_python_exe)."""
 
 import json
 import os
@@ -8,8 +12,6 @@ from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────
 LAB_ROOT = Path(__file__).resolve().parents[2]
-CONFIG_FILE = LAB_ROOT / "config" / "lab_config.jsonc"
-OPTIMIZE_SCRIPT = LAB_ROOT / "optimize.py"
 GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper.py"
 GENERATE_FINE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper_fine.py"
 INVERSE_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_inverse.py"
@@ -35,9 +37,8 @@ def _sofa_python_exe() -> str:
     )
     return exe if exe and os.path.isfile(exe) else sys.executable
 
-# Running subprocesses keyed by role ("optimize", "generate")
+# Running subprocesses keyed by role
 _PROCS: dict[str, subprocess.Popen | None] = {
-    "optimize": None,
     "generate": None,
 }
 
@@ -147,7 +148,6 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
 
     # Derive the emiolabs SOFA root from the executable path (bin/runSofa.exe → sofa/)
     emiolabs_sofa_root = str(Path(runsofa).parents[1])
-    assets_root = str(LAB_ROOT.parent.parent)
 
     env = os.environ.copy()
 
@@ -162,11 +162,16 @@ def _launch_sofa_scene(scene_file: Path, extra_env: dict | None = None) -> str:
     for _k in ("SOFA_SITE_PACKAGES", "SOFA_PYTHON_PATH", "RUNSOFA_EXE"):
         env.pop(_k, None)
 
-    # Ensure LAB_ROOT is on PYTHONPATH so scene files can import launcher and other modules
+    # Ensure LAB_ROOT and the sofaopt package are on PYTHONPATH: scene files
+    # import launcher/labtests from the lab, and sofaopt.scene for scoring —
+    # runSofa's embedded Python doesn't see the bundled Python's site-packages.
+    import sofaopt
+
     pythonpath = env.get("PYTHONPATH", "")
-    lab_root_str = str(LAB_ROOT)
-    if lab_root_str not in pythonpath:
-        env["PYTHONPATH"] = f"{lab_root_str}{os.pathsep}{pythonpath}".rstrip(os.pathsep)
+    for extra in (str(LAB_ROOT), str(Path(sofaopt.__file__).resolve().parents[1])):
+        if extra not in pythonpath:
+            pythonpath = f"{extra}{os.pathsep}{pythonpath}".rstrip(os.pathsep)
+    env["PYTHONPATH"] = pythonpath
 
     if extra_env:
         env.update(extra_env)
@@ -193,15 +198,3 @@ def _write_session_config(recording_test: str) -> None:
         json.dumps({"recording_test": recording_test}, indent=2),
         encoding="utf-8",
     )
-
-
-def _load_config_text() -> str:
-    """Return the contents of the lab configuration file as text.
-
-    Returns:
-        The configuration file contents, or an empty JSON object string on error.
-    """
-    try:
-        return CONFIG_FILE.read_text(encoding="utf-8")
-    except Exception:
-        return "{}"

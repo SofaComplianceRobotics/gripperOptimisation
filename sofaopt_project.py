@@ -220,6 +220,7 @@ PROJECT = SofaOptProject(
     prepare_timeout=GEOMETRY_EXPORT_TIMEOUT,
     stl_delete_delay=30.0,
     run_script=LAB_ROOT / "optimize.py",
+    run_python_exe=Path(_SOFA["python_exe"]) if _SOFA["python_exe"] else None,
     config_file=LAB_ROOT / "config" / "lab_config.jsonc",
     title="Lab ShapeOPT",
     failed_preview_image=_failed_preview_image(),

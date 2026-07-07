@@ -2,7 +2,7 @@
 
 from dash import dcc, html
 
-from .styles import LOG_STYLE
+from sofaopt.dashboard.ui.tabs.styles import LOG_STYLE
 
 
 def build_generate_tab() -> html.Div:

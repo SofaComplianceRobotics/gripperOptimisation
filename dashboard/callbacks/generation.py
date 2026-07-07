@@ -33,7 +33,7 @@ def _open_in_os(path: Path) -> None:
         subprocess.Popen(["xdg-open", str(path)])
 
 
-def register_generation_callbacks(app, _catalog: dict) -> None:
+def register_generation_callbacks(app) -> None:
     """Register generation tab callbacks: run/stop buttons and file open actions."""
 
     @app.callback(
