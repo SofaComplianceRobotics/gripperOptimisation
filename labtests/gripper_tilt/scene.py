@@ -25,9 +25,9 @@ from launcher.bootstrap import bootstrap_lab
 
 SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
-from labtests.core.scene_config import OptunaMeta  # noqa: E402
+from sofaopt.scene import open_trial  # noqa: E402
 
-META = OptunaMeta.from_env()
+TRIAL = open_trial()
 
 # Waypoints: list of [[x,y,z, qx,qy,qz,qw], hold_frames]
 WAYPOINTS = [
@@ -44,7 +44,6 @@ def createScene(rootnode):
 
     from labtests.core.base_scene import build_base_scene
     from labtests.core.modules.effector_target import setup as setup_effector
-    from labtests.core.scoring import ScoreWriter
     from parts.controllers.assemblycontroller import AssemblyController  # type: ignore
 
     nodes = build_base_scene(rootnode, inverse=True)
@@ -61,12 +60,7 @@ def createScene(rootnode):
         program_file=PROGRAM_FILE if os.path.exists(PROGRAM_FILE) else None,
     )
 
-    writer = ScoreWriter(
-        rootnode,
-        run_info=META.run_info,
-        trial_state_path=META.trial_state_path,
-        run_slot=META.run_slot,
-    )
+    writer = TRIAL.attach(rootnode)
 
     assembly_controller = nodes.emio.getObject("AssemblyController")
 
@@ -88,7 +82,7 @@ def createScene(rootnode):
                 if not writer.finished:
                     total_penalty = sum(self.max_y_spreads)
                     score = 40.0 - total_penalty
-                    writer.write_score_and_stop(
+                    writer.write_score(
                         score,
                         f"tilt sequence complete — score={score:.3f} (40 - {self.max_y_spreads[0]:.3f} - {self.max_y_spreads[1]:.3f})",
                     )

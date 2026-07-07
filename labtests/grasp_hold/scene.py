@@ -42,7 +42,6 @@ def createScene(rootnode):
     from labtests.core.playback_controller import make_playback_controller
     from labtests.core.plugins import add_required_plugins
     from labtests.core.scene_config import PlaybackConfig
-    from labtests.core.scoring import ScoreWriter
 
     cfg = PlaybackConfig.from_env(LAB_ROOT)
 
@@ -68,12 +67,7 @@ def createScene(rootnode):
 
     playback = setup_playback(nodes.emio, RECORD_FILE)
 
-    writer = ScoreWriter(
-        rootnode,
-        run_info=cfg.meta.run_info,
-        trial_state_path=cfg.meta.trial_state_path,
-        run_slot=cfg.meta.run_slot,
-    )
+    writer = cfg.trial.attach(rootnode)
 
     Base = make_playback_controller(Sofa.Core.Controller)
     nodes.simulation.addObject(

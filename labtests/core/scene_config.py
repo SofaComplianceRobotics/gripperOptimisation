@@ -13,6 +13,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from sofaopt.scene import Trial, open_trial
+
 from labtests.core import scene_defaults as defaults
 from names import CENTERPARTS_DIRNAME, GRIPPER_COLLISION_STL
 
@@ -30,47 +32,6 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 @dataclass(frozen=True)
-class OptunaMeta:
-    """Optuna/scoring metadata required by every test.
-
-    Use OptunaMeta.from_env() in createScene() (or at module level after path
-    bootstrap).  All tests need these five values to write scores.
-    """
-
-    trial_state_path: str | None
-    run_slot: int
-    gen: int
-    trial: int
-    run: int
-
-    @classmethod
-    def from_env(cls) -> "OptunaMeta":
-        """Construct from the standard OPTUNA_* environment variables.
-
-        Each value is read independently so a manual launch (which sets
-        OPTUNA_RUN_SLOT to pick a cube size but has no trial-state file to write
-        to) still honours the selected slot. Missing vars default to 0.
-        """
-
-        def _int_env(name: str) -> int:
-            raw = os.environ.get(name)
-            return int(raw) if raw not in (None, "") else 0
-
-        return cls(
-            trial_state_path=os.environ.get("OPTUNA_TRIAL_STATE_PATH"),
-            run_slot=_int_env("OPTUNA_RUN_SLOT"),
-            gen=_int_env("OPTUNA_GEN"),
-            trial=_int_env("OPTUNA_TRIAL"),
-            run=_int_env("OPTUNA_RUN"),
-        )
-
-    @property
-    def run_info(self) -> dict:
-        """Return a dict with gen/trial/run keys for status payloads."""
-        return {"gen": self.gen, "trial": self.trial, "run": self.run}
-
-
-@dataclass(frozen=True)
 class PlaybackConfig:
     """All env-var config for direct-mode (motor-playback) cube-pick tests.
 
@@ -81,8 +42,8 @@ class PlaybackConfig:
     without touching any value here.
     """
 
-    # ── Optuna metadata ───────────────────────────────────────────────────────
-    meta: OptunaMeta
+    # ── Optimizer trial (params, run identity, score writing) ────────────────
+    trial: Trial
     # ── Paths ─────────────────────────────────────────────────────────────────
     gripper_mesh_path: str
     # ── Scene physics ─────────────────────────────────────────────────────────
@@ -115,9 +76,9 @@ class PlaybackConfig:
         """Construct from environment variables, resolving paths relative to lab_root."""
         assets_root = lab_root.parent.parent
         return cls(
-            meta=OptunaMeta.from_env(),
+            trial=open_trial(),
             gripper_mesh_path=os.environ.get(
-                "OPTUNA_STL_PATH",
+                "OPT_MESH",
                 str(
                     assets_root
                     / "data"

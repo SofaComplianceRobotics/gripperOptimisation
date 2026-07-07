@@ -121,7 +121,7 @@ def check_spawn_contact_window(ctrl, sim_time: float) -> None:
     if ctrl.spawn_contact_check_frames <= 0 or ctrl.writer.finished:
         return
     if spawn_overlap_detected(ctrl.rootnode, ctrl.gripper_collision):
-        ctrl.writer.write_score_and_stop(
+        ctrl.writer.write_score(
             ctrl.cfg.early_contact_penalty,
             f"cube touched gripper at spawn window t={sim_time:.2f}s",
         )

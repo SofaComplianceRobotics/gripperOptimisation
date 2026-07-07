@@ -47,14 +47,12 @@ CUBE_SIZES = (
 def _cube_scale_for_run() -> list:
     """Return the cube scale for this run, ordered 8 → 12 → 14.
 
-    Keyed off LAB_SHAPEOPT_TEST_RUN_INDEX (the 1-based per-test index the
-    optimizer sets), so the size depends only on which of the three test runs
-    this is — not on the global run slot. Falls back to OPTUNA_RUN_SLOT for
-    manual launches, then to the first size if neither is set.
+    Keyed off OPT_TEST_RUN_INDEX (the 1-based per-test index the optimizer
+    sets), so the size depends only on which of the three test runs this is —
+    not on the global run slot. Falls back to OPT_RUN_SLOT for manual
+    launches, then to the first size if neither is set.
     """
-    raw = os.environ.get("LAB_SHAPEOPT_TEST_RUN_INDEX") or os.environ.get(
-        "OPTUNA_RUN_SLOT"
-    )
+    raw = os.environ.get("OPT_TEST_RUN_INDEX") or os.environ.get("OPT_RUN_SLOT")
     try:
         index = int(raw)
     except (TypeError, ValueError):
@@ -73,13 +71,12 @@ def createScene(rootnode):
     from labtests.core.playback_controller import make_playback_controller
     from labtests.core.plugins import add_required_plugins
     from labtests.core.scene_config import PlaybackConfig
-    from labtests.core.scoring import ScoreWriter
 
     cfg = PlaybackConfig.from_env(LAB_ROOT)
     cube_scale = _cube_scale_for_run()
 
     print(
-        f"[cube] random_cube_pick slot={cfg.meta.run_slot} gen={cfg.meta.gen} "
+        f"[cube] random_cube_pick slot={cfg.trial.run_slot} gen={cfg.trial.gen} "
         f"scale={cube_scale} mass={cfg.cube_mass_start} kg"
     )
 
@@ -104,12 +101,7 @@ def createScene(rootnode):
 
     playback = setup_playback(nodes.emio, RECORD_FILE)
 
-    writer = ScoreWriter(
-        rootnode,
-        run_info=cfg.meta.run_info,
-        trial_state_path=cfg.meta.trial_state_path,
-        run_slot=cfg.meta.run_slot,
-    )
+    writer = cfg.trial.attach(rootnode)
 
     Base = make_playback_controller(Sofa.Core.Controller)
     nodes.simulation.addObject(

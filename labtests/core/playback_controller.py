@@ -206,9 +206,9 @@ def make_playback_controller(SofaController):
                 pruned: If True, write pruned state regardless of score.
             """
             if pruned or score is None:
-                self.writer.write_pruned_and_stop(reason)
+                self.writer.prune(reason)
                 return
-            self.writer.write_score_and_stop(score, reason)
+            self.writer.write_score(score, reason)
 
         # ─────────────────────────────────────────────────────────────────────
 
