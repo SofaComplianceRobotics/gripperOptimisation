@@ -22,8 +22,8 @@ During optimization, one leg shape is generated per candidate and plugged into a
 
 ##### Where do the search bounds come from?
 
-Every parameter carries its own metadata in `geometry/params.py` (and `geometry/leg_params.py` for the legs): a search range `[min, max]` for the optimizer and validity rules (for instance, a wall thickness must stay positive).
-Not all parameters are searched: only the ones carrying a search range are tunable at all (11 currently); `config/lab_config.optimization.json` lists which of those the optimizer is allowed to touch right now. Everything else — ring dimensions, pincer profile, mesh sizing — is permanently fixed at its configured value.
+Every parameter carries its own metadata in `geometry/params.py` (and `geometry/leg_params.py` for the legs): a search range `[min, max]` for the optimizer and validity rules (for instance, a wall thickness must stay positive, and the three plateau angles must fit inside a 45° budget).
+Not all parameters are searched: only the ones carrying a search range are tunable at all (21 currently); `config/lab_config.optimization.json` lists which of those the optimizer is allowed to touch right now. Everything else — pincer cross-section shape details, mesh sizing — is permanently fixed at its configured value.
 You can inspect all of this in the **Parameter Bounds** tab of the dashboard.
 
 :::: exercise

@@ -98,6 +98,36 @@ def _scene_env() -> dict[str, str]:
     return env
 
 
+def _constrain_plateaus(params: dict) -> dict:
+    """Keep the three cylinder plateaus inside the 45° budget.
+
+    Plateau C may use only whatever angle A and B leave available; the value
+    the optimizer recorded is untouched, only the value used for generation.
+    """
+    if "cylinder_plateau_C_deg" in params:
+        max_c = max(
+            0.0,
+            45.0
+            - max(
+                params.get("cylinder_plateau_A_deg", 0.0),
+                params.get("cylinder_plateau_B_deg", 0.0),
+            ),
+        )
+        params["cylinder_plateau_C_deg"] = round(
+            min(params["cylinder_plateau_C_deg"], max_c), 3
+        )
+    return params
+
+
+def _constrain_params(params: dict) -> dict:
+    """Apply every params-clamping rule for one trial.
+
+    The leg needs no clamp: its cross-section is fixed at the stock 10x5
+    that the gripper pocket was designed for (see geometry/leg_params.py).
+    """
+    return _constrain_plateaus(params)
+
+
 def _run_generation_script(
     script: Path, config_path: Path, extra_args: list[str]
 ) -> None:
@@ -306,6 +336,7 @@ PROJECT = SofaOptProject(
     gui_mode="batch",
     float_step=0.1,
     prepare_trial=_prepare_trial,
+    constrain_params=_constrain_params,
     n_parallel=5,
     n_generations=400,
     cmaes_sigma0=0.3,  # concentrate around the seeded gripper (normalized space)

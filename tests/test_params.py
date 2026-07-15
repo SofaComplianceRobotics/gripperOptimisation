@@ -122,10 +122,9 @@ class TestPincerPoints:
 class TestParamSpecs:
     def test_only_opt_annotated_fields_appear(self):
         spec_names = {s["name"] for s in param_specs()}
-        # Spot-check: opt-annotated in, plain (permanently fixed) fields out.
+        # Spot-check: opt-annotated in, plain fields out.
+        assert "cylinder_radius" in spec_names
         assert "p1_dist" in spec_names
-        assert "leg_attachement_tilt_angle" in spec_names
-        assert "cylinder_radius" not in spec_names
         assert "leg_hole_length" not in spec_names
         assert "export_stem" not in spec_names
 

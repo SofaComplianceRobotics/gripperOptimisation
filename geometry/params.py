@@ -43,16 +43,36 @@ class ModelParams:
     """
 
     # Ring
-    cylinder_radius: float = field(default=27.2, metadata={"check": "positive"})
-    cylinder_hole_thickness: float = field(
-        default=3.4, metadata={"check": "positive"}
+    cylinder_radius: float = field(
+        default=27.2,
+        metadata={"opt": {"type": "float", "min": 26, "max": 28}, "check": "positive"},
     )
-    cylinder_height_A: float = field(default=1.5, metadata={"check": "positive"})
-    cylinder_height_B: float = field(default=4.3, metadata={"check": "positive"})
-    cylinder_height_C: float = field(default=3.6, metadata={"check": "positive"})
-    cylinder_plateau_A_deg: float = 10.8
-    cylinder_plateau_B_deg: float = 5.6
-    cylinder_plateau_C_deg: float = 30.0
+    cylinder_hole_thickness: float = field(
+        default=3.4,
+        metadata={"opt": {"type": "float", "min": 1, "max": 5}, "check": "positive"},
+    )
+    cylinder_height_A: float = field(
+        default=1.5,
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
+    )
+    cylinder_height_B: float = field(
+        default=4.3,
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
+    )
+    cylinder_height_C: float = field(
+        default=3.6,
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
+    )
+    cylinder_plateau_A_deg: float = field(
+        default=10.8, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
+    )
+    cylinder_plateau_B_deg: float = field(
+        default=5.6, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
+    )
+    # Effective max = 45 - max(plateau_A, plateau_B); clamped in the optimizer after sampling.
+    cylinder_plateau_C_deg: float = field(
+        default=30.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
+    )
 
     # Leg attachment
     leg_hole_length: float = field(default=10.0, metadata={"check": "positive"})
@@ -79,8 +99,17 @@ class ModelParams:
     )
 
     # Pincers
-    pincer_profile_width: float = field(default=5.5, metadata={"check": "positive"})
-    pincer_profile_height: float = field(default=13.8, metadata={"check": "positive"})
+    pincer_profile_width: float = field(
+        default=5.5,
+        metadata={"opt": {"type": "float", "min": 2.0, "max": 8.0}, "check": "positive"},
+    )
+    pincer_profile_height: float = field(
+        default=13.8,
+        metadata={
+            "opt": {"type": "float", "min": 6.0, "max": 16.0},
+            "check": "positive",
+        },
+    )
     pincer_profile_samples: int = field(default=4, metadata={"check": ("ge", 4)})
     pincer_round_cap_segments: int = field(default=3, metadata={"check": ("ge", 2)})
     pincer_path_scale: float = field(default=1.0, metadata={"check": "positive"})
