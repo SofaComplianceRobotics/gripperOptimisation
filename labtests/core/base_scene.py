@@ -132,9 +132,14 @@ def build_base_scene(
         emio_kwargs["centerPartYoungModulus"] = ym
         print(f"[gripper] centerPartYoungModulus = {ym}")
 
+    # Trial-generated leg (geometry/leg_geometry.py, written by the prepare
+    # hook in sofaopt_project.py). Falls back to the stock leg for manual
+    # runs and no-trial scenes where no OPT_LEG_NAME is set.
+    leg_name = os.environ.get("OPT_LEG_NAME", LEG_NAME)
+
     emio = Emio(
         name="Emio",
-        legsName=[LEG_NAME],
+        legsName=[leg_name],
         legsModel=["beam"],
         legsPositionOnMotor=[
             "counterclockwisedown",

@@ -1,6 +1,7 @@
 """Consistency checks for the cross-component name contract in names.py."""
 
 from generation._gripper_common import params_from_config
+from geometry.leg_params import LegParams
 from geometry.params import ModelParams
 from names import (
     CENTERPARTS_DIRNAME,
@@ -8,6 +9,7 @@ from names import (
     GRIPPER_NAME,
     GRIPPER_PRINT_NAME,
     LEG_NAME,
+    LEG_WORKING_NAME,
 )
 
 
@@ -27,5 +29,19 @@ def test_fine_export_stem_never_overwrites_sim_mesh():
 
 
 def test_names_are_nonempty_strings():
-    for name in (GRIPPER_NAME, GRIPPER_PRINT_NAME, LEG_NAME, CENTERPARTS_DIRNAME):
+    for name in (
+        GRIPPER_NAME,
+        GRIPPER_PRINT_NAME,
+        LEG_NAME,
+        LEG_WORKING_NAME,
+        CENTERPARTS_DIRNAME,
+    ):
         assert isinstance(name, str) and name
+
+
+def test_default_leg_export_stem_is_the_working_name():
+    # The manual "Generate" button and the dashboard's "Launch Test with UI"
+    # must never overwrite the shared stock LEG_NAME (blueleg) other labs
+    # also read from data/meshes/legs/.
+    assert LegParams().export_stem == LEG_WORKING_NAME
+    assert LEG_WORKING_NAME != LEG_NAME

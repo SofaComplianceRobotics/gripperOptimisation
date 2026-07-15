@@ -6,7 +6,7 @@ from pathlib import Path
 
 from dash import Input, Output, State, ctx
 
-from names import GRIPPER_COLLISION_STL
+from names import GRIPPER_COLLISION_STL, LEG_WORKING_NAME, LEGS_DIRNAME
 from dashboard.process.process_manager import (
     INVERSE_SCENE,
     RECORDING_SCENE,
@@ -16,6 +16,7 @@ from dashboard.process.process_manager import (
 
 
 LAB_ROOT = Path(__file__).resolve().parents[2]
+LEGS_DIR = LAB_ROOT.parent.parent / "data" / "meshes" / LEGS_DIRNAME
 
 
 def register_scene_callbacks(app, catalog: dict) -> None:
@@ -64,5 +65,13 @@ def register_scene_callbacks(app, catalog: dict) -> None:
             default_stl = LAB_ROOT / "runtime" / "exports" / GRIPPER_COLLISION_STL
             if default_stl.exists():
                 extra_env["OPT_MESH"] = str(default_stl)
+            # Same idea for the leg: use the lab's own last-generated leg
+            # (from the Generate button) instead of silently falling back to
+            # the stock blueleg baked into base_scene.py. Both files (beam
+            # positions + visual mesh) must be present — see parts.leg.Leg.
+            if (LEGS_DIR / f"{LEG_WORKING_NAME}.stl").exists() and (
+                LEGS_DIR / f"{LEG_WORKING_NAME}.txt"
+            ).exists():
+                extra_env["OPT_LEG_NAME"] = LEG_WORKING_NAME
             return _launch_sofa_scene(test_spec.scene_file, extra_env=extra_env)
         return ""

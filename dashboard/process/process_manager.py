@@ -12,7 +12,7 @@ from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────
 LAB_ROOT = Path(__file__).resolve().parents[2]
-GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper.py"
+GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_all.py"
 GENERATE_FINE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper_fine.py"
 INVERSE_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_inverse.py"
 RECORDING_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_recording.py"

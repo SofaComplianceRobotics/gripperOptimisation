@@ -222,7 +222,9 @@ runtime/modules/site-packages/
 runtime/recordings/
 runtime/trials/
 runtime/gripper_opt.db
+runtime/study.db
 runtime/exports/
+runtime/leg_preview/
 notion_pages/
 
 # Claude Code

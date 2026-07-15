@@ -25,14 +25,22 @@ if str(LAB_ROOT) not in sys.path:
 import sofaopt
 from sofaopt import SofaOptProject, TestSpec, TrialPrep, param_specs_from_dataclass
 
+from geometry.leg_params import LegParams
 from geometry.params import ModelParams
 from labtests.registry import get_test_catalog
 from launcher.bootstrap import resolve_sofa_runtime
-from names import CENTERPARTS_DIRNAME, GRIPPER_COLLISION_STL, GRIPPER_NAME
+from names import (
+    CENTERPARTS_DIRNAME,
+    GRIPPER_COLLISION_STL,
+    GRIPPER_NAME,
+    LEGS_DIRNAME,
+)
 
 ASSETS_ROOT = LAB_ROOT.parent.parent
 CENTERPARTS_DIR = ASSETS_ROOT / "data" / "meshes" / CENTERPARTS_DIRNAME
+LEGS_DIR = ASSETS_ROOT / "data" / "meshes" / LEGS_DIRNAME
 GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper.py"
+GENERATE_LEG_SCRIPT = LAB_ROOT / "generation" / "generate_leg.py"
 
 GEOMETRY_EXPORT_TIMEOUT = 20.0  # seconds before generate_gripper.py is considered stuck
 
@@ -90,46 +98,23 @@ def _scene_env() -> dict[str, str]:
     return env
 
 
-def _constrain_plateaus(params: dict) -> dict:
-    """Keep the three cylinder plateaus inside the 45° budget.
+def _run_generation_script(
+    script: Path, config_path: Path, extra_args: list[str]
+) -> None:
+    """Run a generation script under the emio-labs bundled Python.
 
-    Plateau C may use only whatever angle A and B leave available; the value
-    the optimizer recorded is untouched, only the value used for generation.
+    Never the dashboard's own interpreter — its gmsh/cadquery can differ or
+    fail to load. Raises on timeout/failure so sofaopt hard-fails the trial.
     """
-    if "cylinder_plateau_C_deg" in params:
-        max_c = max(
-            0.0,
-            45.0
-            - max(
-                params.get("cylinder_plateau_A_deg", 0.0),
-                params.get("cylinder_plateau_B_deg", 0.0),
-            ),
-        )
-        params["cylinder_plateau_C_deg"] = round(
-            min(params["cylinder_plateau_C_deg"], max_c), 3
-        )
-    return params
-
-
-def _prepare_gripper_trial(params: dict, trial_dir: Path) -> TrialPrep:
-    """Turn sampled parameters into a gripper mesh for one trial.
-
-    Writes the full config, runs generate_gripper.py under the emio-labs
-    bundled Python (never the dashboard's own interpreter — its gmsh/cadquery
-    can differ or fail to load), and stages the outputs:
-
-    - the collision STL stays in CENTERPARTS_DIR under a trial-unique name so
-      parallel SOFA instances never clash, passed to the scene via OPT_MESH;
-    - a copy of the visual STL goes into the trial dir for the preview render.
-
-    Raises on generator timeout/failure — sofaopt hard-fails the trial.
-    """
-    config_path = trial_dir / "lab_config.jsonc"
-    config_path.write_text(json.dumps(params, indent=2), encoding="utf-8")
-
     try:
         result = subprocess.run(
-            [_SOFA["python_exe"], str(GENERATE_SCRIPT), "--config", str(config_path)],
+            [
+                _SOFA["python_exe"],
+                str(script),
+                "--config",
+                str(config_path),
+                *extra_args,
+            ],
             cwd=str(LAB_ROOT),
             capture_output=True,
             text=True,
@@ -139,17 +124,31 @@ def _prepare_gripper_trial(params: dict, trial_dir: Path) -> TrialPrep:
         )
     except subprocess.TimeoutExpired as e:
         raise RuntimeError(
-            f"generate_gripper.py timed out after {GEOMETRY_EXPORT_TIMEOUT:.1f}s.\n"
+            f"{script.name} timed out after {GEOMETRY_EXPORT_TIMEOUT:.1f}s.\n"
             f"stdout (tail):\n{(e.stdout or '')[-1500:]}\n"
             f"stderr (tail):\n{(e.stderr or '')[-1500:]}"
         ) from e
 
     if result.returncode != 0:
         raise RuntimeError(
-            f"generate_gripper.py failed (returncode={result.returncode}).\n"
+            f"{script.name} failed (returncode={result.returncode}).\n"
             f"stdout (tail):\n{(result.stdout or '')[-2000:]}\n"
             f"stderr (tail):\n{(result.stderr or '')[-2000:]}"
         )
+
+
+def _prepare_gripper_mesh(config_path: Path, trial_dir: Path) -> tuple[Path, Path]:
+    """Turn sampled parameters into a gripper mesh for one trial.
+
+    Stages the outputs:
+    - the collision STL stays in CENTERPARTS_DIR under a trial-unique name so
+      parallel SOFA instances never clash, passed to the scene via OPT_MESH;
+    - a copy of the visual STL goes into the trial dir for the preview render.
+
+    Returns:
+        (collision_stl, visual_stl_copy) paths.
+    """
+    _run_generation_script(GENERATE_SCRIPT, config_path, [])
 
     trial_id = f"{trial_dir.parent.name}_{trial_dir.name}"
 
@@ -165,10 +164,85 @@ def _prepare_gripper_trial(params: dict, trial_dir: Path) -> TrialPrep:
     visual_stl_copy = trial_dir / "visual.stl"
     shutil.copy2(visual_src, visual_stl_copy)
 
+    return collision_stl, visual_stl_copy
+
+
+def _prepare_leg_mesh(config_path: Path, trial_dir: Path) -> tuple[str, Path, Path]:
+    """Turn sampled leg parameters into positions/mesh for one trial.
+
+    The leg files are written directly under LEGS_DIR (where parts.leg.Leg
+    looks them up by name) under a trial-unique stem so parallel SOFA
+    instances never clash.
+
+    Returns:
+        (leg_name, txt_path, stl_path).
+    """
+    trial_id = f"{trial_dir.parent.name}_{trial_dir.name}"
+    leg_name = f"leg_{trial_id}"
+    _run_generation_script(GENERATE_LEG_SCRIPT, config_path, ["--name", leg_name])
+
+    txt_path = LEGS_DIR / f"{leg_name}.txt"
+    stl_path = LEGS_DIR / f"{leg_name}.stl"
+    if not txt_path.exists() or not stl_path.exists():
+        raise RuntimeError("Leg positions/STL not found after generation.")
+
+    return leg_name, txt_path, stl_path
+
+
+def _render_combined_preview(gripper_stl: Path, leg_stl: Path, out_png: Path) -> None:
+    """Render the gripper and the leg side by side into one PNG for one trial.
+
+    sofaopt's own preview pipeline only supports a single image per trial
+    (TrialPrep.preview_image), so both parts are composited here rather than
+    passed through separately. Best-effort: a render failure just means no
+    preview for this trial, not a failed trial (matches how sofaopt's own
+    STL-to-PNG rendering treats preview failures).
+    """
+    import pyvista as pv
+
+    plotter = None
+    try:
+        plotter = pv.Plotter(off_screen=True, shape=(1, 2), window_size=(1600, 600))
+        for col, (title, stl_path) in enumerate(
+            (("Gripper", gripper_stl), ("Leg", leg_stl))
+        ):
+            plotter.subplot(0, col)
+            mesh = pv.read(str(stl_path))
+            plotter.add_mesh(
+                mesh, color="#4a90d9", pbr=True, metallic=0.1, roughness=0.4
+            )
+            plotter.add_light(pv.Light(position=(200, 200, 400), intensity=0.8))
+            plotter.add_text(title, font_size=14)
+            plotter.background_color = "white"
+        plotter.screenshot(str(out_png))
+    except Exception as e:
+        print(f"[warn] Combined preview render failed: {e}")
+    finally:
+        if plotter is not None:
+            plotter.close()
+
+
+def _prepare_trial(params: dict, trial_dir: Path) -> TrialPrep:
+    """Turn one trial's sampled parameters into a gripper mesh and a leg
+    mesh, both feeding the same existing test scenes (grasp-hold, random
+    cube pick, gripper tilt) — the legs plug into the gripper's leg
+    attachments there, so leg shape affects those scores without any
+    leg-specific test being added.
+    """
+    config_path = trial_dir / "lab_config.jsonc"
+    config_path.write_text(json.dumps(params, indent=2), encoding="utf-8")
+
+    collision_stl, visual_stl_copy = _prepare_gripper_mesh(config_path, trial_dir)
+    leg_name, leg_txt, leg_stl = _prepare_leg_mesh(config_path, trial_dir)
+
+    combined_preview = trial_dir / "preview_combined.png"
+    _render_combined_preview(visual_stl_copy, leg_stl, combined_preview)
+    preview_image = combined_preview if combined_preview.exists() else visual_stl_copy
+
     return TrialPrep(
-        env={"OPT_MESH": str(collision_stl)},
-        cleanup=[collision_stl, visual_stl_copy],
-        preview_image=visual_stl_copy,
+        env={"OPT_MESH": str(collision_stl), "OPT_LEG_NAME": leg_name},
+        cleanup=[collision_stl, visual_stl_copy, leg_txt, leg_stl, combined_preview],
+        preview_image=preview_image,
     )
 
 
@@ -199,17 +273,39 @@ def _failed_preview_image() -> Path | None:
     return None
 
 
+def _selected_param_names() -> set[str] | None:
+    selection_path = LAB_ROOT / "config" / "lab_config.optimization.json"
+    if not selection_path.exists():
+        return None
+    try:
+        data = json.loads(selection_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if isinstance(data, list):
+        return {str(name) for name in data}
+    if isinstance(data, dict):
+        raw = data.get("optimized_params", [])
+        if isinstance(raw, list):
+            return {str(name) for name in raw}
+    return None
+
+
+_SELECTED_PARAM_NAMES = _selected_param_names()
+
+
 PROJECT = SofaOptProject(
     name="lab_shapeOPT",
     work_dir=LAB_ROOT,
-    params=param_specs_from_dataclass(ModelParams()),
+    params=param_specs_from_dataclass(
+        ModelParams(), selected_names=_SELECTED_PARAM_NAMES
+    )
+    + param_specs_from_dataclass(LegParams(), selected_names=_SELECTED_PARAM_NAMES),
     tests=_tests_from_registry(),
     runsofa_exe=Path(_SOFA["runsofa_exe"]),
     sofa_env=_scene_env(),
     gui_mode="batch",
     float_step=0.1,
-    prepare_trial=_prepare_gripper_trial,
-    constrain_params=_constrain_plateaus,
+    prepare_trial=_prepare_trial,
     n_parallel=5,
     n_generations=400,
     cmaes_sigma0=0.3,  # concentrate around the seeded gripper (normalized space)
@@ -217,7 +313,10 @@ PROJECT = SofaOptProject(
     hard_fail_score=float(os.environ.get("HARD_FAIL_SCORE", "-3.0")),
     max_active_sofa_procs=12,
     sofa_realtime_timeout=200.0,
-    prepare_timeout=GEOMETRY_EXPORT_TIMEOUT,
+    # prepare_trial now runs two sequential subprocesses (gripper, then leg
+    # generation), each individually bounded by GEOMETRY_EXPORT_TIMEOUT, so
+    # the outer sofaopt-level budget must cover both.
+    prepare_timeout=2 * GEOMETRY_EXPORT_TIMEOUT,
     stl_delete_delay=30.0,
     run_script=LAB_ROOT / "optimize.py",
     run_python_exe=Path(_SOFA["python_exe"]) if _SOFA["python_exe"] else None,

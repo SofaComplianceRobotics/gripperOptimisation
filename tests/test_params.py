@@ -122,9 +122,10 @@ class TestPincerPoints:
 class TestParamSpecs:
     def test_only_opt_annotated_fields_appear(self):
         spec_names = {s["name"] for s in param_specs()}
-        # Spot-check: opt-annotated in, plain fields out.
-        assert "cylinder_radius" in spec_names
+        # Spot-check: opt-annotated in, plain (permanently fixed) fields out.
         assert "p1_dist" in spec_names
+        assert "leg_attachement_tilt_angle" in spec_names
+        assert "cylinder_radius" not in spec_names
         assert "leg_hole_length" not in spec_names
         assert "export_stem" not in spec_names
 
@@ -138,9 +139,9 @@ class TestParamSpecs:
             )
 
     def test_defaults_come_from_the_given_instance(self):
-        base = ModelParams(cylinder_radius=99.0)
+        base = ModelParams(p1_dist=44.0)
         specs = {s["name"]: s for s in param_specs(base)}
-        assert specs["cylinder_radius"]["default"] == 99.0
+        assert specs["p1_dist"]["default"] == 44.0
 
     def test_active_specs_contain_their_default(self):
         """An active search range that excludes its own default is a config smell."""

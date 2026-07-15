@@ -1,0 +1,15 @@
+{
+  "optimized_params": [
+    "leg_attachement_tilt_angle",
+    "p0_hout_dist",
+    "p0_hout_angle_deg",
+    "p1_dist",
+    "p1_angle_deg",
+    "p1_hin_dist",
+    "p1_hin_angle_deg",
+    "leg_p0_hout_dist",
+    "leg_p1_dist",
+    "leg_p1_angle_deg",
+    "leg_p1_hin_dist"
+  ]
+}

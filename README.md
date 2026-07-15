@@ -20,7 +20,7 @@ Dependencies are managed by EmioLabs. Additionally, install the optimization fra
 pip install -e path/to/SofaOptimisation[dashboard,preview]
 ```
 
-If running outside the platform, also install the packages used across `geometry/` and `generation/` manually (CadQuery, gmsh, pyvista, matplotlib).
+If running outside the platform, also install the packages used across `geometry/` and `generation/` manually (CadQuery, gmsh, pyvista, matplotlib, `beziers`, `scipy`).
 
 ---
 
@@ -81,7 +81,8 @@ lab_shapeOPT/
 
 ## Features
 
-- Parametric gripper geometry (~25 parameters: pincer shape, leg dimensions, tilt angles, etc.)
+- Parametric gripper geometry (~25 parameters: pincer shape, leg attachment dimensions, tilt angles, etc.)
+- Parametric leg geometry (3 params: length, middle curvature via one control point) — default reproduces the stock blueleg, motor clip fused on every export; one shape per trial, plugged into all four of the gripper's leg attachments, optimized in the same trial as the gripper (no separate scoring)
 - CMA-ES evolutionary optimization via Optuna — automatic search across generations (provided by sofaopt)
 - SOFA simulation integration — each candidate is physically evaluated for grasp success
 - Parallel trial execution with process throttling and subprocess cleanup
