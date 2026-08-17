@@ -47,9 +47,15 @@ build.
 
 **Steps to reproduce**
 
-Minimal repro (attached as `minimal_repro.py`, no project-specific
-dependencies, only stock SOFA components): a single rigid cube dropped onto
-a fixed rigid floor under gravity.
+Minimal repro (attached as `minimal_repro.py` plus its two mesh files,
+`cube.obj` and `floor.obj`; no project-specific Python code, only stock SOFA
+components): a single rigid cube dropped onto a fixed rigid floor under
+gravity. The two OBJ files are SOFA's own bundled example meshes
+(`share/sofa/mesh/cube.obj`, `share/sofa/mesh/floor.obj` in the tested
+distribution), copied alongside the script rather than relied on through
+SOFA's default resource search path, so a from-source checkout without that
+`share/` tree wired in still reproduces this rather than hitting a
+file-not-found unrelated to the actual bug.
 
 ```txt
 runSofa -l SofaPython3 minimal_repro.py
@@ -62,11 +68,18 @@ batches of 10), never 0%.
 
 ```python
 """
-minimal_repro.py: standalone, dependency-free SOFA scene reproducing the
-run-to-run determinism bug. No project-specific imports, only stock SOFA
+minimal_repro.py: standalone SOFA scene reproducing the run-to-run
+determinism bug. No project-specific Python imports, only stock SOFA
 components. A rigid cube drops onto a fixed rigid floor under gravity;
 launching this exact scene twice (same process or two separate processes)
 does not always produce identical results.
+
+Needs cube.obj and floor.obj (attached alongside this script) in the same
+directory. Those are SOFA's own bundled example meshes
+(share/sofa/mesh/cube.obj, share/sofa/mesh/floor.obj in the tested
+distribution), copied here rather than relied on via SOFA's default
+resource search path, so this reproduces the same way from a from-source
+checkout that does not happen to have that share/ tree wired in.
 
 Usage:
     runSofa -l SofaPython3 minimal_repro.py
@@ -84,6 +97,16 @@ analysis).
 """
 
 from __future__ import annotations
+
+import os
+
+# Resolve relative to this script's own directory, not the process's current
+# working directory or SOFA's DataRepository search path, so this loads the
+# cube.obj/floor.obj attached alongside this file regardless of how or from
+# where it gets launched.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+CUBE_OBJ = os.path.join(_HERE, "cube.obj")
+FLOOR_OBJ = os.path.join(_HERE, "floor.obj")
 
 
 def createScene(rootNode):
@@ -152,7 +175,7 @@ def createScene(rootNode):
     )
     cube.addObject("UniformMass", vertexMass=[0.02, 1.0, cube_inertia])
     collision = cube.addChild("collision")
-    collision.addObject("MeshOBJLoader", name="loader", filename="mesh/cube.obj", triangulate="true", scale3d=cube_scale)
+    collision.addObject("MeshOBJLoader", name="loader", filename=CUBE_OBJ, triangulate="true", scale3d=cube_scale)
     collision.addObject("MeshTopology", src="@loader")
     collision.addObject("MechanicalObject")
     collision.addObject("TriangleCollisionModel", group=2, moving=True, simulated=True)
@@ -170,7 +193,7 @@ def createScene(rootNode):
     floor.addObject("UniformMass", vertexMass=[0.10, 1.0, [1.0, 0, 0, 0, 1.0, 0, 0, 0, 1.0]])
     floor.addObject("FixedConstraint", indices="0")
     floor_collis = floor.addChild("collision")
-    floor_collis.addObject("MeshOBJLoader", name="loader", filename="mesh/floor.obj", triangulate="true", scale3d=floor_scale)
+    floor_collis.addObject("MeshOBJLoader", name="loader", filename=FLOOR_OBJ, triangulate="true", scale3d=floor_scale)
     floor_collis.addObject("MeshTopology", src="@loader")
     floor_collis.addObject("MechanicalObject")
     floor_collis.addObject("TriangleCollisionModel", moving=False, simulated=False, group=3)
