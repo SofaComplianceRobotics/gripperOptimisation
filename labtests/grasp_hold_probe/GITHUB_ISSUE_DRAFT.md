@@ -15,8 +15,8 @@ between runs:
 Because this uses the default comparator, `groups` is ordered by the raw
 memory address of each `BaseMechanicalState` pointer. Addresses vary between
 process launches (ASLR) and even between scene rebuilds within one already-
-running process (heap allocation history — we measured this directly, see
-below). Since the assembly loop
+running process (heap allocation history — confirmed by direct measurement,
+see below). Since the assembly loop
 (`for (const auto& [pair, group] : groups) { ... }`) accumulates mass/
 stiffness/damping contributions in this address-dependent order, and
 floating-point addition is not associative, the exact same scene launched
@@ -34,13 +34,12 @@ header, which use the same pointer-keyed pattern) has no such protection.
 
 **Steps to reproduce**
 
-We isolated this with a step-by-step measurement harness rather than a
-minimal standalone scene — happy to share the scripts on request. The
-method:
+This was isolated with a step-by-step measurement harness rather than a
+minimal standalone scene — scripts available on request. Method used:
 
 1. Build a scene with `FreeMotionAnimationLoop` + an iterative constraint
-   solver (`NNCGConstraintSolver` in our case), with multiple deformable/
-   mapped mechanical bodies (our scene: 4 beam-model legs + a deformable
+   solver (`NNCGConstraintSolver` in this case), with multiple deformable/
+   mapped mechanical bodies (test scene: 4 beam-model legs + a deformable
    gripper, ~68 `MechanicalState` components, ~76 `Mapping` components).
 2. Launch the identical scene twice — either as two separate process
    launches, or by rebuilding the scene graph twice inside one already-
@@ -56,16 +55,16 @@ unmapped rigid body in the same scene (not part of that assembly) stays
 bit-identical until a later step, when contact with the already-diverged
 bodies carries the difference into it.
 
-We separately confirmed retightening the constraint solver's tolerance
+Separately, retightening the constraint solver's tolerance
 (`tolerance=1e-3, maxIterations=250` → `tolerance=1e-10, maxIterations=1500`)
-flips the divergence rate from 100% to 0% across 15 repeated trials of the
-same scene — consistent with genuine floating-point rounding noise that an
-under-converged solver preserves and a fully-converged one washes out, not a
-logic bug in the solver itself (we read `NNCGConstraintSolver.cpp` /
-`BlockGaussSeidelConstraintSolver.cpp` directly and found no other issue —
-plain deterministic array code, no hash containers).
+was confirmed to flip the divergence rate from 100% to 0% across 15 repeated
+trials of the same scene — consistent with genuine floating-point rounding
+noise that an under-converged solver preserves and a fully-converged one
+washes out, not a logic bug in the solver itself (confirmed by reading
+`NNCGConstraintSolver.cpp` / `BlockGaussSeidelConstraintSolver.cpp` directly
+— plain deterministic array code, no hash containers, no other issue found).
 
-We also ruled out, with direct measurement rather than inference: narrow-
+Also ruled out, with direct measurement rather than inference: narrow-
 phase algorithm choice (`DirectSAPNarrowPhase` vs `BVHNarrowPhase` — identical
 divergence rate), OpenMP/BLAS thread pinning, `BuiltConstraintSolver`'s own
 `multithreading` flag (forcing it on/off made no difference to an otherwise-
@@ -94,7 +93,7 @@ converged-equivalent) results, matching the guarantee
 ```txt
 python -m sofaopt.scene.runner <scene.py>
 ```
-(launched via our lab's `sofaopt` runner, which loads the scene module
+(launched via a custom `sofaopt` runner, which loads the scene module
 directly in-process and calls `Sofa.Simulation.animate()` in a loop — see
 `sofaopt/scene/runner.py`. Equivalent to `runSofa -l SofaPython3 <scene.py>`.)
 
@@ -113,7 +112,7 @@ python -c "exec( \"import os, sys\nprint('#################')\nprint('--- sys.ve
 --- SOFA_ROOT ---
 C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa
 --- PYTHONPATH ---
-C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa/plugins/SofaPython3/lib/python3/site-packages;C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa/plugins/STLIB/lib/python3/site-packages;<our lab's assets root>;<sofaopt src root>
+C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa/plugins/SofaPython3/lib/python3/site-packages;C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa/plugins/STLIB/lib/python3/site-packages;<lab assets root>;<sofaopt src root>
 --- sys.path ---
 ['', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\plugins\\SofaPython3\\lib\\python3\\site-packages', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\plugins\\STLIB\\lib\\python3\\site-packages', '<assets root>', '<sofaopt src root>', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\python310.zip', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\DLLs', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\lib', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python', 'C:\\Users\\Cesar\\AppData\\Roaming\\Python\\Python310\\site-packages', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\lib\\site-packages', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\lib\\site-packages\\cmeel.prefix\\lib\\python3.10\\site-packages']
 #################
@@ -177,5 +176,4 @@ too.
 **Content of build_dir/CMakeCache.txt**
 
 N/A — running from the emio-labs binary distribution, not a local build; no
-`CMakeCache.txt` available. Happy to provide the plugin/DLL manifest instead
-if useful.
+`CMakeCache.txt` available. Plugin/DLL manifest available on request.
