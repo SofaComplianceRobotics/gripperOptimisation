@@ -225,6 +225,8 @@ runtime/gripper_opt.db
 runtime/study.db
 runtime/exports/
 runtime/leg_preview/
+runtime.lock
+archives/
 notion_pages/
 
 # Claude Code

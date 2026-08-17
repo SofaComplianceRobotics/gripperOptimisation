@@ -14,6 +14,7 @@ Everything else (env-var config, plugins, controller logic) comes from core.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -26,7 +27,11 @@ SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 from geometry.timing_config import DT_DIRECT as DT
 
-RECORD_FILE = str(
+# The optimizer records a fresh trajectory per trial (this trial's own
+# gripper/leg geometry, via sofaopt_project.py's prepare_trial hook) and
+# points OPT_MOTOR_RECORDING at it. Manual/no-trial launches fall back to
+# the static reference recording.
+RECORD_FILE = os.environ.get("OPT_MOTOR_RECORDING") or str(
     LAB_ROOT / "runtime" / "recordings" / "grasp_hold" / "motor_recording.json"
 )
 
@@ -54,7 +59,9 @@ def createScene(rootnode):
     add_required_plugins(nodes.simulation)
     rootnode.dt = DT
 
-    gripper_collision = setup_collision(nodes.emio, cfg.gripper_mesh_path)
+    gripper_collision = setup_collision(
+        nodes.emio, cfg.gripper_finger1_mesh_path, cfg.gripper_finger2_mesh_path
+    )
 
     cube_handles = setup_cube_floor(
         nodes.simulation,

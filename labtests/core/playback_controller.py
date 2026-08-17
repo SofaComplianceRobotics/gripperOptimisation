@@ -320,10 +320,15 @@ def make_playback_controller(SofaController):
             normals_y: list[float] = []
             # Per side: [contact count, summed contact height].
             side_stats = {"+X": [0, 0.0], "-X": [0, 0.0]}
-            for suffix in ("gPcT", "gTcP", "gLcL"):
+            channels = (
+                (suffix, finger_index)
+                for suffix in ("gPcT", "gTcP", "gLcL")
+                for finger_index in (1, 2)
+            )
+            for suffix, finger_index in channels:
                 try:
                     listener = self.rootnode.Simulation.getObject(
-                        f"cubeGripperContactDbg_{suffix}"
+                        f"cubeGripperContactDbg_{suffix}_f{finger_index}"
                     )
                     contacts = listener.getContactPoints() or []
                 except Exception:
@@ -350,7 +355,11 @@ def make_playback_controller(SofaController):
             # vertical velocity of that tip by finite difference across the log
             # interval, so we can see whether the gripper itself is sweeping up
             # when the cube launches.
-            grip_pos = self.gripper_collision.getMechanicalState().position.value
+            grip_pos = [
+                p
+                for finger in self.gripper_collision
+                for p in finger.getMechanicalState().position.value
+            ]
             grip_tip_y = min(p[1] for p in grip_pos)
             prev_y = getattr(self, "_prev_grip_tip_y", None)
             prev_t = getattr(self, "_prev_grip_tip_t", None)

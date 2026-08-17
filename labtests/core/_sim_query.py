@@ -48,17 +48,18 @@ def set_gripper_collision_active(gripper_collision, active: bool) -> None:
     then collide normally once re-enabled at cube spawn.
 
     Args:
-        gripper_collision: The gripper CollisionModel node from collision_stl.
+        gripper_collision: [finger1_node, finger2_node] from collision_stl.
         active: True to enable collision, False to disable it.
     """
-    for name in (
-        "gripperCollisionPoints",
-        "gripperCollisionLines",
-        "gripperCollisionTriangles",
-    ):
-        model = gripper_collision.getObject(name)
-        if model is not None:
-            model.active.value = active
+    for finger in gripper_collision:
+        for name in (
+            "gripperCollisionPoints",
+            "gripperCollisionLines",
+            "gripperCollisionTriangles",
+        ):
+            model = finger.getObject(name)
+            if model is not None:
+                model.active.value = active
 
 
 def get_cube_collision_min_y(rootnode) -> float | None:
@@ -82,14 +83,16 @@ def get_gripper_collision_min_y(gripper_collision) -> float | None:
     """Return the minimum Y of all gripper collision mesh vertices.
 
     Args:
-        gripper_collision: SOFA gripper collision node.
+        gripper_collision: [finger1_node, finger2_node] from collision_stl.
 
     Returns:
-        Minimum Y coordinate, or None if the node is unavailable.
+        Minimum Y coordinate across both fingers, or None if unavailable.
     """
     try:
-        points = gripper_collision.getMechanicalState().position.value
-        ys = [float(p[1]) for p in points if len(p) >= 2]
+        ys = []
+        for finger in gripper_collision:
+            points = finger.getMechanicalState().position.value
+            ys.extend(float(p[1]) for p in points if len(p) >= 2)
         return min(ys) if ys else None
     except Exception:
         return None
@@ -121,17 +124,23 @@ def collision_aabb(collision_node) -> tuple | None:
 def get_cube_gripper_contact_count(rootnode) -> int:
     """Return the number of active contact points between cube and gripper.
 
+    Summed across both per-finger listeners (see cube_floor.py) since each
+    finger is its own collision model.
+
     Args:
         rootnode: SOFA root node.
 
     Returns:
-        Contact count, or 0 if the listener object is missing.
+        Contact count, or 0 if neither listener object is available.
     """
-    try:
-        listener = rootnode.Simulation.getObject("cubeGripperContactListener")
-        return int(listener.getNumberOfContacts())
-    except Exception:
-        return 0
+    total = 0
+    for name in ("cubeGripperContactListener_finger1", "cubeGripperContactListener_finger2"):
+        try:
+            listener = rootnode.Simulation.getObject(name)
+            total += int(listener.getNumberOfContacts())
+        except Exception:
+            pass
+    return total
 
 
 def spawn_overlap_detected(rootnode, gripper_collision) -> bool:
@@ -143,24 +152,29 @@ def spawn_overlap_detected(rootnode, gripper_collision) -> bool:
 
     Args:
         rootnode: SOFA root node.
-        gripper_collision: SOFA gripper collision node.
+        gripper_collision: [finger1_node, finger2_node] from collision_stl.
 
     Returns:
-        True if an overlap is detected.
+        True if an overlap is detected against either finger.
     """
     if get_cube_gripper_contact_count(rootnode) > 0:
         return True
     cube_aabb = collision_aabb(rootnode.Simulation.Cube.collision)
-    gripper_aabb = collision_aabb(gripper_collision)
-    if cube_aabb is None or gripper_aabb is None:
+    if cube_aabb is None:
         return False
     cx0, cx1, cy0, cy1, cz0, cz1 = cube_aabb
-    gx0, gx1, gy0, gy1, gz0, gz1 = gripper_aabb
-    return (
-        cx0 <= gx1
-        and cx1 >= gx0
-        and cy0 <= gy1
-        and cy1 >= gy0
-        and cz0 <= gz1
-        and cz1 >= gz0
-    )
+    for finger in gripper_collision:
+        gripper_aabb = collision_aabb(finger)
+        if gripper_aabb is None:
+            continue
+        gx0, gx1, gy0, gy1, gz0, gz1 = gripper_aabb
+        if (
+            cx0 <= gx1
+            and cx1 >= gx0
+            and cy0 <= gy1
+            and cy1 >= gy0
+            and cz0 <= gz1
+            and cz1 >= gz0
+        ):
+            return True
+    return False

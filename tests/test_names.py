@@ -5,6 +5,7 @@ from geometry.leg_params import LegParams
 from geometry.params import ModelParams
 from names import (
     CENTERPARTS_DIRNAME,
+    GRIPPER_COLLISION_FINGER_STLS,
     GRIPPER_COLLISION_STL,
     GRIPPER_NAME,
     GRIPPER_PRINT_NAME,
@@ -20,6 +21,14 @@ def test_default_export_stem_is_the_gripper_name():
 
 def test_collision_stl_derives_from_gripper_name():
     assert GRIPPER_COLLISION_STL == f"{GRIPPER_NAME}_collision.stl"
+
+
+def test_finger_collision_stls_derive_from_gripper_name():
+    assert GRIPPER_COLLISION_FINGER_STLS == (
+        f"{GRIPPER_NAME}_collision_finger1.stl",
+        f"{GRIPPER_NAME}_collision_finger2.stl",
+    )
+    assert len(set(GRIPPER_COLLISION_FINGER_STLS)) == 2
 
 
 def test_fine_export_stem_never_overwrites_sim_mesh():

@@ -37,8 +37,8 @@ def setup(
 
     Args:
         simulation: SOFA simulation node from base_scene.
-        gripper_collision: Node returned by collision_stl.setup(), needed to
-            wire the ContactListener.
+        gripper_collision: [finger1_node, finger2_node] list returned by
+            collision_stl.setup(), needed to wire the ContactListeners.
         cube_scale: [x, y, z] scale for the cube mesh. Default [5, 5, 5].
         cube_mass: Initial uniform mass for the cube (kg).
         floor_center_y: Y position of the floor centre.
@@ -143,15 +143,19 @@ def setup(
     )
     collision.addObject("RigidMapping")
 
-    simulation.addObject(
-        "ContactListener",
-        name="cubeGripperContactListener",
-        collisionModel1=gripper_collision.gripperCollisionTriangles.getLinkPath(),
-        collisionModel2=collision.cubeCollisionTriangles.getLinkPath(),
-    )
+    # One listener per finger — ContactListener only ever compares two named
+    # collision models, and the two fingers are now separate models (see
+    # collision_stl.py). get_cube_gripper_contact_count() sums both.
+    for i, finger in enumerate(gripper_collision, start=1):
+        simulation.addObject(
+            "ContactListener",
+            name=f"cubeGripperContactListener_finger{i}",
+            collisionModel1=finger.gripperCollisionTriangles.getLinkPath(),
+            collisionModel2=collision.cubeCollisionTriangles.getLinkPath(),
+        )
 
     # MinProximityIntersection only generates point↔triangle and line↔line
-    # contacts, never triangle↔triangle, so the listener above stays empty and
+    # contacts, never triangle↔triangle, so the listeners above stay empty and
     # cannot measure the grip. These watch the channels that actually carry the
     # contacts. Created only when contact debugging is on (each listener walks
     # its contact list every step), and consumed by playback_controller.
@@ -161,29 +165,30 @@ def setup(
         "yes",
         "on",
     ):
-        for model1, model2, suffix in (
-            (
-                gripper_collision.gripperCollisionPoints,
-                collision.cubeCollisionTriangles,
-                "gPcT",
-            ),
-            (
-                gripper_collision.gripperCollisionTriangles,
-                collision.cubeCollisionPoints,
-                "gTcP",
-            ),
-            (
-                gripper_collision.gripperCollisionLines,
-                collision.cubeCollisionLines,
-                "gLcL",
-            ),
-        ):
-            simulation.addObject(
-                "ContactListener",
-                name=f"cubeGripperContactDbg_{suffix}",
-                collisionModel1=model1.getLinkPath(),
-                collisionModel2=model2.getLinkPath(),
-            )
+        for i, finger in enumerate(gripper_collision, start=1):
+            for model1, model2, suffix in (
+                (
+                    finger.gripperCollisionPoints,
+                    collision.cubeCollisionTriangles,
+                    "gPcT",
+                ),
+                (
+                    finger.gripperCollisionTriangles,
+                    collision.cubeCollisionPoints,
+                    "gTcP",
+                ),
+                (
+                    finger.gripperCollisionLines,
+                    collision.cubeCollisionLines,
+                    "gLcL",
+                ),
+            ):
+                simulation.addObject(
+                    "ContactListener",
+                    name=f"cubeGripperContactDbg_{suffix}_f{i}",
+                    collisionModel1=model1.getLinkPath(),
+                    collisionModel2=model2.getLinkPath(),
+                )
 
     # ── Floor ─────────────────────────────────────────────────────────────────
 

@@ -12,7 +12,7 @@ import pytest
 
 from labtests.core import scene_defaults as defaults
 from labtests.core.scene_config import PlaybackConfig
-from names import GRIPPER_COLLISION_STL
+from names import GRIPPER_COLLISION_FINGER_STLS
 
 LAB_ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,7 +32,8 @@ ENV_VARS = (
     "NO_PICKUP_PENALTY",
     "UNDERCUBE_PENALTY",
     "ENABLE_UNDERCUBE_CHECK",
-    "OPT_MESH",
+    "OPT_MESH_FINGER1",
+    "OPT_MESH_FINGER2",
     "OPT_TRIAL_STATE_PATH",
     "OPT_RUN_SLOT",
     "OPT_GEN",
@@ -61,7 +62,8 @@ class TestPlaybackConfigDefaults:
 
     def test_default_mesh_path_uses_name_contract(self, clean_env):
         cfg = PlaybackConfig.from_env(LAB_ROOT)
-        assert cfg.gripper_mesh_path.endswith(GRIPPER_COLLISION_STL)
+        assert cfg.gripper_finger1_mesh_path.endswith(GRIPPER_COLLISION_FINGER_STLS[0])
+        assert cfg.gripper_finger2_mesh_path.endswith(GRIPPER_COLLISION_FINGER_STLS[1])
 
     def test_trial_defaults_to_manual_launch(self, clean_env):
         cfg = PlaybackConfig.from_env(LAB_ROOT)
@@ -88,9 +90,11 @@ class TestPlaybackConfigOverrides:
         assert PlaybackConfig.from_env(LAB_ROOT).enable_undercube_check is False
 
     def test_mesh_path_override(self, clean_env):
-        clean_env.setenv("OPT_MESH", r"C:\somewhere\trial_7_collision.stl")
+        clean_env.setenv("OPT_MESH_FINGER1", r"C:\somewhere\trial_7_collision_finger1.stl")
+        clean_env.setenv("OPT_MESH_FINGER2", r"C:\somewhere\trial_7_collision_finger2.stl")
         cfg = PlaybackConfig.from_env(LAB_ROOT)
-        assert cfg.gripper_mesh_path == r"C:\somewhere\trial_7_collision.stl"
+        assert cfg.gripper_finger1_mesh_path == r"C:\somewhere\trial_7_collision_finger1.stl"
+        assert cfg.gripper_finger2_mesh_path == r"C:\somewhere\trial_7_collision_finger2.stl"
 
     def test_trial_reads_run_identity(self, clean_env, tmp_path):
         state = tmp_path / "trial_state.json"

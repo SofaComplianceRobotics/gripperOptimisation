@@ -9,7 +9,10 @@ import shutil
 from pathlib import Path
 
 from geometry.assembly import assemble_model
-from geometry.gripper_parts import make_pincer_pair_world_collision
+from geometry.gripper_parts import (
+    make_pincer_pair_world_collision,
+    make_pincer_pair_world_collision_split,
+)
 from geometry.io.export_mesh import (
     model_to_stl_collision,
     model_to_stl,
@@ -68,11 +71,26 @@ def run_export(
             pincers_export = rotate_model_to_export_frame(pincers)
             model_to_stl_collision(pincers_export, params, collision_stl_path)
 
+            # Same distal fraction, but exported as two separate solids/files
+            # so SOFA can load each finger as its own collision body — the
+            # merged collision_stl_path above can never register finger-vs-
+            # finger contact since it's one collision model.
+            finger_stl_paths = [
+                stl_path.parent / f"{params.export_stem}_collision_finger{i}.stl"
+                for i in (1, 2)
+            ]
+            for finger_part, finger_path in zip(
+                make_pincer_pair_world_collision_split(params), finger_stl_paths
+            ):
+                model_to_stl_collision(
+                    rotate_model_to_export_frame(finger_part), params, finger_path
+                )
+
         if secondary_dir:
             secondary_dir.mkdir(parents=True, exist_ok=True)
             files_to_copy = [stl_path]
             if not fine:
-                files_to_copy += [json_path, collision_stl_path]
+                files_to_copy += [json_path, collision_stl_path, *finger_stl_paths]
                 if vtk_path.exists():
                     files_to_copy.append(vtk_path)
 
