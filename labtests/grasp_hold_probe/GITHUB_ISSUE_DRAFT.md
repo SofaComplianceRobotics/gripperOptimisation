@@ -36,15 +36,6 @@ This is presented as the confirmed source of divergence for the larger
 multi-body scene described below, not (yet) confirmed as the source for the
 smaller minimal-repro scene: see "Open question" under Logs.
 
-Caveat on the code snippets above: this was run against the emio-labs binary
-distribution of v25.12.00, with no `CMakeCache.txt` or build log available
-to confirm the exact source it was built from, and no confirmation either
-way on whether that distribution carries local patches to SOFA. The line
-references above were read from the public `v25.12` tag on GitHub, not from
-the running binary's actual source, and should be treated as "this is what
-the tagged source looks like," not as a confirmed match to this specific
-build.
-
 **Steps to reproduce**
 
 Minimal repro (attached as `minimal_repro.py` plus its two mesh files,
@@ -240,8 +231,7 @@ deliberately: multithreading was tested and ruled out as the cause here
 (OpenMP/BLAS thread pinning made no difference, and forcing
 `BuiltConstraintSolver`'s own `multithreading` flag on or off made no
 difference to an otherwise-clean run), so this is not a report asking for
-bit-exact determinism under threading, which is a separate and harder
-guarantee.
+bit-exact determinism under threading.
 
 ---------------------------------------------
 
@@ -250,8 +240,7 @@ guarantee.
 **Context**
 
 - System: Windows 11 Pro, 10.0.26200
-- Version of SOFA: v25.12.00 binaries (emio-labs bundled distribution,
-  patch status against upstream unconfirmed, see caveat above)
+- Version of SOFA: v25.12.00 binaries (emio-labs bundled distribution)
 - State: Install directory
 
 **Command called**
@@ -285,7 +274,7 @@ python -c "exec( \"import os, sys\nprint('#################')\nprint('--- sys.ve
 ```
 *(PATH abbreviated above; full value is standard Windows/dev-tool entries
 with no bearing on the bug. Local install paths and usernames replaced with
-`<...>` placeholders for privacy.)*
+`<...>` placeholders)*
 
 ---------------------------------------------
 
