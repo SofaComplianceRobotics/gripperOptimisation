@@ -20,10 +20,10 @@ see below). Since the assembly loop
 (`for (const auto& [pair, group] : groups) { ... }`) accumulates mass/
 stiffness/damping contributions in this address-dependent order, and
 floating-point addition is not associative, the exact same scene launched
-twice can produce a genuinely different (if tiny) free-motion result. In a
-contact-rich scene this snowballs into visibly different simulation outcomes.
+twice can produce a different (if tiny) free-motion result. In a
+contact-rich scene this can snowball into visibly different simulation outcomes.
 
-SOFA already has a fix for exactly this class of bug elsewhere in the
+There already is a fix for exactly this class of bug elsewhere in the
 codebase: `sofa::helper::map_ptr_stable_compare`
 (`sofa/helper/map_ptr_stable_compare.h`) sorts by order-of-first-appearance
 instead of address, and is already used to protect
@@ -35,13 +35,13 @@ header, which use the same pointer-keyed pattern) has no such protection.
 **Steps to reproduce**
 
 This was isolated with a step-by-step measurement harness rather than a
-minimal standalone scene — scripts available on request. Method used:
+minimal standalone scene, scripts available on request. Method used:
 
 1. Build a scene with `FreeMotionAnimationLoop` + an iterative constraint
    solver (`NNCGConstraintSolver` in this case), with multiple deformable/
    mapped mechanical bodies (test scene: 4 beam-model legs + a deformable
    gripper, ~68 `MechanicalState` components, ~76 `Mapping` components).
-2. Launch the identical scene twice — either as two separate process
+2. Launch the identical scene twice, either as two separate process
    launches, or by rebuilding the scene graph twice inside one already-
    running process. Both show the effect.
 3. Read each mechanical body's `free_position`/`free_velocity` Data (the
@@ -50,7 +50,7 @@ minimal standalone scene — scripts available on request. Method used:
    matter) and diff step-by-step between the two runs.
 
 Result: bodies going through the FEM/mapping matrix assembly (legs, gripper)
-diverge starting at step 0 — before any contact is even possible. A simple
+diverge starting at step 0, before any contact is even possible. A simple
 unmapped rigid body in the same scene (not part of that assembly) stays
 bit-identical until a later step, when contact with the already-diverged
 bodies carries the difference into it.
@@ -58,23 +58,13 @@ bodies carries the difference into it.
 Separately, retightening the constraint solver's tolerance
 (`tolerance=1e-3, maxIterations=250` → `tolerance=1e-10, maxIterations=1500`)
 was confirmed to flip the divergence rate from 100% to 0% across 15 repeated
-trials of the same scene — consistent with genuine floating-point rounding
+trials of the same scene, consistent with floating-point rounding
 noise that an under-converged solver preserves and a fully-converged one
-washes out, not a logic bug in the solver itself (confirmed by reading
-`NNCGConstraintSolver.cpp` / `BlockGaussSeidelConstraintSolver.cpp` directly
-— plain deterministic array code, no hash containers, no other issue found).
-
-Also ruled out, with direct measurement rather than inference: narrow-
-phase algorithm choice (`DirectSAPNarrowPhase` vs `BVHNarrowPhase` — identical
-divergence rate), OpenMP/BLAS thread pinning, `BuiltConstraintSolver`'s own
-`multithreading` flag (forcing it on/off made no difference to an otherwise-
-clean run), cube-landing geometry/symmetry, friction, and
-`UncoupledConstraintCorrection`.
+washes out.
 
 **Expected behavior**
 
-Launching the identical scene twice should produce identical (or at least
-converged-equivalent) results, matching the guarantee
+Launching the identical scene twice should produce identical results, matching the guarantee
 `NarrowPhaseDetection`/`CollisionResponse` already provide via
 `map_ptr_stable_compare`.
 
@@ -91,11 +81,11 @@ converged-equivalent) results, matching the guarantee
 **Command called**
 
 ```txt
-python -m sofaopt.scene.runner <scene.py>
+runSofa -l SofaPython3 <scene.py>
 ```
-(launched via a custom `sofaopt` runner, which loads the scene module
-directly in-process and calls `Sofa.Simulation.animate()` in a loop — see
-`sofaopt/scene/runner.py`. Equivalent to `runSofa -l SofaPython3 <scene.py>`.)
+(also reproduced via a plain Python script that loads the scene module
+directly and calls `Sofa.Simulation.animate()` in a loop — same effect, not
+SOFA-specific tooling.)
 
 **Env vars**
 
@@ -110,16 +100,16 @@ python -c "exec( \"import os, sys\nprint('#################')\nprint('--- sys.ve
 --- PATH ---
 <SOFA_ROOT>\plugins\SofaPython3\bin;<SOFA_ROOT>\bin;<standard Windows/user PATH entries>
 --- SOFA_ROOT ---
-C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa
+<install path>\emio-labs\resources\sofa
 --- PYTHONPATH ---
-C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa/plugins/SofaPython3/lib/python3/site-packages;C:\Users\Cesar\AppData\Local\Programs\emio-labs\resources\sofa/plugins/STLIB/lib/python3/site-packages;<lab assets root>;<sofaopt src root>
+<SOFA_ROOT>/plugins/SofaPython3/lib/python3/site-packages;<SOFA_ROOT>/plugins/STLIB/lib/python3/site-packages;<lab project root>
 --- sys.path ---
-['', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\plugins\\SofaPython3\\lib\\python3\\site-packages', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\plugins\\STLIB\\lib\\python3\\site-packages', '<assets root>', '<sofaopt src root>', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\python310.zip', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\DLLs', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\lib', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python', 'C:\\Users\\Cesar\\AppData\\Roaming\\Python\\Python310\\site-packages', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\lib\\site-packages', 'C:\\Users\\Cesar\\AppData\\Local\\Programs\\emio-labs\\resources\\sofa\\bin\\python\\lib\\site-packages\\cmeel.prefix\\lib\\python3.10\\site-packages']
+['', '<SOFA_ROOT>/plugins/SofaPython3/lib/python3/site-packages', '<SOFA_ROOT>/plugins/STLIB/lib/python3/site-packages', '<lab project root>', '<SOFA_ROOT>/bin/python/python310.zip', '<SOFA_ROOT>/bin/python/DLLs', '<SOFA_ROOT>/bin/python/lib', '<SOFA_ROOT>/bin/python', '<user Python310 site-packages>', '<SOFA_ROOT>/bin/python/lib/site-packages', '<SOFA_ROOT>/bin/python/lib/site-packages/cmeel.prefix/lib/python3.10/site-packages']
 #################
 ```
 *(PATH abbreviated above — full value is standard Windows/dev-tool entries
-with no bearing on the bug; redacted local folder names replaced with
-`<...>` for the same reason.)*
+with no bearing on the bug; local install paths and usernames replaced with
+`<...>` placeholders for privacy.)*
 
 ---------------------------------------------
 
