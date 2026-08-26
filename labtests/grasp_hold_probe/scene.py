@@ -48,6 +48,17 @@ shared core modules:
   PROBE_OMP1=1            No-op here (thread pinning happens at the process
                           level in the probe launcher, not the scene) — kept
                           as a documented no-op so its absence isn't a surprise.
+  PROBE_CUBE_UNREACHABLE=1  PROBE_SKIP_PLAYBACK or PROBE_LEGS_ONLY paths.
+                          Builds the cube+floor exactly as normal (same
+                          collision meshes, same mass/mapping components,
+                          same total DOF count and MatrixLinearSystem.groups
+                          population as without this flag), but spawns the
+                          cube far out of reach so it can never fall into
+                          contact range within the probe's step window.
+                          Isolates "no contact ever occurs" from "scene
+                          structure changed" — unlike skipping cube_floor
+                          setup entirely, which changes the total DOF count
+                          and therefore isn't a clean control.
 """
 
 from __future__ import annotations
@@ -339,8 +350,16 @@ def _create_legs_only_scene(rootnode):
         floor_center_y=cfg.floor_center_y,
         cube_spawn_clearance=cfg.cube_spawn_clearance,
     )
+    if _bool_env("PROBE_CUBE_UNREACHABLE"):
+        # Same cube/floor/collision infrastructure as the baseline, just
+        # spawned far enough away that it cannot fall into contact range
+        # with the legs within the probe's step window.
+        spawn_y = cube_handles.cube_spawn_y + 1.0e6
+        print(f"[probe] PROBE_CUBE_UNREACHABLE: cube spawned at y={spawn_y} (unreachable)", file=sys.stderr)
+    else:
+        spawn_y = cube_handles.cube_spawn_y
     cube_handles.cube.MechanicalObject.position = [
-        [0.0, cube_handles.cube_spawn_y, 0.0] + _cube_orientation()
+        [0.0, spawn_y, 0.0] + _cube_orientation()
     ]
 
     _swap_narrowphase(rootnode)
@@ -396,8 +415,13 @@ def createScene(rootnode):
 
     if _bool_env("PROBE_SKIP_PLAYBACK"):
         print("[probe] PROBE_SKIP_PLAYBACK: robot built but never driven — no PlaybackController attached", file=sys.stderr)
+        if _bool_env("PROBE_CUBE_UNREACHABLE"):
+            spawn_y = cube_handles.cube_spawn_y + 1.0e6
+            print(f"[probe] PROBE_CUBE_UNREACHABLE: cube spawned at y={spawn_y} (unreachable)", file=sys.stderr)
+        else:
+            spawn_y = cube_handles.cube_spawn_y
         cube_handles.cube.MechanicalObject.position = [
-            [0.0, cube_handles.cube_spawn_y, 0.0] + _cube_orientation()
+            [0.0, spawn_y, 0.0] + _cube_orientation()
         ]
     else:
         playback = setup_playback(nodes.emio, RECORD_FILE)
