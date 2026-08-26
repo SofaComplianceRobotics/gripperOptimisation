@@ -138,9 +138,9 @@ class TestParamSpecs:
             )
 
     def test_defaults_come_from_the_given_instance(self):
-        base = ModelParams(cylinder_radius=99.0)
+        base = ModelParams(p1_dist=44.0)
         specs = {s["name"]: s for s in param_specs(base)}
-        assert specs["cylinder_radius"]["default"] == 99.0
+        assert specs["p1_dist"]["default"] == 44.0
 
     def test_active_specs_contain_their_default(self):
         """An active search range that excludes its own default is a config smell."""

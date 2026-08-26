@@ -1,0 +1,25 @@
+{
+  "optimized_params": [
+    "cylinder_radius",
+    "cylinder_hole_thickness",
+    "cylinder_height_A",
+    "cylinder_height_B",
+    "cylinder_height_C",
+    "cylinder_plateau_A_deg",
+    "cylinder_plateau_B_deg",
+    "cylinder_plateau_C_deg",
+    "leg_attachement_tilt_angle",
+    "pincer_profile_width",
+    "pincer_profile_height",
+    "p0_hout_dist",
+    "p0_hout_angle_deg",
+    "p1_dist",
+    "p1_angle_deg",
+    "p1_hin_dist",
+    "p1_hin_angle_deg",
+    "leg_p0_hout_dist",
+    "leg_p1_dist",
+    "leg_p1_angle_deg",
+    "leg_p1_hin_dist"
+  ]
+}

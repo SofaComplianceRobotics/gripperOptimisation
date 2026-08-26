@@ -8,6 +8,7 @@ overrides) before any refactor of params_from_config.
 import pytest
 
 from generation._gripper_common import load_jsonc, params_from_config
+from geometry.leg_params import LegParams
 from geometry.params import ModelParams
 from names import GRIPPER_PRINT_NAME
 
@@ -96,6 +97,15 @@ class TestParamsFromConfig:
         params = params_from_config(cfg, ModelParams())
         assert params.export_stem == ModelParams().export_stem
         assert params.export_dir == ModelParams().export_dir
+
+
+class TestParamsFromConfigOtherDataclass:
+    def test_forced_fields_skipped_for_dataclasses_without_them(self):
+        # _CONFIG_FORCED_FIELDS (mesh_enabled, mesh_show_viewer) only exist on
+        # ModelParams; params_from_config is also used for LegParams and must
+        # not choke on fields the target dataclass doesn't have.
+        params = params_from_config({"leg_p1_dist": 120.0}, LegParams())
+        assert params.leg_p1_dist == 120.0
 
 
 class TestParamsFromConfigFine:

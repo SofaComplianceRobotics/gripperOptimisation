@@ -16,7 +16,7 @@ from pathlib import Path
 from sofaopt.scene import Trial, open_trial
 
 from labtests.core import scene_defaults as defaults
-from names import CENTERPARTS_DIRNAME, GRIPPER_COLLISION_STL
+from names import CENTERPARTS_DIRNAME, GRIPPER_COLLISION_FINGER_STLS
 
 
 def _env_float(name: str, default: float) -> float:
@@ -45,7 +45,11 @@ class PlaybackConfig:
     # ── Optimizer trial (params, run identity, score writing) ────────────────
     trial: Trial
     # ── Paths ─────────────────────────────────────────────────────────────────
-    gripper_mesh_path: str
+    # Two separate collision meshes (one per finger), so SOFA can detect
+    # contact between the fingers themselves — a single merged gripper
+    # collision mesh can never register a finger-vs-finger self-contact.
+    gripper_finger1_mesh_path: str
+    gripper_finger2_mesh_path: str
     # ── Scene physics ─────────────────────────────────────────────────────────
     friction_coef: float
     playback_time_scale: float
@@ -75,17 +79,16 @@ class PlaybackConfig:
     def from_env(cls, lab_root: Path) -> "PlaybackConfig":
         """Construct from environment variables, resolving paths relative to lab_root."""
         assets_root = lab_root.parent.parent
+        centerparts_dir = assets_root / "data" / "meshes" / CENTERPARTS_DIRNAME
         return cls(
             trial=open_trial(),
-            gripper_mesh_path=os.environ.get(
-                "OPT_MESH",
-                str(
-                    assets_root
-                    / "data"
-                    / "meshes"
-                    / CENTERPARTS_DIRNAME
-                    / GRIPPER_COLLISION_STL
-                ),
+            gripper_finger1_mesh_path=os.environ.get(
+                "OPT_MESH_FINGER1",
+                str(centerparts_dir / GRIPPER_COLLISION_FINGER_STLS[0]),
+            ),
+            gripper_finger2_mesh_path=os.environ.get(
+                "OPT_MESH_FINGER2",
+                str(centerparts_dir / GRIPPER_COLLISION_FINGER_STLS[1]),
             ),
             friction_coef=_env_float("SHAPEOPT_FRICTION_COEF", defaults.FRICTION_COEF),
             playback_time_scale=_env_float(

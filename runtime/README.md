@@ -35,7 +35,8 @@ runtime/
 
 **`exports/`** — Output of `generate_gripper.py`. Contains the STL/VTK/JSON for the current gripper config:
 - `new_gripper.stl` / `.vtk` — simulation mesh
-- `new_gripper_collision.stl` — coarser mesh used for SOFA contact detection
+- `new_gripper_collision.stl` — coarser mesh, both fingers merged (unused by the scene; kept for reference/preview)
+- `new_gripper_collision_finger1.stl` / `_finger2.stl` — same coarse mesh, but split one file per finger. SOFA loads these two (not the merged one above) so it can detect the fingers colliding with each other, not just with the cube/floor.
 - `new_gripper_print.stl` / `.3mf` — fine mesh for 3D printing (only from `generate_gripper_fine.py`)
 - `new_gripper.json` — leg attachment poses for SOFA
 

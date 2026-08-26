@@ -3,6 +3,11 @@ Lab ShapeOPT Recording Scene - Record motor trajectories for replay.
 
 Inverse target-control scene based on project_pickandplace.
 Records motor trajectories to runtime/motor_recording.json while simulation runs.
+Also records the effector target's pose and the gripper opening every frame
+("target_poses" / "gripper_openings") — sofaopt_project.py's per-trial
+recorder replays that captured path (not the raw .crprog) through each
+trial's own gripper/leg, since there's no way to headlessly re-run
+ProgramWindow's own playback logic.
 
 Usage:
     1. Run this scene.
@@ -13,7 +18,6 @@ Usage:
 To record a new trajectory, rerun the scene; the previous file is overwritten.
 """
 
-import os
 import json
 from pathlib import Path
 
@@ -23,6 +27,7 @@ SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 
 import Sofa.Core
 
+from labtests.core.modules.motor_recorder import MotorRecorder
 from scenes._manual_scene import build_manual_scene
 
 
@@ -76,21 +81,19 @@ class RecordingController(Sofa.Core.Controller):
     and writes them to `runtime/recordings/<test>/motor_recording.json`.
     """
 
-    def __init__(self, root, emio):
+    def __init__(self, root, emio, target_mo, rest_lengths):
         """Initialize recording state and periodic autosave settings."""
         Sofa.Core.Controller.__init__(self)
         self.name = "RecordingController"
         self.root = root
-        self.emio = emio
-        self.recording_state = {
-            "motor_positions": [],
-            "timestamps": [],
-            "start_time": None,
-            "dt": float(root.dt.value),
-        }
-        self.capture_start_time = None
-        self.last_save_time = 0.0
-        self.save_interval = 1.0
+        self.recorder = MotorRecorder(
+            emio,
+            RECORD_FILE,
+            dt=float(root.dt.value),
+            target_mo=target_mo,
+            rest_lengths=rest_lengths,
+        )
+        self._start_time = None
 
         print("=" * 60)
         print("RECORDING MODE ACTIVE")
@@ -101,46 +104,19 @@ class RecordingController(Sofa.Core.Controller):
         )
         print("=" * 60)
 
-    def _save_to_file(self):
-        """Persist the in-memory trajectory to runtime/motor_recording.json."""
-        try:
-            directory = os.path.dirname(RECORD_FILE)
-            if directory and not os.path.exists(directory):
-                os.makedirs(directory, exist_ok=True)
-            with open(RECORD_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.recording_state, f, indent=2)
-        except Exception as exc:
-            print(f"[Recording] save error: {exc}")
-
     def onAnimateBeginEvent(self, event):
         """Capture one frame of motor positions at each animation step."""
         current_time = float(self.root.time.value)
 
-        if self.recording_state["start_time"] is None:
-            self.recording_state["start_time"] = current_time
+        if self._start_time is None:
+            self._start_time = current_time
 
-        if current_time < (self.recording_state["start_time"] + ASSEMBLY_SKIP_TIME):
+        if current_time < (self._start_time + ASSEMBLY_SKIP_TIME):
             return
 
-        if self.capture_start_time is None:
-            self.capture_start_time = current_time
-
-        positions = []
-        for motor in self.emio.motors:
-            motor_position = float(motor.getMechanicalState().position.value[0][0])
-            positions.append(motor_position)
-
-        self.recording_state["motor_positions"].append(positions)
-        self.recording_state["timestamps"].append(
-            current_time - self.capture_start_time
-        )
-
-        if current_time - self.last_save_time >= self.save_interval:
-            self.last_save_time = current_time
-            self._save_to_file()
-            print(
-                f"[Recording] {len(self.recording_state['motor_positions'])} frames | t={current_time:.2f}s"
-            )
+        self.recorder.capture_frame(current_time)
+        if self.recorder.frame_count % 100 == 0:
+            print(f"[Recording] {self.recorder.frame_count} frames | t={current_time:.2f}s")
 
 
 def createScene(rootnode):
@@ -149,7 +125,11 @@ def createScene(rootnode):
     if nodes is None:
         return
 
-    rootnode.addObject(RecordingController(rootnode, nodes.emio))
+    target_mo = rootnode.Modelling.Target.getMechanicalState()
+    rest_lengths = nodes.emio.centerpart.Effector.Distance.DistanceMapping.restLengths
+    rootnode.addObject(
+        RecordingController(rootnode, nodes.emio, target_mo, rest_lengths)
+    )
 
     if args.connection:
         nodes.emio.addConnectionComponents()

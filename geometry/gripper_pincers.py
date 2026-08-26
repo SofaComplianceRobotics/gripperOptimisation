@@ -302,3 +302,52 @@ def make_pincer_pair_world_collision(p: ModelParams) -> cq.Workplane:
     """
 
     return make_pincer_pair_world(p, trailing_fraction=p.mesh_collision_tail_fraction)
+
+
+def make_pincer_pair_world_collision_split(p: ModelParams) -> list[cq.Workplane]:
+    """Build the two collision pincers as independent, unmerged solids.
+
+    Same placement and distal-fraction trimming as
+    make_pincer_pair_world_collision, but keeps each pincer as its own solid
+    instead of unioning them. SOFA loads the two solids as separate collision
+    bodies so it can detect contact between the fingers themselves (a single
+    merged mesh/collision model can never self-collide).
+
+    Args:
+        p (ModelParams): Model parameters.
+
+    Returns:
+        list[cq.Workplane]: [pincer_1, pincer_2] placed in world space.
+    """
+    pincer_placement_radius = p.cylinder_radius
+    pincer = make_pincer_local(
+        p, trailing_fraction=p.mesh_collision_tail_fraction
+    ).rotate((0, 0, 0), (1, 0, 0), -90)
+
+    clip_height = (p.cylinder_height * 4.0) + 200.0
+    clip_box = (
+        cq.Workplane("XY")
+        .box(
+            (p.cylinder_radius * 4.0) + 20.0,
+            (p.cylinder_radius * 4.0) + 20.0,
+            clip_height,
+        )
+        .translate((0, 0, p.cylinder_height - (clip_height / 2.0)))
+    )
+
+    parts = []
+    for angle_deg in (0.0, 180.0):
+        a = math.radians(angle_deg)
+        x = pincer_placement_radius * math.cos(a)
+        y = pincer_placement_radius * math.sin(a)
+
+        tilt_y_deg = p.pincer_tilt_y_deg if angle_deg == 0.0 else -p.pincer_tilt_y_deg
+
+        pincer_i = pincer.rotate((0, 0, 0), (0, 0, 1), angle_deg)
+        pincer_i = pincer_i.rotate((0, 0, 0), (0, 1, 0), tilt_y_deg)
+        pincer_i = pincer_i.translate((x, y, 0))
+        pincer_i = pincer_i.intersect(clip_box)
+
+        parts.append(pincer_i)
+
+    return parts

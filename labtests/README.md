@@ -118,7 +118,9 @@ def createScene(rootnode):
     add_required_plugins(nodes.simulation)
     rootnode.dt = DT
 
-    gripper_collision = setup_collision(nodes.emio, cfg.gripper_mesh_path)
+    gripper_collision = setup_collision(
+        nodes.emio, cfg.gripper_finger1_mesh_path, cfg.gripper_finger2_mesh_path
+    )
     cube_handles = setup_cube_floor(
         nodes.simulation,
         gripper_collision,
@@ -255,7 +257,7 @@ from labtests.grasp_hold.scene import createScene as createScene  # noqa: F401
 | `add_required_plugins(simulation)` | 13 SOFA plugins for collision and contact. |
 | `PlaybackConfig.from_env(lab_root)` | Scene physics/scoring config: defaults from `core/scene_defaults.py`, env vars override individually. |
 | `OptunaMeta.from_env()` | Optuna metadata only (gen, trial, run, slot). |
-| `setup_collision(emio, stl_path)` | Adds gripper collision mesh. Returns node. |
+| `setup_collision(emio, finger1_stl_path, finger2_stl_path)` | Adds the two finger collision meshes (own SOFA group each, so they can collide with each other). Returns `[finger1_node, finger2_node]`. |
 | `setup_cube_floor(simulation, gripper_collision, **kwargs)` | Adds cube + floor. Returns `CubeFloorHandles`. |
 | `setup_playback(emio, record_file)` | Loads motor recording + wires `JointConstraints`. |
 | `setup_effector(nodes, emio, **kwargs)` | Adds effector target + ImGui controls. Returns `EffectorHandles`. |

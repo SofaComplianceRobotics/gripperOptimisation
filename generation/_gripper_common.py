@@ -112,6 +112,7 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     Returns:
         A new ModelParams instance.
     """
+    field_names = {f.name for f in fields(base)}
     kwargs: dict = {}
     for f in fields(base):
         if f.name in _CONFIG_EXCLUDED_FIELDS or f.name not in cfg:
@@ -128,7 +129,9 @@ def params_from_config(cfg: dict, base, fine: bool = False):
         else:
             kwargs[f.name] = raw
 
-    kwargs.update(_CONFIG_FORCED_FIELDS)
+    # _CONFIG_FORCED_FIELDS is gripper-specific (mesh generation flags); this
+    # function is also used for LegParams, which has neither field.
+    kwargs.update({k: v for k, v in _CONFIG_FORCED_FIELDS.items() if k in field_names})
 
     if fine:
         kwargs["mesh_size_max_stl"] = 2

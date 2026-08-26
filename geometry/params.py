@@ -45,33 +45,33 @@ class ModelParams:
     # Ring
     cylinder_radius: float = field(
         default=27.2,
-        metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
+        metadata={"opt": {"type": "float", "min": 26, "max": 28}, "check": "positive"},
     )
     cylinder_hole_thickness: float = field(
         default=3.4,
-        metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
+        metadata={"opt": {"type": "float", "min": 1, "max": 5}, "check": "positive"},
     )
     cylinder_height_A: float = field(
         default=1.5,
-        metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
     )
     cylinder_height_B: float = field(
         default=4.3,
-        metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
     )
     cylinder_height_C: float = field(
         default=3.6,
-        metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
+        metadata={"opt": {"type": "float", "min": 0.2, "max": 5}, "check": "positive"},
     )
     cylinder_plateau_A_deg: float = field(
-        default=10.8, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=10.8, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
     )
     cylinder_plateau_B_deg: float = field(
-        default=5.6, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=5.6, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
     )
     # Effective max = 45 - max(plateau_A, plateau_B); clamped in the optimizer after sampling.
     cylinder_plateau_C_deg: float = field(
-        default=30.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
+        default=30.0, metadata={"opt": {"type": "float", "min": 0, "max": 45}}
     )
 
     # Leg attachment
@@ -101,30 +101,20 @@ class ModelParams:
     # Pincers
     pincer_profile_width: float = field(
         default=5.5,
-        metadata={
-            "opt": {"type": "float", "min": 0, "max": 0},
-            "check": "positive",
-        },
+        metadata={"opt": {"type": "float", "min": 2.0, "max": 8.0}, "check": "positive"},
     )
     pincer_profile_height: float = field(
         default=13.8,
         metadata={
-            "opt": {"type": "float", "min": 0, "max": 0},
+            "opt": {"type": "float", "min": 6.0, "max": 16.0},
             "check": "positive",
         },
     )
     pincer_profile_samples: int = field(default=4, metadata={"check": ("ge", 4)})
     pincer_round_cap_segments: int = field(default=3, metadata={"check": ("ge", 2)})
-    pincer_path_scale: float = field(
-        default=1.0,
-        metadata={"opt": {"type": "float", "min": 0, "max": 0}, "check": "positive"},
-    )
-    pincer_tilt_y_deg: float = field(
-        default=90.0, metadata={"opt": {"type": "float", "min": 0, "max": 0}}
-    )
-    pincer_round_ends: bool = field(
-        default=True, metadata={"opt": {"type": "bool", "min": 0, "max": 0}}
-    )
+    pincer_path_scale: float = field(default=1.0, metadata={"check": "positive"})
+    pincer_tilt_y_deg: float = 90.0
+    pincer_round_ends: bool = True
     # Bézier spline in polar form — absolute XY computed by pincer_points property
     p0_hout_dist: float = field(
         default=1.6, metadata={"opt": {"type": "float", "min": 0.0, "max": 32.0}}
@@ -222,11 +212,7 @@ class ModelParams:
     )
     mesh_collision_size: float = field(
         default=90.0,
-        metadata={
-            "opt": {"type": "float", "min": 0, "max": 0},
-            "check": "positive",
-            "check_if": "mesh_enabled",
-        },
+        metadata={"check": "positive", "check_if": "mesh_enabled"},
     )
     mesh_collision_tail_fraction: float = field(
         default=1.0,
@@ -234,19 +220,11 @@ class ModelParams:
     )
     mesh_angle_smooth: float = field(
         default=20.0,
-        metadata={
-            "opt": {"type": "float", "min": 0, "max": 0},
-            "check": ("open_open", 0.0, 90.0),
-            "check_if": "mesh_enabled",
-        },
+        metadata={"check": ("open_open", 0.0, 90.0), "check_if": "mesh_enabled"},
     )
     mesh_size_from_curvature: int = field(
         default=12,
-        metadata={
-            "opt": {"type": "int", "min": 0, "max": 0},
-            "check": "non_negative",
-            "check_if": "mesh_enabled",
-        },
+        metadata={"check": "non_negative", "check_if": "mesh_enabled"},
     )
     mesh_show_viewer: bool = False
 
@@ -291,7 +269,7 @@ def param_specs(base: ModelParams | None = None) -> list[dict]:
     return specs
 
 
-def _apply_check(name: str, value, check) -> None:
+def apply_check(name: str, value, check) -> None:
     """Enforce one field's "check" metadata rule.
 
     Supported rules:
@@ -347,7 +325,7 @@ def validate_params(p: ModelParams) -> None:
         gate = f.metadata.get("check_if")
         if gate is not None and not getattr(p, gate):
             continue
-        _apply_check(f.name, getattr(p, f.name), check)
+        apply_check(f.name, getattr(p, f.name), check)
 
     # ── Cross-field geometric constraints ──
     if p.cylinder_hole_thickness >= 2.0 * p.cylinder_radius:

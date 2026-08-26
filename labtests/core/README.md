@@ -62,7 +62,7 @@ Optional scene components. Each exposes a single `setup()` function that takes S
 
 | Module | Import alias | What it adds |
 |---|---|---|
-| `collision_stl.py` | `setup_collision` | Gripper collision mesh from STL |
+| `collision_stl.py` | `setup_collision` | Two per-finger collision meshes from STL (own SOFA group each, so the fingers can collide with each other) |
 | `cube_floor.py` | `setup_cube_floor` | Rigid cube + floor plane; returns `CubeFloorHandles` |
 | `motor_playback.py` | `setup_playback` | Loads motor recording, wires `JointConstraints`; returns `PlaybackHandles` |
 | `effector_target.py` | `setup_effector` | Effector target + ImGui drag handle; returns `EffectorHandles` |
