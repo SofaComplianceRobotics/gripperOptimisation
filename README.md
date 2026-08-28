@@ -22,32 +22,37 @@ Everything installs into the **emio-labs bundled Python** (SOFA's `SofaPython3`,
 
 ### Install for development (clone)
 
-From `<emio-labs>\v25.12.00\assets\labs\`:
+Requires [git](https://git-scm.com/download/win) (or `winget install --id Git.Git -e --source winget`). From `<emio-labs assets>\labs\` (on Windows, the live one EmioLabs actually reads is normally `%USERPROFILE%\emio-labs\<version>\assets\labs`, not the copy next to the installed exe):
 
 ```powershell
-$SofaPy = "$env:LOCALAPPDATA\Programs\emio-labs\resources\sofa\bin\python\python.exe"
-
-# 1. The lab itself, as assets\labs\lab_shapeOPT
 git clone https://github.com/SofaComplianceRobotics/gripperOptimisation.git lab_shapeOPT
-
-# 2. The optimization framework, cloned anywhere, installed editable
-git clone https://github.com/SofaComplianceRobotics/SofaOptimisation.git
-& $SofaPy -m pip install -e ".\SofaOptimisation[dashboard,preview]"
-
-# 3. The geometry / generation / dashboard dependencies (pinned, verified for 3.10)
-& $SofaPy -m pip install -r ".\lab_shapeOPT\tools\requirements-bundle.txt"
-
-# 4. Register the lab: add this block to assets\labs\labsConfig.json -> "labs":
-#      { "name": "lab_shapeOPT", "filename": "lab_shapeOPT.md",
-#        "title": "Shape Optimization",
-#        "description": "optimise the shape of a structure to meet a target performance" }
+powershell -ExecutionPolicy Bypass -File lab_shapeOPT\tools\install_dev.ps1
 ```
+
+`install_dev.ps1` auto-detects the emio-labs bundled Python (pass `-SofaPy <path>` if it can't — e.g. a portable install run from somewhere other than the standard `Programs\emio-labs`), clones or updates `sofaopt` next to itself, installs both into that Python, and registers `lab_shapeOPT` in `labsConfig.json`. Safe to re-run any time, e.g. after a `git pull`.
 
 Then launch from the EmioLabs platform button, or directly:
 
 ```powershell
 & $SofaPy lab_shapeOPT\launcher\launch_web.py
 ```
+
+<details>
+<summary>What the script does, step by step (for doing it by hand, or debugging)</summary>
+
+```powershell
+$SofaPy = "$env:LOCALAPPDATA\Programs\emio-labs\resources\sofa\bin\python\python.exe"
+
+git clone https://github.com/SofaComplianceRobotics/SofaOptimisation.git
+& $SofaPy -m pip install -e ".\SofaOptimisation[dashboard,preview]"
+& $SofaPy -m pip install -r ".\lab_shapeOPT\tools\requirements-bundle.txt"
+```
+
+Then add this to `assets\labs\labsConfig.json`'s `"labs"` array:
+```json
+{ "name": "lab_shapeOPT", "filename": "lab_shapeOPT.md", "title": "Shape Optimization", "description": "optimise the shape of a structure to meet a target performance" }
+```
+</details>
 
 ### Pre-built bundle
 
