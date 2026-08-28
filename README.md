@@ -12,15 +12,50 @@ Lab ShapeOPT lets you generate soft robotic gripper geometries from a parameter 
 
 ## Installation
 
-**Prerequisites:** EmioLabs installed (provides SOFA and runSofa.exe). Python 3.10+.
+**Prerequisites:** EmioLabs installed (provides SOFA and runSofa.exe).
 
-Dependencies are managed by EmioLabs. Additionally, install the optimization framework into the emio-labs bundled Python:
+Everything installs into the **emio-labs bundled Python** (SOFA's `SofaPython3`, currently 3.10) so the dashboard, the optimizer and the runSofa scenes all share one interpreter and one SOFA build. On Windows that interpreter is:
 
-```bash
-pip install -e path/to/SofaOptimisation[dashboard,preview]
+```
+%LOCALAPPDATA%\Programs\emio-labs\resources\sofa\bin\python\python.exe
 ```
 
-If running outside the platform, also install the packages used across `geometry/` and `generation/` manually (CadQuery, gmsh, pyvista, matplotlib, `beziers`, `scipy`).
+### Install for development (clone)
+
+From `<emio-labs>\v25.12.00\assets\labs\`:
+
+```powershell
+$SofaPy = "$env:LOCALAPPDATA\Programs\emio-labs\resources\sofa\bin\python\python.exe"
+
+# 1. The lab itself, as assets\labs\lab_shapeOPT
+git clone https://github.com/SofaComplianceRobotics/gripperOptimisation.git lab_shapeOPT
+
+# 2. The optimization framework, cloned anywhere, installed editable
+git clone https://github.com/SofaComplianceRobotics/SofaOptimisation.git
+& $SofaPy -m pip install -e ".\SofaOptimisation[dashboard,preview]"
+
+# 3. The geometry / generation / dashboard dependencies (pinned, verified for 3.10)
+& $SofaPy -m pip install -r ".\lab_shapeOPT\tools\requirements-bundle.txt"
+
+# 4. Register the lab: add this block to assets\labs\labsConfig.json -> "labs":
+#      { "name": "lab_shapeOPT", "filename": "lab_shapeOPT.md",
+#        "title": "Shape Optimization",
+#        "description": "optimise the shape of a structure to meet a target performance" }
+```
+
+Then launch from the EmioLabs platform button, or directly:
+
+```powershell
+& $SofaPy lab_shapeOPT\launcher\launch_web.py
+```
+
+### Pre-built bundle
+
+`dist/lab_shapeOPT_bundle_windows.zip` is a self-contained bundle (source + all deps in
+`runtime/modules/site-packages/`) built by `tools/build_bundle.ps1`. **The checked-in zip is
+stale** — it predates the split into `sofaopt` and does not contain the framework. Rebuild it
+with `tools/build_bundle.ps1` (after adding `sofaopt` to `tools/requirements-bundle.txt`)
+before handing it to anyone.
 
 ---
 

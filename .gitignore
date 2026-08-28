@@ -219,7 +219,6 @@ __marimo__/
 
 # Ignore all files in site-packages
 runtime/modules/site-packages/
-runtime/recordings/
 runtime/trials/
 runtime/gripper_opt.db
 runtime/study.db
