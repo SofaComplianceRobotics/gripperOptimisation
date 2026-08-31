@@ -6,11 +6,19 @@
 #
 # Sofa / SofaPython3 is provided by the emio-labs install, not pip.
 # OCP, plotly, ezdxf, nlopt, vtk are pulled in transitively.
+#
+# numpy is deliberately NOT pinned here: neither cadquery nor cadquery-ocp
+# declares a numpy dependency at all (OCP is a pybind11/OCCT wrapper, no
+# numpy C-API use), so nothing in this file needs a specific version. Pinning
+# one anyway used to force-upgrade whatever numpy emio-labs already shipped
+# (e.g. downgrading pip's own choice on a machine where numpy 1.26.4 satisfies
+# every bound here) and broke emioapi/dynamixelmotorsapi, which pin
+# numpy==1.26.4 for the Emio hardware link. Leave it to float.
 
 cadquery==2.7.0
 gmsh==4.15.0
 svg.path==7.0
-numpy==2.2.6
+beziers==0.6.0
 scipy==1.15.3
 matplotlib==3.10.8
 optuna==4.8.0
