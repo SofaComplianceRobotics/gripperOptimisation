@@ -376,8 +376,7 @@ def _prepare_trial(params: dict, trial_dir: Path) -> TrialPrep:
     attachments there, so leg shape affects those scores without any
     leg-specific test being added.
     """
-    config_path = trial_dir / "lab_config.jsonc"
-    config_path.write_text(json.dumps(params, indent=2), encoding="utf-8")
+    config_path = trial_dir / "params.json"  # already written by sofaopt's prepare_trial
 
     finger1_stl, finger2_stl, visual_stl_copy = _prepare_gripper_mesh(
         config_path, trial_dir
