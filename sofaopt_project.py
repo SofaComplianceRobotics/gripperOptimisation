@@ -23,7 +23,13 @@ if str(LAB_ROOT) not in sys.path:
     sys.path.insert(0, str(LAB_ROOT))
 
 import sofaopt
-from sofaopt import SofaOptProject, TestSpec, TrialPrep, param_specs_from_dataclass
+from sofaopt import (
+    ParamSpec,
+    SofaOptProject,
+    TestSpec,
+    TrialPrep,
+    param_specs_from_dataclass,
+)
 
 from geometry.leg_params import LegParams
 from geometry.params import ModelParams
@@ -376,8 +382,7 @@ def _prepare_trial(params: dict, trial_dir: Path) -> TrialPrep:
     attachments there, so leg shape affects those scores without any
     leg-specific test being added.
     """
-    config_path = trial_dir / "lab_config.jsonc"
-    config_path.write_text(json.dumps(params, indent=2), encoding="utf-8")
+    config_path = trial_dir / "params.json"  # already written by sofaopt's prepare_trial
 
     finger1_stl, finger2_stl, visual_stl_copy = _prepare_gripper_mesh(
         config_path, trial_dir
@@ -453,16 +458,35 @@ def _selected_param_names() -> set[str] | None:
     return None
 
 
+def _param_specs(instance, selected: set[str] | None) -> list[ParamSpec]:
+    """Build the ParamSpec list for one params dataclass, freezing the rest.
+
+    sofaopt's param_specs_from_dataclass reads each field's [min, max] from its
+    "opt" metadata. On top of that, every param not listed in
+    config/lab_config.optimization.json is held at its current value
+    (low == high), which sofaopt treats as frozen: it still reaches the scene
+    but is never searched. selected=None searches everything with opt metadata.
+    Bool params are always left searchable.
+    """
+    specs = param_specs_from_dataclass(instance)
+    if selected is None:
+        return specs
+    return [
+        s
+        if s.type == "bool" or s.name in selected
+        else ParamSpec(s.name, s.type, s.default, s.default, s.default)
+        for s in specs
+    ]
+
+
 _SELECTED_PARAM_NAMES = _selected_param_names()
 
 
 PROJECT = SofaOptProject(
     name="lab_shapeOPT",
     work_dir=LAB_ROOT,
-    params=param_specs_from_dataclass(
-        ModelParams(), selected_names=_SELECTED_PARAM_NAMES
-    )
-    + param_specs_from_dataclass(LegParams(), selected_names=_SELECTED_PARAM_NAMES),
+    params=_param_specs(ModelParams(), _SELECTED_PARAM_NAMES)
+    + _param_specs(LegParams(), _SELECTED_PARAM_NAMES),
     tests=_tests_from_registry(),
     runsofa_exe=Path(_SOFA["runsofa_exe"]),
     sofa_env=_scene_env(),
