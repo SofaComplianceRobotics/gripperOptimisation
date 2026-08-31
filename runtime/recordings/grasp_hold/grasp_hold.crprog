@@ -1,0 +1,24 @@
+<?xml version='1.0'?>
+<!DOCTYPE program>
+<program>
+    <track>
+        <action name="startmove" wp="0.000000 -110.000000 0.000000 0.000000 0.000000 0.000000 1.000000 " duration="0.5" freeInRotation="true" comment="Start waypoint"/>
+        <action name="pick" duration="0.20000000000000001" closing="35" opening="70" release="true" comment="Place"/>
+        <action name="move" wp="0.000000 -165.000000 0.000000 -0.532276 0.124313 -0.809375 0.214806 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="pick" duration="0.5" closing="5" opening="70" release="false" comment="Pick"/>
+        <action name="move" wp="0.000000 -110.000000 0.000000 -0.796519 0.055699 -0.580752 0.158690 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="-24.920099 -110.000000 28.115000 -0.912703 0.256323 -0.262584 0.179782 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="12.651800 -140.000000 -28.370600 -0.898742 -0.007067 -0.395938 0.188272 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="-23.642200 -128.000000 -21.725201 -0.865235 0.280035 -0.313835 0.272868 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="8.562300 -110.000000 24.536699 -0.943077 -0.075451 -0.313848 0.080074 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="-29.009600 -140.000000 -1.278000 -0.881208 0.304552 -0.243324 0.267421 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="-24.000000 -140.000000 25.000000 -0.875021 -0.027031 -0.462339 0.140893 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="wait" duration="0.5" comment="Wait"/>
+        <action name="move" wp="0.000000 -110.000000 0.000000 -0.931641 0.037764 -0.316522 0.174448 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="0.000000 -140.000000 0.000000 -0.842320 0.051657 -0.509930 0.166731 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="0.000000 -110.000000 0.000000 -0.931642 0.037764 -0.316521 0.174448 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="0.000000 -140.000000 0.000000 -0.839134 0.051982 -0.515298 0.166192 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="move" wp="0.000000 -110.000000 0.000000 -0.931642 0.037764 -0.316521 0.174448 " duration="0.5" freeInRotation="true" type="0" comment="Move to waypoint"/>
+        <action name="pick" duration="4" closing="5" opening="70" release="true" comment="Place"/>
+    </track>
+</program>

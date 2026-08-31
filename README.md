@@ -12,15 +12,63 @@ Lab ShapeOPT lets you generate soft robotic gripper geometries from a parameter 
 
 ## Installation
 
-**Prerequisites:** EmioLabs installed (provides SOFA and runSofa.exe). Python 3.10+.
+**Prerequisites:** EmioLabs installed (provides SOFA and runSofa.exe).
 
-Dependencies are managed by EmioLabs. Additionally, install the optimization framework into the emio-labs bundled Python:
+Everything installs into the **emio-labs bundled Python** (SOFA's `SofaPython3`, currently 3.10) so the dashboard, the optimizer and the runSofa scenes all share one interpreter and one SOFA build. On Windows that interpreter is:
 
-```bash
-pip install -e path/to/SofaOptimisation[dashboard,preview]
+```
+%LOCALAPPDATA%\Programs\emio-labs\resources\sofa\bin\python\python.exe
 ```
 
-If running outside the platform, also install the packages used across `geometry/` and `generation/` manually (CadQuery, gmsh, pyvista, matplotlib, `beziers`, `scipy`).
+### Just want to run it (no terminal, no git)
+
+1. In EmioLabs: **Labs → Configure Labs**, paste `https://github.com/SofaComplianceRobotics/gripperOptimisation/archive/refs/heads/main.zip` into the path/URL field, click **Add**. This downloads, unzips and registers the lab for you.
+2. Open the lab, click the **install dependencies** button once. It runs as the emio-labs bundled Python automatically (EmioLabs puts it first on PATH for any `#python-button`), installs sofaopt + the pinned geometry/dashboard stack, and falls back to a plain `pip install` from GitHub if git isn't on the machine.
+3. Click the **launch dashboard** button.
+
+Updating later means repeating step 1 (Configure Labs re-copies the zip over the existing folder — see the caveat under development install below) then step 2 again.
+
+### Install for development (clone)
+
+Requires [git](https://git-scm.com/download/win) (or `winget install --id Git.Git -e --source winget`). From `<emio-labs assets>\labs\` (on Windows, the live one EmioLabs actually reads is normally `%USERPROFILE%\emio-labs\<version>\assets\labs`, not the copy next to the installed exe):
+
+```powershell
+git clone https://github.com/SofaComplianceRobotics/gripperOptimisation.git lab_shapeOPT
+powershell -ExecutionPolicy Bypass -File lab_shapeOPT\tools\install_dev.ps1
+```
+
+`install_dev.ps1` auto-detects the emio-labs bundled Python (pass `-SofaPy <path>` if it can't — e.g. a portable install run from somewhere other than the standard `Programs\emio-labs`), clones or updates `sofaopt` next to itself, installs both into that Python, and registers `lab_shapeOPT` in `labsConfig.json`. Safe to re-run any time, e.g. after a `git pull`. Once registered, the lab's own **install dependencies** button (inside EmioLabs) does the same sofaopt/deps step and reuses the same `sofaopt` clone, so either works for later updates.
+
+Then launch from the EmioLabs platform button, or directly:
+
+```powershell
+& $SofaPy lab_shapeOPT\launcher\launch_web.py
+```
+
+<details>
+<summary>What the script does, step by step (for doing it by hand, or debugging)</summary>
+
+```powershell
+$SofaPy = "$env:LOCALAPPDATA\Programs\emio-labs\resources\sofa\bin\python\python.exe"
+
+git clone https://github.com/SofaComplianceRobotics/SofaOptimisation.git
+& $SofaPy -m pip install -e ".\SofaOptimisation[dashboard,preview]"
+& $SofaPy -m pip install -r ".\lab_shapeOPT\tools\requirements-bundle.txt"
+```
+
+Then add this to `assets\labs\labsConfig.json`'s `"labs"` array:
+```json
+{ "name": "lab_shapeOPT", "filename": "lab_shapeOPT.md", "title": "Shape Optimization", "description": "optimise the shape of a structure to meet a target performance" }
+```
+</details>
+
+### Pre-built bundle
+
+`dist/lab_shapeOPT_bundle_windows.zip` is a self-contained bundle (source + all deps in
+`runtime/modules/site-packages/`) built by `tools/build_bundle.ps1`. **The checked-in zip is
+stale** — it predates the split into `sofaopt` and does not contain the framework. Rebuild it
+with `tools/build_bundle.ps1` (after adding `sofaopt` to `tools/requirements-bundle.txt`)
+before handing it to anyone.
 
 ---
 
