@@ -99,6 +99,38 @@ class TestParamsFromConfig:
         assert params.export_dir == ModelParams().export_dir
 
 
+class TestParamsFromConfigClampsToSearchRange:
+    def test_above_max_is_clamped_down(self, capsys):
+        # pincer_profile_height opt range is [6.0, 16.0].
+        params = params_from_config({"pincer_profile_height": 99.0}, ModelParams())
+        assert params.pincer_profile_height == 16.0
+        assert "[clamp] pincer_profile_height" in capsys.readouterr().out
+
+    def test_below_min_is_clamped_up(self):
+        # p1_dist opt range is [36, 48].
+        params = params_from_config({"p1_dist": 1.0}, ModelParams())
+        assert params.p1_dist == 36.0
+
+    def test_in_range_value_is_untouched_and_silent(self, capsys):
+        params = params_from_config({"pincer_profile_height": 12.0}, ModelParams())
+        assert params.pincer_profile_height == 12.0
+        assert "[clamp]" not in capsys.readouterr().out
+
+    def test_clamped_value_keeps_field_type(self):
+        params = params_from_config({"p1_dist": 999.0}, ModelParams())
+        assert isinstance(params.p1_dist, float)
+
+    def test_leg_params_are_clamped_too(self):
+        # leg_p1_dist opt range is [70.0, 200.0].
+        params = params_from_config({"leg_p1_dist": 5000.0}, LegParams())
+        assert params.leg_p1_dist == 200.0
+
+    def test_non_opt_field_is_not_clamped(self):
+        # mesh_size_max_stl has no opt metadata: any positive value passes through.
+        params = params_from_config({"mesh_size_max_stl": 500.0}, ModelParams())
+        assert params.mesh_size_max_stl == 500.0
+
+
 class TestParamsFromConfigOtherDataclass:
     def test_forced_fields_skipped_for_dataclasses_without_them(self):
         # _CONFIG_FORCED_FIELDS (mesh_enabled, mesh_show_viewer) only exist on
