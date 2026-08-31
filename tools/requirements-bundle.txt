@@ -1,27 +1,31 @@
 # Lab ShapeOPT runtime dependencies.
 #
-# Pinned to the versions verified working under the emio-labs SOFA Python 3.10.
+# Only packages the lab itself needs and sofaopt does NOT already bring in —
+# cadquery/gmsh/svg.path/beziers/scipy are geometry-generation-only, nothing
+# sofaopt touches. install_deps.py always installs sofaopt[dashboard,preview]
+# first, so optuna/cmaes/dash/plotly/pyvista (and matplotlib, pulled in by
+# pyvista) are already resolved by the time this file runs. Re-pinning any of
+# those here just makes pip install a version, then immediately uninstall it
+# for the one sofaopt already chose — wasted bandwidth and noisy "Attempting
+# uninstall" logs for no behavioural difference, since the lab has no exact-
+# version requirement on any of them.
+#
 # Installed into runtime/modules/site-packages by build_bundle.ps1 so the lab
 # is self-contained and needs no setup on the target machine.
 #
 # Sofa / SofaPython3 is provided by the emio-labs install, not pip.
-# OCP, plotly, ezdxf, nlopt, vtk are pulled in transitively.
+# OCP, ezdxf, nlopt, vtk are pulled in transitively via cadquery.
 #
-# numpy is deliberately NOT pinned here: neither cadquery nor cadquery-ocp
-# declares a numpy dependency at all (OCP is a pybind11/OCCT wrapper, no
-# numpy C-API use), so nothing in this file needs a specific version. Pinning
-# one anyway used to force-upgrade whatever numpy emio-labs already shipped
-# (e.g. downgrading pip's own choice on a machine where numpy 1.26.4 satisfies
-# every bound here) and broke emioapi/dynamixelmotorsapi, which pin
-# numpy==1.26.4 for the Emio hardware link. Leave it to float.
+# numpy is deliberately NOT pinned here either: neither cadquery nor
+# cadquery-ocp declares a numpy dependency at all (OCP is a pybind11/OCCT
+# wrapper, no numpy C-API use), so nothing in this file needs a specific
+# version. Pinning one anyway used to force-upgrade whatever numpy emio-labs
+# already shipped (e.g. downgrading pip's own choice on a machine where numpy
+# 1.26.4 satisfies every bound here) and broke emioapi/dynamixelmotorsapi,
+# which pin numpy==1.26.4 for the Emio hardware link. Leave it to float.
 
 cadquery==2.7.0
 gmsh==4.15.0
 svg.path==7.0
 beziers==0.6.0
 scipy==1.15.3
-matplotlib==3.10.8
-optuna==4.8.0
-cmaes==0.13.0
-dash==4.1.0
-pyvista==0.48.2
