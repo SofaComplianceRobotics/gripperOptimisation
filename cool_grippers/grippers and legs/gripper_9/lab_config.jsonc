@@ -1,0 +1,23 @@
+{
+  "cylinder_radius": 27.2,
+  "cylinder_hole_thickness": 3.3,
+  "cylinder_height_A": 2.1,
+  "cylinder_height_B": 3.4,
+  "cylinder_height_C": 2.7,
+  "cylinder_plateau_A_deg": 37.7,
+  "cylinder_plateau_B_deg": 19.4,
+  "cylinder_plateau_C_deg": 2.8,
+  "leg_attachement_tilt_angle": 22.9,
+  "pincer_profile_width": 4.7,
+  "pincer_profile_height": 8.3,
+  "p0_hout_dist": 12.5,
+  "p0_hout_angle_deg": -24.1,
+  "p1_dist": 38.4,
+  "p1_angle_deg": -37.1,
+  "p1_hin_dist": 13.8,
+  "p1_hin_angle_deg": 143.2,
+  "leg_p0_hout_dist": 23.0,
+  "leg_p1_dist": 181.6,
+  "leg_p1_angle_deg": 83.6,
+  "leg_p1_hin_dist": 125.2
+}
