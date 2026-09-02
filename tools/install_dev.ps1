@@ -78,12 +78,16 @@ if (Test-Path (Join-Path $SofaOptDir ".git")) {
 }
 
 # --- 3. Install dependencies --------------------------------------------------
+# -c constraints.txt: this installs into the shared emio-labs SOFA Python, so
+# numpy/cadquery must stay at the versions emioapi and the other labs expect.
+$Constraints = Join-Path $LabRoot "tools\constraints.txt"
+
 Write-Host "`nInstalling sofaopt (editable, with dashboard+preview extras)..."
-& $SofaPy -m pip install -e "$SofaOptDir[dashboard,preview]"
+& $SofaPy -m pip install -c $Constraints -e "$SofaOptDir[dashboard,preview]"
 if ($LASTEXITCODE -ne 0) { throw "pip install of sofaopt failed" }
 
 Write-Host "`nInstalling lab_shapeOPT dependencies..."
-& $SofaPy -m pip install -r (Join-Path $LabRoot "tools\requirements-bundle.txt")
+& $SofaPy -m pip install -c $Constraints -r (Join-Path $LabRoot "tools\requirements-bundle.txt")
 if ($LASTEXITCODE -ne 0) { throw "pip install of lab dependencies failed" }
 
 # --- 4. Register the lab in labsConfig.json -----------------------------------
