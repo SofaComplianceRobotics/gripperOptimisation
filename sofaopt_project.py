@@ -49,7 +49,7 @@ GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper.py"
 GENERATE_LEG_SCRIPT = LAB_ROOT / "generation" / "generate_leg.py"
 TRIAL_RECORDER_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_trial_recorder.py"
 
-GEOMETRY_EXPORT_TIMEOUT = 20.0  # seconds before generate_gripper.py is considered stuck
+GEOMETRY_EXPORT_TIMEOUT = 60.0  # seconds before generate_gripper.py is considered stuck
 RECORDING_TIMEOUT = 60.0  # seconds before the trial recording pass is considered stuck
 
 _SOFA = resolve_sofa_runtime()
