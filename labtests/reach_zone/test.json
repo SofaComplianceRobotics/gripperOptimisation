@@ -1,0 +1,7 @@
+{
+  "label": "Reach Zone: 1 run",
+  "short_label": "reach",
+  "description": "Sweeps a stack of rings above and below working height and scores the volume of the reachable zone",
+  "default_selected": false,
+  "run_count": 1
+}

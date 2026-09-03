@@ -27,6 +27,7 @@ $ErrorActionPreference = "Stop"
 $LabRoot      = (Resolve-Path "$PSScriptRoot\..").Path
 $SofaPython   = Join-Path $SofaRoot "bin\python\python.exe"
 $Requirements = Join-Path $PSScriptRoot "requirements-bundle.txt"
+$Constraints  = Join-Path $PSScriptRoot "constraints.txt"
 
 if ($SourceOnly) {
     Write-Host "Building source-only patch (no dependencies)"
@@ -85,7 +86,7 @@ if (-not $SourceOnly) {
     $BundleSP = Join-Path $Stage "runtime\modules\site-packages"
     New-Item -ItemType Directory -Force -Path $BundleSP | Out-Null
     Write-Host "Installing dependencies into runtime\modules\site-packages ..."
-    & $SofaPython -m pip install --no-cache-dir --target $BundleSP -r $Requirements
+    & $SofaPython -m pip install --no-cache-dir --target $BundleSP -c $Constraints -r $Requirements
     if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
     # --- 4. Slim the installed packages -------------------------------------

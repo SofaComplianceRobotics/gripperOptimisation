@@ -16,7 +16,13 @@ def build_generate_tab() -> html.Div:
             html.H3("Generate 3D Model", className="mb-2"),
             html.P(
                 "Generate STL/VTK/JSON files from the current lab_config.jsonc.",
-                className="text-muted mb-3",
+                className="text-muted mb-1",
+            ),
+            html.P(
+                "Values outside a parameter's search range (see the Parameter "
+                "Bounds tab) are clamped to that range before generation. Any "
+                "clamped value is listed in the log below as a [clamp] line.",
+                className="text-muted small mb-3",
             ),
             html.Div(
                 [

@@ -40,5 +40,5 @@ Or use the dashboard Generate tab after copying the file.
 
 ## To save a new design
 
-Run the optimizer, find a trial you like in the leaderboard, copy its `runtime/trials/gen_XXXX/trial_XX/lab_config.jsonc` here as a new numbered folder, and rename the file to match the folder index.
+Run the optimizer, find a trial you like in the leaderboard, copy its `runtime/trials/gen_XXXX/trial_XX/params.json` here as a new numbered folder, and rename the file to `lab_config_X.jsonc` to match the folder index (same JSON content, just renamed to the format `config/lab_config.jsonc` and the generation scripts expect).
 Try and save an image to so you dont have to generate each time you want to see it

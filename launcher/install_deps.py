@@ -20,6 +20,10 @@ LAB_ROOT = Path(__file__).resolve().parents[1]
 SOFAOPT_DIR = Path.home() / "Documents" / "SofaOptimisation"
 SOFAOPT_ZIP_URL = "https://github.com/SofaComplianceRobotics/SofaOptimisation/archive/refs/heads/main.zip"
 REQUIREMENTS = LAB_ROOT / "tools" / "requirements-bundle.txt"
+# Applied to every pip install below. This runs against the shared emio-labs
+# SOFA Python, so numpy/cadquery must stay at the versions emioapi and the
+# other labs expect (see tools/constraints.txt).
+CONSTRAINTS = LAB_ROOT / "tools" / "constraints.txt"
 
 
 def run(cmd: list[str]) -> None:
@@ -38,14 +42,14 @@ def install_sofaopt() -> None:
         else:
             print(f"Cloning sofaopt into {SOFAOPT_DIR}...")
             run(["git", "clone", "https://github.com/SofaComplianceRobotics/SofaOptimisation.git", str(SOFAOPT_DIR)])
-        run([sys.executable, "-m", "pip", "install", "-e", f"{SOFAOPT_DIR}[dashboard,preview]"])
+        run([sys.executable, "-m", "pip", "install", "-c", str(CONSTRAINTS), "-e", f"{SOFAOPT_DIR}[dashboard,preview]"])
     else:
         print("git not found — installing sofaopt directly from GitHub (not editable).")
-        run([sys.executable, "-m", "pip", "install", f"sofaopt[dashboard,preview] @ {SOFAOPT_ZIP_URL}"])
+        run([sys.executable, "-m", "pip", "install", "-c", str(CONSTRAINTS), f"sofaopt[dashboard,preview] @ {SOFAOPT_ZIP_URL}"])
 
 
 def install_lab_requirements() -> None:
-    run([sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS)])
+    run([sys.executable, "-m", "pip", "install", "-c", str(CONSTRAINTS), "-r", str(REQUIREMENTS)])
 
 
 if __name__ == "__main__":

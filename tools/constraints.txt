@@ -1,0 +1,14 @@
+# Version ceiling/floor for EVERY pip install this lab runs (install_deps.py,
+# install_dev.ps1, build_bundle.ps1). Passed as `pip install -c constraints.txt`.
+#
+# install_deps.py / install_dev.ps1 install into the SHARED emio-labs SOFA
+# Python, alongside emioapi (Requires-Dist: numpy==1.26.4) and the other labs.
+# Without these constraints the sofaopt install, or cadquery, silently upgrades
+# numpy to 2.x in that shared interpreter and breaks the Emio hardware link.
+#
+# A constraint is not a requirement: a line here only takes effect if something
+# already pulls that package in. Nothing in this lab needs numpy>=2 or
+# cadquery>=2.7 (verified: full geometry pipeline + test suite pass on these).
+
+numpy==1.26.4
+cadquery==2.4.0
