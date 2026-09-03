@@ -5,6 +5,7 @@ Shared bootstrap, config loading, and parameter building for gripper generation 
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from dataclasses import fields, replace
@@ -42,6 +43,23 @@ def load_jsonc(path: Path) -> dict:
     text = path.read_text(encoding="utf-8")
     text = _JSONC_STRING_OR_COMMENT.sub(lambda m: m.group(1) or "", text)
     return json.loads(text)
+
+
+def flush_and_hard_exit(code: int = 0) -> None:
+    """Flush the output streams and end the process immediately.
+
+    On Windows the CAD stack (OpenCASCADE via OCP, plus gmsh) is unstable
+    during normal interpreter shutdown: its native teardown intermittently
+    hangs or raises an access violation (exit code 0xC0000005) even when the
+    export itself succeeded and every file is already on disk. subprocess
+    callers read that stall or crash as a failed generation. os._exit bypasses
+    the Python cleanup and C++ static destructors responsible, so a completed
+    export exits cleanly. Call this only after main() has written and printed
+    its results.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
 
 
 def _bootstrap_lab_site_packages() -> None:

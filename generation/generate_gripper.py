@@ -13,6 +13,7 @@ from pathlib import Path
 from _gripper_common import (
     LAB_ROOT,
     ensure_cadquery_runtime,
+    flush_and_hard_exit,
     load_jsonc,
     params_from_config,
 )
@@ -61,3 +62,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    flush_and_hard_exit()

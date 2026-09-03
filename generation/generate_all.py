@@ -12,7 +12,7 @@ overhead or its shared, non-trial-unique output names.
 
 from __future__ import annotations
 
-import runpy
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,9 +21,8 @@ GENERATION_DIR = Path(__file__).resolve().parent
 
 def main() -> None:
     for script in ("generate_gripper.py", "generate_leg.py"):
-        print(f"--- {script} ---")
-        sys.argv = [script]
-        runpy.run_path(str(GENERATION_DIR / script), run_name="__main__")
+        print(f"--- {script} ---", flush=True)
+        subprocess.run([sys.executable, str(GENERATION_DIR / script)], check=True)
 
 
 if __name__ == "__main__":
