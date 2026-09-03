@@ -1,0 +1,64 @@
+FUTURE IMPROVEMENTS
+===================
+
+Rough notes for the next pass on lab_shapeOPT. Not scoped yet, just
+things to change.
+
+
+1. Simplify the number of tabs
+-----------------------------
+The dashboard currently shows: Config, Generate, Scenes, Optimise,
+Performance, Progress, Parameter Bounds, Playground (Generate + Scenes
+are the lab's own, the rest come from sofaopt).
+
+That is too many for students to hold in their head. Ideas:
+- Merge Performance + Progress into one "Run" view (live trials on top,
+  score history + leaderboard below).
+- Fold Parameter Bounds into Config, or only show it in an "advanced"
+  mode.
+- Drop Playground from the main strip (see point 2).
+Target: 3-4 tabs for the normal student path.
+
+
+2. Move the Playground out of this project
+------------------------------------------
+The Playground is useful exactly once: you open it, you get the feel for
+how parameters change the shape, and after that it just sits there as
+another tab. It should not ship inside the lab.
+
+Options:
+- Standalone little web app / notebook that students open at the start
+  and then close.
+- A short intro step that links out to it, rather than a permanent tab.
+Whatever it becomes, the lab project should not carry the Playground
+code or its tab.
+
+
+3. New exercise: students write their own reward function
+---------------------------------------------------------
+Right now the score comes from ready-made tests that students only pick
+from a checklist. Add an exercise where they actually write the scoring
+logic.
+
+Shape of the exercise:
+- We give them a handful of recording scenes (pre-recorded motor / motion
+  scenes, no need to design new ones).
+- We ask them to pick 1-2 obvious parameters to optimise (small search
+  space so a run finishes fast in a practicum slot).
+- We expose a set of ready-made variables pulled from each simulation
+  (e.g. contact force, object displacement, distance to target, energy,
+  slip, whatever we already compute internally). Documented list with
+  units.
+- The student writes a small Python script: a function that takes those
+  variables for one simulation and returns a single float score.
+- That score is fed into CMA-ES exactly as the built-in tests are today.
+
+Deliverables for us:
+- A clean "reward function" entry point (one function, typed inputs,
+  returns float) that plugs into the existing optimise pipeline.
+- The variable-extraction layer that hands those inputs over per trial.
+- 2-3 recording scenes chosen for this exercise.
+- Starter template + one worked example reward function.
+
+Point of the exercise: students see that the interesting design choice in
+black-box optimisation is "what does good mean", not the optimiser.

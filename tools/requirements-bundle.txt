@@ -10,7 +10,7 @@
 # uninstall" logs for no behavioural difference, since the lab has no exact-
 # version requirement on any of them.
 #
-# Installed into runtime/modules/site-packages by build_bundle.ps1 so the lab
+# Installed into modules/site-packages by build_bundle.ps1 so the lab
 # is self-contained and needs no setup on the target machine.
 #
 # Sofa / SofaPython3 is provided by the emio-labs install, not pip.

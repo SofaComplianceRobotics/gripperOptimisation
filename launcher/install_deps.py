@@ -37,8 +37,13 @@ def install_sofaopt() -> None:
     GitHub's zip download, which needs nothing but pip."""
     if shutil.which("git"):
         if (SOFAOPT_DIR / ".git").is_dir():
-            print(f"sofaopt already cloned at {SOFAOPT_DIR}, pulling...")
-            run(["git", "-C", str(SOFAOPT_DIR), "pull"])
+            print(f"sofaopt already cloned at {SOFAOPT_DIR}, updating to origin/main...")
+            # The lab consumes stock sofaopt main. Pin the checkout there before
+            # pulling so a clone left on a local feature branch (or with an
+            # unrelated upstream) still lands on the version the lab expects.
+            run(["git", "-C", str(SOFAOPT_DIR), "fetch", "origin", "main"])
+            run(["git", "-C", str(SOFAOPT_DIR), "checkout", "main"])
+            run(["git", "-C", str(SOFAOPT_DIR), "merge", "--ff-only", "origin/main"])
         else:
             print(f"Cloning sofaopt into {SOFAOPT_DIR}...")
             run(["git", "clone", "https://github.com/SofaComplianceRobotics/SofaOptimisation.git", str(SOFAOPT_DIR)])

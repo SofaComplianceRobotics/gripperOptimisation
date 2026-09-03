@@ -14,7 +14,11 @@ from pathlib import Path
 LAB_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = LAB_ROOT
 
-LAB_SITE_PACKAGES = LAB_ROOT / "runtime" / "modules" / "site-packages"
+# Lab-local package dir. Deliberately outside runtime/: runtime/ is the
+# per-run workspace that archiving moves wholesale, and these compiled
+# extensions get memory-mapped by any process that imports them (the
+# dashboard included), which would make that move fail on Windows.
+LAB_SITE_PACKAGES = LAB_ROOT / "modules" / "site-packages"
 
 # These scripts are run directly (only the generation/ dir lands on sys.path),
 # so LAB_ROOT must be added before importing any lab-root module like names.
@@ -66,7 +70,7 @@ def _bootstrap_lab_site_packages() -> None:
     """Prepend the lab-local site-packages directory to sys.path if present.
 
     This allows generated scripts to import dependencies installed into
-    `runtime/modules/site-packages`.
+    `modules/site-packages`.
     """
     if LAB_SITE_PACKAGES.exists():
         sys.path.insert(0, str(LAB_SITE_PACKAGES))

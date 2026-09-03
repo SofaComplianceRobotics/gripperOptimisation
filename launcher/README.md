@@ -18,7 +18,7 @@ Calls `dashboard.app.launch_dashboard(port=8050, open_browser=True)`.
 
 **`bootstrap.py`** — `bootstrap_lab(script_file)` → `(script_dir, src_root, app_root, lab_root)`
 
-Used by every scene file and launcher script to locate the lab root and ensure imports work regardless of how SOFA or the platform launched the script. Walks up from `__file__` until it finds a directory containing both `config/lab_config.jsonc` and `runtime/`. Adds `lab_root` and `runtime/modules/site-packages` to `sys.path`.
+Used by every scene file and launcher script to locate the lab root and ensure imports work regardless of how SOFA or the platform launched the script. Walks up from `__file__` until it finds a directory containing both `config/lab_config.jsonc` and `runtime/`. Adds `lab_root` and `modules/site-packages` to `sys.path`.
 
 ```python
 from launcher.bootstrap import bootstrap_lab

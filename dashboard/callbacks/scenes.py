@@ -68,7 +68,9 @@ def register_scene_callbacks(app, catalog: dict) -> None:
         """
         tid = ctx.triggered_id
         if tid == "scene-inverse-btn":
-            return _launch_sofa_scene(INVERSE_SCENE)
+            leg_name = _generated_leg_name()
+            extra_env = {"OPT_LEG_NAME": leg_name} if leg_name else None
+            return _launch_sofa_scene(INVERSE_SCENE, extra_env=extra_env)
         if tid == "scene-recording-btn" and recording_test:
             _write_session_config(recording_test)
             leg_name = _generated_leg_name()
