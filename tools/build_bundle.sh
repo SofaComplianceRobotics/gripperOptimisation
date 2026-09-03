@@ -66,7 +66,7 @@ mkdir -p "$STAGE"
 # git ls-files (cached + untracked-not-ignored) gives the real project files,
 # so uncommitted edits ship and .venv / .git / caches are skipped.
 cd "$LAB_ROOT"
-SKIP_RE='^(\.venv/|dist/|tools/|modules/|runtime/(exports|logs|trials|recordings)/|runtime/.*\.(db|log)$|.*__pycache__/|.*\.pyc$|.*\.crproj$|failed_generation\.png$)'
+SKIP_RE='^(\.venv/|dist/|tools/|modules/|logs/|runtime/(exports|trials|recordings)/|runtime/.*\.(db|log)$|.*__pycache__/|.*\.pyc$|.*\.crproj$|failed_generation\.png$)'
 count=0
 while IFS= read -r f; do
   [[ "$f" =~ $SKIP_RE ]] && continue

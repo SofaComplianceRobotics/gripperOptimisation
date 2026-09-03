@@ -194,6 +194,7 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     if fine:
         kwargs["mesh_size_max_stl"] = 2
         kwargs["mesh_size_min_stl"] = 0.8
+        kwargs["mesh_smoothing"] = 10
         kwargs["export_stem"] = GRIPPER_PRINT_NAME
         kwargs["ring_ramp_samples"] = max(
             kwargs.get("ring_ramp_samples", base.ring_ramp_samples), 64
