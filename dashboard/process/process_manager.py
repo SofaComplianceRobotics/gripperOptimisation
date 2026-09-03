@@ -20,7 +20,11 @@ CONFIG_FILE = LAB_ROOT / "config" / "lab_config.jsonc"
 INVERSE_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_inverse.py"
 RECORDING_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_recording.py"
 SESSION_CONFIG_FILE = LAB_ROOT / "runtime" / "session_config.json"
-_LOG_DIR = LAB_ROOT / "runtime" / "logs"
+# Dashboard-owned logs (Generate tab, scene launchers). A sibling of runtime/,
+# never a child: archiving moves runtime/ wholesale, and the persistent generate
+# worker keeps its stderr file open for its whole life — on Windows that move
+# fails if the open file sits under the directory being moved.
+_LOG_DIR = LAB_ROOT / "logs"
 
 
 def _sofa_python_exe() -> str:
