@@ -28,7 +28,6 @@ import numpy as np
 from beziers.cubicbezier import CubicBezier
 from beziers.path import BezierPath
 from beziers.point import Point
-from scipy.spatial.transform import Rotation
 
 from geometry.leg_params import LegParams
 
@@ -60,6 +59,27 @@ _KAPPA = 0.5522847498
 # Motor attachment clip (wrap + snap bumps), extracted once from the
 # platform's leg-cad.FCStd, already positioned in the leg frame.
 ATTACHMOTOR_BREP = Path(__file__).resolve().parent / "data" / "attachmotor.brep"
+
+
+def _quat_axis_angle(axis: int, angle: float) -> tuple[float, float, float, float]:
+    """Unit quaternion (x, y, z, w) for a rotation of `angle` rad about the
+    axis 0=x, 1=y, 2=z."""
+    s = sin(angle / 2.0)
+    xyz = [0.0, 0.0, 0.0]
+    xyz[axis] = s
+    return (xyz[0], xyz[1], xyz[2], cos(angle / 2.0))
+
+
+def _quat_mul(a, b):
+    """Hamilton product a * b of two (x, y, z, w) quaternions."""
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return (
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    )
 
 
 def _properly_cross(a, b, c, d) -> bool:
@@ -178,12 +198,12 @@ class LegCenterline:
 
             point = curve.pointAtTime(t)
             theta = curve.tangentAtTime(t).angle - pi / 2
-            quaternion = (
-                Rotation.from_euler("z", -pi / 2).inv()
-                * Rotation.from_euler("y", theta)
-                * Rotation.from_euler("x", pi)
-            ).as_quat()
-            beams.append([0.0, point.y, point.x, *quaternion.tolist()])
+            # Rz(pi/2) * Ry(theta) * Rx(pi), scalar-last (x, y, z, w).
+            quaternion = _quat_mul(
+                _quat_axis_angle(2, pi / 2),
+                _quat_mul(_quat_axis_angle(1, theta), _quat_axis_angle(0, pi)),
+            )
+            beams.append([0.0, point.y, point.x, *quaternion])
 
         return beams
 

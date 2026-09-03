@@ -8,16 +8,23 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────
 LAB_ROOT = Path(__file__).resolve().parents[2]
 GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_all.py"
+GENERATE_WORKER_SCRIPT = LAB_ROOT / "generation" / "worker.py"
 GENERATE_FINE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper_fine.py"
+CONFIG_FILE = LAB_ROOT / "config" / "lab_config.jsonc"
 INVERSE_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_inverse.py"
 RECORDING_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_recording.py"
 SESSION_CONFIG_FILE = LAB_ROOT / "runtime" / "session_config.json"
-_LOG_DIR = LAB_ROOT / "runtime" / "logs"
+# Dashboard-owned logs (Generate tab, scene launchers). A sibling of runtime/,
+# never a child: archiving moves runtime/ wholesale, and the persistent generate
+# worker keeps its stderr file open for its whole life — on Windows that move
+# fails if the open file sits under the directory being moved.
+_LOG_DIR = LAB_ROOT / "logs"
 
 
 def _sofa_python_exe() -> str:
@@ -37,10 +44,28 @@ def _sofa_python_exe() -> str:
     )
     return exe if exe and os.path.isfile(exe) else sys.executable
 
-# Running subprocesses keyed by role
-_PROCS: dict[str, subprocess.Popen | None] = {
+# Running subprocesses keyed by role. A "generate" entry may also hold a
+# _ThreadHandle when that run is being served by the persistent worker.
+_PROCS: dict[str, "subprocess.Popen | _ThreadHandle | None"] = {
     "generate": None,
 }
+
+
+class _ThreadHandle:
+    """Minimal Popen-like view of a background thread, so _proc_running and
+    _stop_proc treat a warm-worker request like any other 'generate' run."""
+
+    def __init__(self, thread: threading.Thread) -> None:
+        self._thread = thread
+        self.pid = "worker"
+
+    def poll(self):
+        return None if self._thread.is_alive() else 0
+
+    def kill(self) -> None:
+        # A gmsh/OCC call cannot be interrupted mid-flight; Stop recycles the
+        # worker process instead (see _stop_proc).
+        pass
 
 
 def _proc_running(name: str) -> bool:
@@ -56,7 +81,158 @@ def _proc_running(name: str) -> bool:
     return proc is not None and proc.poll() is None
 
 
-def _start_proc(name: str, script: Path, env: dict | None = None) -> str:
+# ── Persistent generation worker ───────────────────────────────
+# The standard Generate button reuses one long-lived worker process so
+# repeated clicks skip Python start-up + `import cadquery` (~1.3s). Every
+# other path (fine/print export, a custom env) still gets a fresh
+# subprocess, and any worker failure falls back to one too.
+_WORKER: subprocess.Popen | None = None
+_WORKER_RUNS = 0
+_WORKER_MAX_RUNS = 40  # recycle before OCC's slow memory creep matters
+_WORKER_LOCK = threading.Lock()
+_WORKER_SPAWN_TIMEOUT = 30.0
+_WORKER_RUN_TIMEOUT = 90.0
+
+
+def _worker_alive() -> bool:
+    return _WORKER is not None and _WORKER.poll() is None
+
+
+def _kill_worker() -> None:
+    global _WORKER
+    if _WORKER is not None:
+        try:
+            _WORKER.kill()
+        except Exception:
+            pass
+        _WORKER = None
+
+
+def _spawn_worker() -> bool:
+    """Start the worker and wait for its readiness line. Returns success."""
+    global _WORKER, _WORKER_RUNS
+    _kill_worker()
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        run_env = os.environ.copy()
+        run_env["PYTHONIOENCODING"] = "utf-8"
+        proc = subprocess.Popen(
+            [_sofa_python_exe(), str(GENERATE_WORKER_SCRIPT)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=open(_LOG_DIR / "generate_worker.err", "w", encoding="utf-8"),
+            cwd=str(GENERATE_WORKER_SCRIPT.parent),
+            env=run_env,
+            text=True,
+            bufsize=1,
+        )
+    except Exception:
+        _WORKER = None
+        return False
+
+    ready = _read_line_with_timeout(proc.stdout, _WORKER_SPAWN_TIMEOUT)
+    if not ready or not _json_ok(ready):
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        _WORKER = None
+        return False
+
+    _WORKER = proc
+    _WORKER_RUNS = 0
+    return True
+
+
+def _read_line_with_timeout(stream, timeout: float) -> str:
+    """Blocking readline guarded by a timeout thread. Returns '' on timeout."""
+    box: list[str] = []
+    reader = threading.Thread(target=lambda: box.append(stream.readline()), daemon=True)
+    reader.start()
+    reader.join(timeout)
+    return box[0] if box else ""
+
+
+def _json_ok(line: str) -> bool:
+    try:
+        return bool(json.loads(line).get("ok"))
+    except Exception:
+        return False
+
+
+def _run_generate_on_worker(log_path: Path) -> dict:
+    """Send one generate request to the worker and wait for its reply.
+
+    Assumes the caller holds a live worker reference. Returns the parsed
+    reply dict, or {"ok": False, ...} if the worker stalled or died.
+    """
+    request = json.dumps(
+        {"cmd": "generate", "config": str(CONFIG_FILE), "log": str(log_path)}
+    )
+    try:
+        _WORKER.stdin.write(request + "\n")
+        _WORKER.stdin.flush()
+    except Exception as exc:
+        return {"ok": False, "error": f"worker write failed: {exc}"}
+
+    reply = _read_line_with_timeout(_WORKER.stdout, _WORKER_RUN_TIMEOUT)
+    if not reply:
+        return {"ok": False, "error": "worker timed out"}
+    try:
+        return json.loads(reply)
+    except Exception:
+        return {"ok": False, "error": "worker sent malformed reply"}
+
+
+def _start_generate() -> str:
+    """Run the standard gripper+leg generation, preferring the warm worker.
+
+    Falls back to a cold generate_all.py subprocess if the worker cannot be
+    spawned or fails a run.
+    """
+    global _WORKER_RUNS
+
+    log_path = _LOG_DIR / "generate.log"
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    with _WORKER_LOCK:
+        if not _worker_alive() or _WORKER_RUNS >= _WORKER_MAX_RUNS:
+            if not _spawn_worker():
+                return _start_subprocess("generate", GENERATE_SCRIPT)
+        _WORKER_RUNS += 1
+
+    log_path.write_text("Generating (warm worker)...\n", encoding="utf-8")
+
+    def _drive() -> None:
+        result = _run_generate_on_worker(log_path)
+        if not result.get("ok"):
+            with _WORKER_LOCK:
+                _kill_worker()
+            with open(log_path, "a", encoding="utf-8") as log:
+                log.write(
+                    f"\n[warm worker failed: {result.get('error')}] "
+                    "falling back to a fresh process...\n"
+                )
+            try:
+                cold = subprocess.Popen(
+                    [_sofa_python_exe(), str(GENERATE_SCRIPT)],
+                    stdout=open(log_path, "a", encoding="utf-8"),
+                    stderr=subprocess.STDOUT,
+                    cwd=str(GENERATE_SCRIPT.parent),
+                    env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                )
+                cold.wait()
+            except Exception as exc:
+                with open(log_path, "a", encoding="utf-8") as log:
+                    log.write(f"\nFallback generation failed: {exc}\n")
+
+    thread = threading.Thread(target=_drive, daemon=True)
+    thread.start()
+    _PROCS["generate"] = _ThreadHandle(thread)
+    return "Started (warm worker)."
+
+
+def _start_subprocess(name: str, script: Path, env: dict | None = None) -> str:
     """Start a background subprocess for a given role and script.
 
     Args:
@@ -67,8 +243,6 @@ def _start_proc(name: str, script: Path, env: dict | None = None) -> str:
     Returns:
         Human-readable status string (started/already running/error).
     """
-    if _proc_running(name):
-        return f"Already running (PID {_PROCS[name].pid})."
     try:
         _LOG_DIR.mkdir(parents=True, exist_ok=True)
         log_path = _LOG_DIR / f"{name}.log"
@@ -89,8 +263,24 @@ def _start_proc(name: str, script: Path, env: dict | None = None) -> str:
         return f"Error starting process: {exc}"
 
 
+def _start_proc(name: str, script: Path, env: dict | None = None) -> str:
+    """Start a background job for a given role and script.
+
+    The standard Generate run (generate_all.py, no custom env) goes through
+    the persistent worker; everything else gets a fresh subprocess.
+
+    Returns:
+        Human-readable status string (started/already running/error).
+    """
+    if _proc_running(name):
+        return f"Already running (PID {_PROCS[name].pid})."
+    if name == "generate" and script == GENERATE_SCRIPT and env is None:
+        return _start_generate()
+    return _start_subprocess(name, script, env)
+
+
 def _stop_proc(name: str) -> str:
-    """Terminate a running subprocess by role name.
+    """Terminate a running job by role name.
 
     Args:
         name: Role name of the subprocess to stop.
@@ -102,7 +292,11 @@ def _stop_proc(name: str) -> str:
     if proc is None or proc.poll() is not None:
         return "Not running."
     try:
-        proc.kill()
+        if isinstance(proc, _ThreadHandle):
+            with _WORKER_LOCK:
+                _kill_worker()
+        else:
+            proc.kill()
         _PROCS[name] = None
         return "Stopped."
     except Exception as exc:

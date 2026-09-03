@@ -35,7 +35,7 @@ def _make_variable_height_ring(
     Returns:
         cq.Workplane: The constructed ring solid.
     """
-    result = None
+    sectors = []
     for i in range(n_samples):
         angle_start = i * 360.0 / n_samples
         angle_end = angle_start + 360.0 / n_samples
@@ -54,10 +54,13 @@ def _make_variable_height_ring(
             ]
             wires.append(Wire.makePolygon(pts))
 
-        sector = cq.Workplane().add(cq.Solid.makeLoft(wires, ruled=True))
-        result = sector if result is None else result.union(sector)
+        sectors.append(cq.Solid.makeLoft(wires, ruled=True))
 
-    return result
+    # Fuse every wedge in one boolean rather than a running union per wedge:
+    # an incremental union re-processes the whole accumulated solid on each
+    # step, so its cost grows with n_samples; a single fuse does not.
+    fused = sectors[0].fuse(*sectors[1:]) if len(sectors) > 1 else sectors[0]
+    return cq.Workplane().add(fused.clean())
 
 
 def make_circle(p: ModelParams) -> cq.Workplane:

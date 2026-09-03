@@ -93,22 +93,23 @@ def _export_with_gmsh(
         gmsh.option.setNumber("Mesh.Algorithm", 6)
 
         if export_3d:
-            gmsh.option.setNumber("Mesh.Algorithm3D", 10)  # HXT tetrahedra.
-            # HXT only supports triangles; do not recombine to quads.
+            # Delaunay (1) by default. HXT (10) is multi-threaded and wins on
+            # large meshes, but at this lab's element count its setup cost
+            # makes it ~3x slower for a tet mesh of the same enclosed volume.
+            # Set mesh_algorithm_3d=10 to switch back.
+            gmsh.option.setNumber("Mesh.Algorithm3D", p.mesh_algorithm_3d)
             gmsh.option.setNumber("Mesh.RecombineAll", 0)
             gmsh.option.setNumber("Mesh.Binary", 0)  # ASCII VTK for compatibility.
             gmsh.model.mesh.generate(2)
             gmsh.model.mesh.generate(3)
         else:
             gmsh.option.setNumber("Mesh.AngleSmoothNormals", p.mesh_angle_smooth)
-            # Recombine triangles to quads for more efficient surface mesh.
             gmsh.option.setNumber("Mesh.RecombineAll", 0)
-            # Aggressive smoothing to blend stepped geometry into smooth slopes
-            gmsh.option.setNumber("Mesh.Smoothing", 10)  # Multiple smoothing passes
-            gmsh.option.setNumber(
-                "Mesh.Optimize", 2
-            )  # Level 2 optimization (more aggressive)
-            gmsh.option.setNumber("Mesh.OptimizeNetgen", 1)  # Additional Netgen pass
+            # A few Laplacian smoothing passes blend the stepped ring ramp into
+            # a smooth slope. Higher-cost quality passes (Mesh.Optimize level 2,
+            # the extra Netgen pass) barely change a surface mesh this coarse.
+            gmsh.option.setNumber("Mesh.Smoothing", p.mesh_smoothing)
+            gmsh.option.setNumber("Mesh.Optimize", 1)
             gmsh.option.setNumber("Mesh.Binary", 1)
             gmsh.model.mesh.generate(2)
 
