@@ -114,6 +114,30 @@ _CONFIG_EXCLUDED_FIELDS = frozenset({"export_dir", "export_stem"})
 _CONFIG_FORCED_FIELDS = {"mesh_enabled": True, "mesh_show_viewer": False}
 
 
+def _clamp_to_search_range(name: str, value, opt: dict):
+    """Clamp a numeric config value to its parameter's [min, max] search range.
+
+    `opt` is the field's "opt" metadata ({"type", "min", "max"}). A value
+    outside the range is pulled to the nearest bound and the adjustment is
+    printed (it shows up in the dashboard's Generate-tab log). Ranges with
+    min == max are "frozen" params and left untouched.
+
+    Returns:
+        The clamped value, same type as `value`.
+    """
+    lo, hi = opt["min"], opt["max"]
+    if lo >= hi:
+        return value
+    clamped = min(max(value, lo), hi)
+    if clamped != value:
+        clamped = type(value)(clamped)
+        print(
+            f"[clamp] {name}: {value} is outside the search range "
+            f"[{lo}, {hi}], using {clamped}"
+        )
+    return clamped
+
+
 def params_from_config(cfg: dict, base, fine: bool = False):
     """Build a ModelParams instance from a config dict.
 
@@ -121,6 +145,11 @@ def params_from_config(cfg: dict, base, fine: bool = False):
     coerced to the type of the field's default value. Unknown config keys
     are ignored. Exceptions: _CONFIG_EXCLUDED_FIELDS are never read from
     the config, and _CONFIG_FORCED_FIELDS always win.
+
+    Fields carrying "opt" search-range metadata are clamped to their
+    [min, max] range: an out-of-range value in the config is pulled to the
+    nearest bound rather than rejected, so playing with values in
+    lab_config.jsonc never fails on bounds alone.
 
     Args:
         cfg: Parsed lab_config.jsonc dict.
@@ -139,13 +168,20 @@ def params_from_config(cfg: dict, base, fine: bool = False):
         default = getattr(base, f.name)
         # bool before int: bool is a subclass of int in Python.
         if isinstance(default, bool):
-            kwargs[f.name] = bool(raw)
+            value = bool(raw)
         elif isinstance(default, int):
-            kwargs[f.name] = int(round(float(raw)))
+            value = int(round(float(raw)))
         elif isinstance(default, float):
-            kwargs[f.name] = float(raw)
+            value = float(raw)
         else:
-            kwargs[f.name] = raw
+            value = raw
+
+        opt = f.metadata.get("opt")
+        if opt is not None and isinstance(value, (int, float)) and not isinstance(
+            value, bool
+        ):
+            value = _clamp_to_search_range(f.name, value, opt)
+        kwargs[f.name] = value
 
     # _CONFIG_FORCED_FIELDS is gripper-specific (mesh generation flags); this
     # function is also used for LegParams, which has neither field.

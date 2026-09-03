@@ -15,7 +15,7 @@ runtime/
 ├── trials/             ← Per-trial output from the optimization loop
 │   ├── gen_XXXX/
 │   │   └── trial_XX/
-│   │       ├── lab_config.jsonc   ← params used for this trial
+│   │       ├── params.json        ← params used for this trial
 │   │       ├── trial_state.json   ← run results and scores
 │   │       └── preview.png        ← offscreen render of the gripper
 │   └── previews/                  ← flat copy of all previews (gen_XXXX_trial_XX.png)
