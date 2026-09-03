@@ -54,7 +54,7 @@ Pop-Location
 
 # modules/ is rebuilt fresh below; runtime/{exports,logs,...} and other
 # generated or machine-local artifacts never ship.
-$skip = '^(\.venv/|dist/|tools/|modules/|runtime/(exports|logs|trials|recordings)/|runtime/.*\.(db|log)$|.*__pycache__/|.*\.pyc$|.*\.crproj$|failed_generation\.png$)'
+$skip = '^(\.venv/|dist/|tools/|modules/|logs/|runtime/(exports|trials|recordings)/|runtime/.*\.(db|log)$|.*__pycache__/|.*\.pyc$|.*\.crproj$|failed_generation\.png$)'
 
 $copied = 0
 foreach ($f in $files) {
