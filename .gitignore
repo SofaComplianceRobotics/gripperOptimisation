@@ -217,14 +217,15 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Ignore all files in site-packages
-runtime/modules/site-packages/
+# Lab-local package dir (CadQuery & friends), installed per machine
+/modules/
 runtime/trials/
 runtime/gripper_opt.db
 runtime/study.db
 runtime/exports/
 runtime/leg_preview/
 runtime.lock
+logs/
 archives/
 notion_pages/
 

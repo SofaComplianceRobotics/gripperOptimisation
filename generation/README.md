@@ -13,7 +13,7 @@ Entry points for turning a config file into gripper mesh files. Scripts here rea
 **`_gripper_common.py`** — Shared bootstrap used by both scripts above:
 - `load_jsonc()` — JSONC loading; strips `//` comments without touching `//` inside string values
 - `params_from_config()` — generic config→`ModelParams` mapping (see below)
-- `ensure_cadquery_runtime()` — verifies CadQuery is importable (current env or `runtime/modules/site-packages`), with an actionable error if not
+- `ensure_cadquery_runtime()` — verifies CadQuery is importable (current env or `modules/site-packages`), with an actionable error if not
 
 Prefixed with `_` — not a public entry point.
 

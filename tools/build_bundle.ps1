@@ -13,7 +13,7 @@ Usage:
 
 -SourceOnly skips the dependencies and produces a small lab_shapeOPT_source.zip
 containing just the lab source. Extract it over an existing install to update
-the code without touching runtime\modules\site-packages.
+the code without touching modules\site-packages.
 #>
 
 param(
@@ -52,9 +52,9 @@ Push-Location $LabRoot
 $files = git ls-files --cached --others --exclude-standard
 Pop-Location
 
-# runtime/modules is rebuilt fresh below; runtime/{exports,logs,...} and other
+# modules/ is rebuilt fresh below; runtime/{exports,logs,...} and other
 # generated or machine-local artifacts never ship.
-$skip = '^(\.venv/|dist/|tools/|runtime/modules/|runtime/(exports|logs|trials|recordings)/|runtime/.*\.(db|log)$|.*__pycache__/|.*\.pyc$|.*\.crproj$|failed_generation\.png$)'
+$skip = '^(\.venv/|dist/|tools/|modules/|runtime/(exports|logs|trials|recordings)/|runtime/.*\.(db|log)$|.*__pycache__/|.*\.pyc$|.*\.crproj$|failed_generation\.png$)'
 
 $copied = 0
 foreach ($f in $files) {
@@ -83,9 +83,9 @@ if (Test-Path $recSrc) {
 
 # --- 3. Install lab deps for Python 3.10 into the bundle's site-packages -----
 if (-not $SourceOnly) {
-    $BundleSP = Join-Path $Stage "runtime\modules\site-packages"
+    $BundleSP = Join-Path $Stage "modules\site-packages"
     New-Item -ItemType Directory -Force -Path $BundleSP | Out-Null
-    Write-Host "Installing dependencies into runtime\modules\site-packages ..."
+    Write-Host "Installing dependencies into modules\site-packages ..."
     & $SofaPython -m pip install --no-cache-dir --target $BundleSP -c $Constraints -r $Requirements
     if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 

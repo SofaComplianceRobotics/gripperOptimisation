@@ -145,7 +145,7 @@ def bootstrap_lab(script_file: str) -> Tuple[Path, Path, Path, Path]:
     )
     src_root = lab_root
     app_root = lab_root
-    lab_site = lab_root / "runtime" / "modules" / "site-packages"
+    lab_site = lab_root / "modules" / "site-packages"
 
     for candidate in (str(lab_root), str(lab_site)):
         if candidate and candidate not in sys.path:

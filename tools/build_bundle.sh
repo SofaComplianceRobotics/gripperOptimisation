@@ -66,7 +66,7 @@ mkdir -p "$STAGE"
 # git ls-files (cached + untracked-not-ignored) gives the real project files,
 # so uncommitted edits ship and .venv / .git / caches are skipped.
 cd "$LAB_ROOT"
-SKIP_RE='^(\.venv/|dist/|tools/|runtime/modules/|runtime/(exports|logs|trials|recordings)/|runtime/.*\.(db|log)$|.*__pycache__/|.*\.pyc$|.*\.crproj$|failed_generation\.png$)'
+SKIP_RE='^(\.venv/|dist/|tools/|modules/|runtime/(exports|logs|trials|recordings)/|runtime/.*\.(db|log)$|.*__pycache__/|.*\.pyc$|.*\.crproj$|failed_generation\.png$)'
 count=0
 while IFS= read -r f; do
   [[ "$f" =~ $SKIP_RE ]] && continue
@@ -87,9 +87,9 @@ fi
 
 if [ "$SOURCE_ONLY" -eq 0 ]; then
   # --- 3. Install lab deps for Python 3.10 into the bundle site-packages -----
-  BUNDLE_SP="$STAGE/runtime/modules/site-packages"
+  BUNDLE_SP="$STAGE/modules/site-packages"
   mkdir -p "$BUNDLE_SP"
-  echo "Installing dependencies into runtime/modules/site-packages ..."
+  echo "Installing dependencies into modules/site-packages ..."
   "$SOFA_PY" -m pip install --no-cache-dir --target "$BUNDLE_SP" -r "$REQUIREMENTS"
 
   # --- 4. Slim: caches and other-ABI compiled extensions --------------------
