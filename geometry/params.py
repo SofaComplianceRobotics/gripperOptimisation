@@ -222,6 +222,14 @@ class ModelParams:
         default=20.0,
         metadata={"check": ("open_open", 0.0, 90.0), "check_if": "mesh_enabled"},
     )
+    mesh_smoothing: int = field(
+        default=6,
+        metadata={"check": "non_negative", "check_if": "mesh_enabled"},
+    )
+    mesh_algorithm_3d: int = field(
+        default=1,
+        metadata={"check": "positive", "check_if": "mesh_enabled"},
+    )
     mesh_size_from_curvature: int = field(
         default=12,
         metadata={"check": "non_negative", "check_if": "mesh_enabled"},
