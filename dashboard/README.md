@@ -17,7 +17,7 @@ Entry point: `python launcher/launch_web.py` → `dashboard.app.launch_dashboard
 `sofaopt.dashboard.app.launch_dashboard` with `PROJECT` from
 `sofaopt_project.py` and `extra_tabs=LAB_TABS`.
 
-**`ui/tabs/`** — layout builders, one `build_*_tab()` per tab, no callbacks.
+**`tabs/`** — layout builders, one `build_*_tab()` per tab, no callbacks.
 - `generate.py` — Generate tab: buttons for the sim-mesh and fine-mesh
   generators, buttons to open the output STLs, and a log pane.
 - `scenes.py` — Scenes tab: "watch a test" picker plus the inverse-kinematics
