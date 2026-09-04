@@ -12,9 +12,7 @@ Parametric geometry engine. Defines the gripper's shape, assembles its parts, an
 
 Also home to `param_specs()` (derives the optimizer/dashboard spec list from the metadata) and `validate_params()` (generic per-field checks + hand-written cross-field geometric constraints). Adding a parameter here makes it config-settable, searchable, displayed, and validated with no other edits.
 
-**`gripper_geometry.py`** — builds the ring and leg attachments. **`gripper_pincers.py`** — builds the pincer pair (visual and collision variants). Each function returns a CadQuery solid.
-
-**`gripper_parts.py`** — public re-export facade over the two builder modules.
+**`gripper_geometry.py`** — builds the ring and leg attachments. **`gripper_pincers.py`** — builds the pincer pair (visual and collision variants). Each function returns a CadQuery solid; `assembly.py` and `export_pipeline.py` import them directly.
 
 **`geometry_helpers.py`** — low-level geometric primitives shared across part construction: spline profiles, annular sectors, vertical drop faces.
 

@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 
 from geometry.assembly import assemble_model
-from geometry.gripper_parts import (
+from geometry.gripper_pincers import (
     make_pincer_pair_world_collision,
     make_pincer_pair_world_collision_split,
 )
