@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 
 from geometry.params import ModelParams
-from geometry.transforms.quaternion import (
+from geometry.quaternion import (
     _axis_angle_to_quat,
     _quat_mul,
     _normalize_quat,

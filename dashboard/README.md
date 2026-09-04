@@ -35,7 +35,7 @@ built.
 - `scenes.py` — scene launch buttons; writes `runtime/session_config.json`
   before launching the recorder, and drives `run_trajectory_recorder`.
 
-**`process/process_manager.py`** — starts and stops the Generate-tab
+**`process_manager.py`** — starts and stops the Generate-tab
 subprocesses (the persistent `generation/worker.py`, the cold
 `generate_all.py` fallback, the fine generator) and launches the interactive
 SOFA scenes. Writes its logs to the top-level `logs/` directory. The

@@ -21,7 +21,7 @@ from geometry.io.export_mesh import (
 )
 from geometry.io.export_json import export_leg_attachment_json
 from geometry.io.paths import make_versioned_export_path
-from geometry.transforms.quaternion import rotate_model_to_export_frame
+from geometry.quaternion import rotate_model_to_export_frame
 from geometry.params import ModelParams, validate_params
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")

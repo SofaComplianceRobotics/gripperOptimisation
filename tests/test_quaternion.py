@@ -1,4 +1,4 @@
-"""Unit tests for the quaternion helpers in geometry/transforms/quaternion.py.
+"""Unit tests for the quaternion helpers in geometry/quaternion.py.
 
 The module imports cadquery for a single type annotation; conftest.py
 registers a stub so the pure math is testable without the CAD runtime.
@@ -12,7 +12,7 @@ import math
 
 import pytest
 
-from geometry.transforms.quaternion import (
+from geometry.quaternion import (
     _axis_angle_to_quat,
     _export_frame_quat,
     _normalize_quat,

@@ -7,7 +7,7 @@ from pathlib import Path
 from dash import Input, Output, State, ctx
 
 from names import GRIPPER_COLLISION_FINGER_STLS, LEG_WORKING_NAME, LEGS_DIRNAME
-from dashboard.process.process_manager import (
+from dashboard.process_manager import (
     INVERSE_SCENE,
     RECORDING_SCENE,
     _launch_sofa_scene,

@@ -1,6 +1,6 @@
 """Persistent generation worker for the dashboard's Generate button.
 
-Kept alive by dashboard/process/process_manager.py so repeated clicks skip
+Kept alive by dashboard/process_manager.py so repeated clicks skip
 the ~1.3s of Python start-up and `import cadquery` that a fresh
 generate_all.py subprocess pays every time. The CAD stack is imported once,
 here, and then reused.

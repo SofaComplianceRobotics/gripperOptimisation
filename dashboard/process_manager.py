@@ -12,7 +12,7 @@ import threading
 from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────
-LAB_ROOT = Path(__file__).resolve().parents[2]
+LAB_ROOT = Path(__file__).resolve().parents[1]
 GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_all.py"
 GENERATE_WORKER_SCRIPT = LAB_ROOT / "generation" / "worker.py"
 GENERATE_FINE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper_fine.py"
