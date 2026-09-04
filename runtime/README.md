@@ -2,6 +2,8 @@
 
 Everything generated at runtime. Nothing here is source code — it's all produced by the optimization loop, generation scripts, or SOFA scenes.
 
+Run and session logs are **not** here — they live in the top-level `logs/` directory, a deliberate sibling of `runtime/` so archiving (which moves `runtime/` wholesale) never has to deal with an open log handle.
+
 ---
 
 ## Directory map
@@ -9,25 +11,26 @@ Everything generated at runtime. Nothing here is source code — it's all produc
 ```
 runtime/
 ├── exports/            ← Gripper mesh files from the last generation run
-├── logs/               ← generate.log and optimize.log
-├── modules/            ← Python packages installed by the lab (CadQuery, etc.)
-├── recordings/         ← Motor trajectory recordings per test (NOT auto-generated)
+├── leg_preview/        ← Output of preview_leg.py (single-leg quick preview)
+├── recordings/         ← Motor trajectory recordings per test (committed, NOT auto-generated)
 ├── trials/             ← Per-trial output from the optimization loop
 │   ├── gen_XXXX/
 │   │   └── trial_XX/
 │   │       ├── params.json        ← params used for this trial
 │   │       ├── trial_state.json   ← run results and scores
 │   │       └── preview.png        ← offscreen render of the gripper
-│   └── previews/                  ← flat copy of all previews (gen_XXXX_trial_XX.png)
-├── gripper_opt.db                     ← Optuna SQLite database (the CMA-ES state)
-└── session_config.json                ← written by the web UI before launching a recording scene
+│   ├── previews/                  ← flat copy of all previews (gen_XXXX_trial_XX.png)
+│   └── progress.json              ← overall progress, read by the dashboard
+├── study.db                       ← Optuna SQLite database (the CMA-ES state)
+├── session_config.json            ← written by the web UI before launching a recording scene
+└── watch_recording.json           ← motor trace captured by the recording scene's watch mode
 ```
 
 ---
 
 ## Key files
 
-**`gripper_opt.db`** — Optuna's SQLite database. Stores all trial params, scores, and the CMA-ES sampler state. The optimizer resumes from this on restart. Delete it to start a fresh optimization run.
+**`study.db`** — Optuna's SQLite database. Stores all trial params, scores, and the CMA-ES sampler state. The optimizer resumes from this on restart. Delete it to start a fresh optimization run.
 
 **`trials/progress.json`** — Written after every trial. Contains overall progress (generation, trial counts, best/avg score, test weights). Read by the dashboard and the UI progress bar.
 
@@ -41,5 +44,3 @@ runtime/
 - `new_gripper.json` — leg attachment poses for SOFA
 
 **`recordings/<test_name>/motor_recording.json`** — Motor position trajectory recorded in inverse mode. Required by any direct-mode labtest. These are committed and should not be deleted — re-recording takes manual effort.
-
-**`modules/`** — Lab-local Python packages (CadQuery and friends) used when they aren't available in the active environment. Install into it manually with `pip install --target runtime/modules/site-packages <package>`.

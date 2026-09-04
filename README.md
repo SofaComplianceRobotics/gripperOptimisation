@@ -64,11 +64,10 @@ Then add this to `assets\labs\labsConfig.json`'s `"labs"` array:
 
 ### Pre-built bundle
 
-`dist/lab_shapeOPT_bundle_windows.zip` is a self-contained bundle (source + all deps in
-`modules/site-packages/`) built by `tools/build_bundle.ps1`. **The checked-in zip is
-stale** — it predates the split into `sofaopt` and does not contain the framework. Rebuild it
-with `tools/build_bundle.ps1` (after adding `sofaopt` to `tools/requirements-bundle.txt`)
-before handing it to anyone.
+`tools/build_bundle.ps1` produces a self-contained bundle in `dist/` (source + all deps in
+`modules/site-packages/`) that a user unzips and runs with no pip or venv step. `dist/` is
+git-ignored and holds nothing by default — build a fresh zip (after adding `sofaopt` to
+`tools/requirements-bundle.txt`) before handing it to anyone.
 
 ---
 

@@ -10,10 +10,6 @@ Gripper parameter files. The optimizer and generation scripts both read `lab_con
 
 Read by `generation/_gripper_common.py` to build a `ModelParams` and generate a mesh. Written by the optimizer for each trial with the candidate parameter values. Supports `//` line comments (JSONC format) — these are stripped before JSON parsing.
 
-**`lab_config_working.jsonc`** — a manually saved working baseline.
-
-Not read by any script automatically. Use it as a known-good backup: copy it to `lab_config.jsonc` to restore a baseline before starting a new optimization run, or as a reference when the optimizer has overwritten the active config.
-
 ---
 
 ## Format
