@@ -27,10 +27,6 @@ point (`low == high`) so sofaopt freezes it at its **`params.py` /
 are unrelated). Bool params stay searchable regardless. Edit it from the
 dashboard's Parameters tab, or by hand.
 
-This file has nothing to do with `lab_config.jsonc`. It is not touched during
-a run, and the optimizer does not seed from it — CMA-ES centres its search on
-the dataclass defaults.
-
 ---
 
 ## Format
