@@ -12,9 +12,7 @@ Parametric geometry engine. Defines the gripper's shape, assembles its parts, an
 
 Also home to `param_specs()` (derives the optimizer/dashboard spec list from the metadata) and `validate_params()` (generic per-field checks + hand-written cross-field geometric constraints). Adding a parameter here makes it config-settable, searchable, displayed, and validated with no other edits.
 
-**`gripper_geometry.py`** — builds the ring and leg attachments. **`gripper_pincers.py`** — builds the pincer pair (visual and collision variants). Each function returns a CadQuery solid.
-
-**`gripper_parts.py`** — public re-export facade over the two builder modules.
+**`gripper_geometry.py`** — builds the ring and leg attachments. **`gripper_pincers.py`** — builds the pincer pair (visual and collision variants). Each function returns a CadQuery solid; `assembly.py` and `export_pipeline.py` import them directly.
 
 **`geometry_helpers.py`** — low-level geometric primitives shared across part construction: spline profiles, annular sectors, vertical drop faces.
 
@@ -24,23 +22,21 @@ Also home to `param_specs()` (derives the optimizer/dashboard spec list from the
 
 **`timing_config.py`** — central DT (timestep) constants for all SOFA scenes.
 
+**`quaternion.py`** — quaternion math and frame rotations between CadQuery's Z-up convention and SOFA's Y-up frame.
+
 **`leg_params.py`** — `LegParams` dataclass: tunable shape of the Emio leg as a single-span Bezier spline (4 searchable params, all `leg_`-prefixed to avoid colliding with `ModelParams`'s identically-shaped pincer spline fields): a start point (fixed, end of the motor-wrap arc) with a tunable outgoing handle length, and a free end point (polar from the start, matching `params.py`'s pincer spline convention and reusing its `p1_dist`/`p1_angle_deg`/`p1_hin_dist` names) with a tunable incoming handle length. The start point's outgoing handle and the end point's incoming handle keep their *angle* fixed vertical (only length is tunable) so the joins with the fixed motor-wrap arc and the fixed straight tip run stay smooth; the end point's *position* is otherwise fully free — not pinned to the gripper's stock lateral offset. The cross-section is fixed at the stock 10×5 the gripper pocket was designed for. The default parameter set reproduces the stock blueleg exactly — a straight leg. Same metadata convention as `params.py` (`"opt"` for search bounds, `"check"` for validation), its own `param_specs()`/`validate_params()`. One leg shape is generated per trial and reused for all four attachments — there's no separate leg test; the shared grasp/tilt/cube-pick tests score the assembled gripper+legs together (see `sofaopt_project.py`'s `prepare_trial` hook).
 
-**`leg_geometry.py`** — `build_leg(LegParams) -> LegCenterline`: follows the platform's own leg recipe (see the lab_design lab): a fixed quarter-wrap around the motor pulley (hardware constants `PULLEY_RADIUS`/`STRAIGHT_OFFSET` measured off the stock blueleg), a tunable single-span spline built directly from `LegParams`'s polar points/handles, and a fixed straight vertical tip run continuing from wherever the spline's end point lands. Exposes `get_beams()` (Rigid3 frames, same convention as `blueleg.txt`) and `export_stl()`/`export_positions()` (the `<name>.stl`/`<name>.txt` pair `parts.leg.Leg` expects in `data/meshes/legs/`). The STL fuses `data/attachmotor.brep` — the exact motor clip (snap bumps included) extracted from the platform's `leg-cad.FCStd` — so every generated leg physically attaches to a motor. Requires `beziers` and `scipy`; STL export additionally needs cadquery/OCP.
+**`leg_geometry.py`** — `build_leg(LegParams) -> LegCenterline`: follows the platform's own leg recipe (see the lab_design lab): a fixed quarter-wrap around the motor pulley (hardware constants `PULLEY_RADIUS`/`STRAIGHT_OFFSET` measured off the stock blueleg), a tunable single-span spline built directly from `LegParams`'s polar points/handles, and a fixed straight vertical tip run continuing from wherever the spline's end point lands. Exposes `get_beams()` (Rigid3 frames, same convention as `blueleg.txt`) and `export_stl()`/`export_positions()` (the `<name>.stl`/`<name>.txt` pair `parts.leg.Leg` expects in `data/meshes/legs/`). The STL fuses `attachmotor.brep` — the exact motor clip (snap bumps included) extracted from the platform's `leg-cad.FCStd` — so every generated leg physically attaches to a motor. Requires `beziers` and `scipy`; STL export additionally needs cadquery/OCP.
 
-**`data/attachmotor.brep`** — static motor-attachment clip solid, extracted once from `assets/data/meshes/legs/leg-cad.FCStd` (the `attachmotor` body), already positioned in the leg frame.
+**`attachmotor.brep`** — static motor-attachment clip solid (OpenCASCADE BREP), extracted once from `assets/data/meshes/legs/leg-cad.FCStd` (the `attachmotor` body), already positioned in the leg frame. Read by `leg_geometry.py` and fused onto every generated leg.
 
 ---
 
-## Submodules
+## io/ subpackage
 
-**`io/`**
 - `export_mesh.py` — CadQuery → STL/VTK via Gmsh, including collision mesh variants
 - `export_json.py` — serializes leg attachment poses and config to JSON for SOFA
 - `paths.py` — resolves and creates versioned export directories
-
-**`transforms/`**
-- `quaternion.py` — quaternion math and frame rotations between CadQuery's Z-up convention and SOFA's Y-up frame
 
 ---
 

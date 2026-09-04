@@ -1,53 +1,61 @@
 # dashboard/
 
-Dash web control panel for the lab: edit the config, trigger generation, launch scenes, start/stop the optimizer, and monitor results live.
+The lab's own dashboard tabs, layered onto sofaopt's project dashboard.
 
-Entry point: `python launcher/launch_web.py` (which calls `dashboard.app.launch_dashboard`).
+sofaopt supplies the generic tabs (Config, Run, Monitor, Parameters,
+Results, Archives) and the web server. This package adds three lab-specific
+tabs and wires them in through `extra_tabs`.
 
----
-
-## Top-level modules
-
-**`app.py`** — Dash app factory and launch. Builds the layout (header, tab strip, tab cards), registers all callbacks, opens the browser, and starts the server.
-
-**`analyze_config.py`** — Constants shared across the dashboard: paths, `TOP_X` (leaderboard size), rolling window size, live refresh interval, score aggregation mode.
-
-**`analyze_io.py`** — Loads `trial_state.json` files from `runtime/trials/` and aggregates them into trial records. Core data pipeline for all views.
+Entry point: `python launcher/launch_web.py` → `dashboard.app.launch_dashboard`.
 
 ---
 
-## Subpackages
+## Modules
 
-**`data/`** — Data loading and caching layer.
-- `cache.py` — Caches trial records, generation summaries, and `trial_state.json` reads to avoid redundant disk I/O on each refresh.
+**`app.py`** — the dashboard entry point. Defines `LAB_TABS` (the three
+`DashboardTab` specs below) and `launch_dashboard()`, which calls
+`sofaopt.dashboard.app.launch_dashboard` with `PROJECT` from
+`sofaopt_project.py` and `extra_tabs=LAB_TABS`.
 
-**`plotting/`** — Plotly figure construction.
-- `colors.py` — The color palette (UI accent and plot series colors live here).
-- `compute.py` — Rolling averages, best-so-far curves, score math.
-- `traces.py` — Builds Plotly traces (lines, bars, scatter) from computed data.
-- `performance.py` — Assembles the full performance figure (score history + per-test contribution bars).
-- `bounds.py` — Parameter-bounds figure, driven by `geometry.params.param_specs()`.
+**`tabs/`** — layout builders, one `build_*_tab()` per tab, no callbacks.
+- `generate.py` — Generate tab: buttons for the sim-mesh and fine-mesh
+  generators, buttons to open the output STLs, and a log pane.
+- `scenes.py` — Scenes tab: "watch a test" picker plus the inverse-kinematics
+  and motor-recording scene launchers.
+- `param_guide.py` — Parameter Guide tab: one collapsible entry per documented
+  parameter with its description and a low/high render pair. Bounds are read
+  live from the project's `ParamSpec` list; prose and images live in
+  `PARAM_DOCS` and `dashboard/param_guide_images/`. Also registers the
+  `/param-doc-image` route.
 
-**`process/`** — Subprocess management.
-- `process_manager.py` — Starts and stops the generation/optimization subprocesses and launches SOFA scenes from the UI.
+**`callbacks/`** — `@app.callback` registration only, no HTML. One
+`register_*_callbacks(app)` per tab, called by `app.py` after the layout is
+built.
+- `generation.py` — Generate/fine/stop buttons, open-output buttons, log tail.
+- `scenes.py` — scene launch buttons; writes `runtime/session_config.json`
+  before launching the recorder, and drives `run_trajectory_recorder`.
 
-**`callbacks/`** — `@app.callback` registration only, no HTML. One `register_*_callbacks(app)` function per tab. `app.py` calls these after building the layout.
-
-**`ui/`** — Dash layout builders only, no callbacks.
-- `ui/tabs/` — One `build_*_tab()` function per tab. Each tab has a matching file in `callbacks/` that wires its interactivity.
-- `ui/tabs/styles.py` — Shared style constants (app shell, tab strip, log panes).
-- `ui/progress/` — Progress view: helpers that read trial state and builders that turn it into Dash HTML.
+**`process_manager.py`** — starts and stops the Generate-tab
+subprocesses (the persistent `generation/worker.py`, the cold
+`generate_all.py` fallback, the fine generator) and launches the interactive
+SOFA scenes. Writes its logs to the top-level `logs/` directory. The
+optimizer's Run/Stop is sofaopt's, not here.
 
 ---
 
-## Dashboard tabs
+## Tabs in the running dashboard
 
-| Tab | What it shows |
-|---|---|
-| Config | Edit `lab_config.jsonc` and save to disk |
-| Generate | Trigger gripper generation, show output log |
-| Scenes | Launch SOFA scenes (inverse, recording, watch-a-test) |
-| Optimise | Pick tests/weights, start/stop the optimization loop, live log |
-| Performance | Score history, rolling avg, best-so-far, per-test contribution bars |
-| Progress | Live per-trial grid for the current generation |
-| Parameter Bounds | Where recent trials sit inside each parameter's search range |
+| Tab | Owner | What it does |
+|---|---|---|
+| Config | sofaopt | Edit `lab_config.jsonc` |
+| **Generate** | lab | Run the geometry generators, open their output |
+| **Scenes** | lab | Launch inverse / recording scenes, watch one test |
+| Run | sofaopt | Pick tests + weights, start/stop the optimizer |
+| Monitor | sofaopt | Live per-trial grid for the current generation |
+| **Parameter Guide** | lab | Plain-language notes on each tunable parameter |
+| Parameters | sofaopt | Where recent trials sit in each search range |
+| Results | sofaopt | Leaderboard, score history, best-so-far |
+| Archives | sofaopt | Past runs archived from `runtime/` |
+
+The three lab tabs are inserted `before="run"`, so they sit right after
+Config in the strip.

@@ -22,12 +22,12 @@ from sofaopt.dashboard.app import launch_dashboard as _launch_sofaopt_dashboard
 from sofaopt_project import PROJECT
 from dashboard.callbacks.generation import register_generation_callbacks
 from dashboard.callbacks.scenes import register_scene_callbacks
-from dashboard.ui.tabs.generate import build_generate_tab
-from dashboard.ui.tabs.param_guide import (
+from dashboard.tabs.generate import build_generate_tab
+from dashboard.tabs.param_guide import (
     build_param_guide_tab,
     register_param_guide_routes,
 )
-from dashboard.ui.tabs.scenes import build_scenes_tab
+from dashboard.tabs.scenes import build_scenes_tab
 
 LAB_TABS = (
     DashboardTab(

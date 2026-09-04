@@ -7,9 +7,9 @@ pytest imports this file before any test module. Three jobs:
 2. Provide dummy values for the SOFA_* env vars so sofaopt_project.py's
    runtime resolution never probes the filesystem. Unit tests never launch
    SOFA, so the values only need to exist, not point anywhere real.
-3. Register a stub `cadquery` module: geometry/transforms/quaternion.py
-   imports cadquery but only uses it as a type annotation, and the real
-   package targets Python 3.10 which cannot load in this test venv.
+3. Register a stub `cadquery` module: geometry/quaternion.py imports
+   cadquery but only uses it as a type annotation, and the real package
+   targets Python 3.10 which cannot load in this test venv.
 """
 
 from __future__ import annotations

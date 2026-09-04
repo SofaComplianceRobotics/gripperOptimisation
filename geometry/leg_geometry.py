@@ -5,7 +5,7 @@ freecadbeziercurvetomeshes.py and the stock blueleg): a planar centerline
 that wraps the motor pulley, runs up with tunable curvature, and ends in a
 straight vertical section that slides into the gripper's leg pocket. The
 motor attachment clip (with its snap bumps) is the exact solid extracted from
-the platform's leg-cad.FCStd (geometry/data/attachmotor.brep), fused onto
+the platform's leg-cad.FCStd (geometry/attachmotor.brep), fused onto
 every generated leg.
 
 Output contract, matching what parts.leg.Leg (the EmioLabs SOFA prefab)
@@ -58,7 +58,7 @@ _KAPPA = 0.5522847498
 
 # Motor attachment clip (wrap + snap bumps), extracted once from the
 # platform's leg-cad.FCStd, already positioned in the leg frame.
-ATTACHMOTOR_BREP = Path(__file__).resolve().parent / "data" / "attachmotor.brep"
+ATTACHMOTOR_BREP = Path(__file__).resolve().parent / "attachmotor.brep"
 
 
 def _quat_axis_angle(axis: int, angle: float) -> tuple[float, float, float, float]:

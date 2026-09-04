@@ -220,10 +220,9 @@ __marimo__/
 # Lab-local package dir (CadQuery & friends), installed per machine
 /modules/
 runtime/trials/
-runtime/gripper_opt.db
 runtime/study.db
 runtime/exports/
-runtime/leg_preview/
+runtime/previews/
 runtime.lock
 logs/
 archives/
@@ -234,3 +233,9 @@ notion_pages/
 
 # Understand Anything
 
+
+# Local scratch notes, not part of the project
+FUTURE_IMPROVEMENTS.txt
+
+# reach_zone sweep output (regenerated on each run)
+runtime/recordings/reach_zone/zone_result.json

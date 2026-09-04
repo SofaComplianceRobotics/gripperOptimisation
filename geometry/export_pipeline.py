@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 
 from geometry.assembly import assemble_model
-from geometry.gripper_parts import (
+from geometry.gripper_pincers import (
     make_pincer_pair_world_collision,
     make_pincer_pair_world_collision_split,
 )
@@ -21,7 +21,7 @@ from geometry.io.export_mesh import (
 )
 from geometry.io.export_json import export_leg_attachment_json
 from geometry.io.paths import make_versioned_export_path
-from geometry.transforms.quaternion import rotate_model_to_export_frame
+from geometry.quaternion import rotate_model_to_export_frame
 from geometry.params import ModelParams, validate_params
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
