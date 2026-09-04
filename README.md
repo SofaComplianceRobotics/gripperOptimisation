@@ -84,7 +84,7 @@ python generation/generate_gripper.py
 
 Launch a SOFA simulation scene:
 ```bash
-runSofa.exe -l SofaPython3 scenes/lab_shapeOPT_inverse.py
+runSofa.exe -l SofaPython3 manual_scenes/lab_shapeOPT_inverse.py
 ```
 
 Run the optimization loop:
@@ -117,7 +117,7 @@ lab_shapeOPT/
 ├── launcher/          # Entry-point scripts — bootstraps the environment and starts the web interface
 ├── project/           # EmioLabs platform project files (platform-specific format, not Python)
 ├── runtime/           # Generated at runtime — Optuna DB, session config, trial results, mesh exports
-├── scenes/            # Manual SOFA scenes (inverse control, motor recording) — not run by the optimizer
+├── manual_scenes/     # Inverse-mode SOFA scenes: hand control, motor-trajectory recording (feeds the tests)
 ├── sections/          # Markdown shown in the EmioLabs lab page (assembled by lab_shapeOPT.md)
 ├── tests/             # pytest unit tests for the pure-Python layers
 ├── tools/             # Dev install and bundle-build scripts

@@ -28,7 +28,7 @@ SCRIPT_DIR, SRC_ROOT, APP_ROOT, LAB_ROOT = bootstrap_lab(__file__)
 import Sofa.Core
 
 from labtests.core.modules.motor_recorder import MotorRecorder
-from scenes._manual_scene import build_manual_scene
+from manual_scenes._manual_scene import build_manual_scene
 
 
 def _pick_recording_target() -> str:

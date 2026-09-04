@@ -17,8 +17,8 @@ GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_all.py"
 GENERATE_WORKER_SCRIPT = LAB_ROOT / "generation" / "worker.py"
 GENERATE_FINE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper_fine.py"
 CONFIG_FILE = LAB_ROOT / "config" / "lab_config.jsonc"
-INVERSE_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_inverse.py"
-RECORDING_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_recording.py"
+INVERSE_SCENE = LAB_ROOT / "manual_scenes" / "lab_shapeOPT_inverse.py"
+RECORDING_SCENE = LAB_ROOT / "manual_scenes" / "lab_shapeOPT_recording.py"
 SESSION_CONFIG_FILE = LAB_ROOT / "runtime" / "session_config.json"
 # Dashboard-owned logs (Generate tab, scene launchers). A sibling of runtime/,
 # never a child: archiving moves runtime/ wholesale, and the persistent generate

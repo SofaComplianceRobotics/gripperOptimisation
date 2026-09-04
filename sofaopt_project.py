@@ -47,7 +47,7 @@ CENTERPARTS_DIR = ASSETS_ROOT / "data" / "meshes" / CENTERPARTS_DIRNAME
 LEGS_DIR = ASSETS_ROOT / "data" / "meshes" / LEGS_DIRNAME
 GENERATE_SCRIPT = LAB_ROOT / "generation" / "generate_gripper.py"
 GENERATE_LEG_SCRIPT = LAB_ROOT / "generation" / "generate_leg.py"
-TRIAL_RECORDER_SCENE = LAB_ROOT / "scenes" / "lab_shapeOPT_trial_recorder.py"
+TRIAL_RECORDER_SCENE = LAB_ROOT / "manual_scenes" / "lab_shapeOPT_trial_recorder.py"
 
 GEOMETRY_EXPORT_TIMEOUT = 60.0  # seconds before generate_gripper.py is considered stuck
 RECORDING_TIMEOUT = 60.0  # seconds before the trial recording pass is considered stuck
@@ -253,7 +253,7 @@ def run_trajectory_recorder(output_path: Path, leg_name: str | None = None) -> i
     """Launch the headless trial-recorder scene, writing to `output_path`.
 
     Replays the captured reference effector-target path (see
-    scenes/lab_shapeOPT_trial_recorder.py) through the inverse solver and
+    manual_scenes/lab_shapeOPT_trial_recorder.py) through the inverse solver and
     records the resulting motor angles. Only `leg_name` needs to be passed in
     explicitly: inverse-mode scenes have no collision pipeline, so the
     gripper's own mesh comes from whatever generate_gripper.py already wrote
