@@ -108,7 +108,7 @@ python -m pytest
 
 ```
 lab_shapeOPT/
-├── config/            # Active gripper config files (JSONC) read by generation and optimization
+├── config/            # lab_config.jsonc (the hand-edited gripper) + the optimizer's search-space selection
 ├── cool_grippers/     # Curated saved gripper designs — reference configs and starting points
 ├── dashboard/         # The lab's own dashboard tabs (Generate, Scenes, Parameter Guide) layered onto sofaopt's
 ├── docs/              # Images used by the Parameter Guide tab

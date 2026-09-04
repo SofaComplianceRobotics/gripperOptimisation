@@ -6,18 +6,30 @@ Gripper parameter files.
 
 ## Files
 
-**`lab_config.jsonc`** — the live config. This is the file that matters.
+**`lab_config.jsonc`** — the live, hand-edited config: the one gripper you'd
+build right now.
 
-Read by `generation/_gripper_common.py` to build a `ModelParams` and generate
-a mesh. Written by the optimizer for each trial with the candidate parameter
-values. Supports `//` line comments (JSONC format) — these are stripped
-before JSON parsing.
+The `generation/` scripts read it (via `_gripper_common.load_jsonc`) when run
+with no `--config` argument — i.e. from the dashboard Generate button, the
+Config tab, or a bare `python generation/generate_gripper.py`. Supports `//`
+line comments (JSONC); they're stripped before parsing.
 
-**`lab_config.optimization.json`** — the search-space selection: a plain
+The optimizer does **not** use this file. Each trial gets its own
+`params.json` (written by sofaopt into the trial directory) and the
+generation scripts are pointed at that with `--config`.
+
+**`lab_config.optimization.json`** — the search-space selection: a
 `{"optimized_params": [...]}` list of the `ModelParams` / `LegParams` field
-names the optimizer is allowed to vary. `sofaopt_project.py` reads it and
-freezes every field not in the list to its `lab_config.jsonc` value. Edit it
-from the dashboard's Parameters tab, or by hand.
+names the optimizer is allowed to vary. `sofaopt_project.py` reads it and,
+for every searchable field *not* in the list, collapses its range to a single
+point (`low == high`) so sofaopt freezes it at its **`params.py` /
+`leg_params.py` default** (not its `lab_config.jsonc` value — the two files
+are unrelated). Bool params stay searchable regardless. Edit it from the
+dashboard's Parameters tab, or by hand.
+
+This file has nothing to do with `lab_config.jsonc`. It is not touched during
+a run, and the optimizer does not seed from it — CMA-ES centres its search on
+the dataclass defaults.
 
 ---
 
