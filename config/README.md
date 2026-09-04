@@ -1,6 +1,6 @@
 # config/
 
-Gripper parameter files. The optimizer and generation scripts both read `lab_config.jsonc` as the active configuration.
+Gripper parameter files.
 
 ---
 
@@ -8,7 +8,16 @@ Gripper parameter files. The optimizer and generation scripts both read `lab_con
 
 **`lab_config.jsonc`** — the live config. This is the file that matters.
 
-Read by `generation/_gripper_common.py` to build a `ModelParams` and generate a mesh. Written by the optimizer for each trial with the candidate parameter values. Supports `//` line comments (JSONC format) — these are stripped before JSON parsing.
+Read by `generation/_gripper_common.py` to build a `ModelParams` and generate
+a mesh. Written by the optimizer for each trial with the candidate parameter
+values. Supports `//` line comments (JSONC format) — these are stripped
+before JSON parsing.
+
+**`lab_config.optimization.json`** — the search-space selection: a plain
+`{"optimized_params": [...]}` list of the `ModelParams` / `LegParams` field
+names the optimizer is allowed to vary. `sofaopt_project.py` reads it and
+freezes every field not in the list to its `lab_config.jsonc` value. Edit it
+from the dashboard's Parameters tab, or by hand.
 
 ---
 

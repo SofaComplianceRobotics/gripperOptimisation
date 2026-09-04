@@ -1,32 +1,45 @@
 # scenes/
 
-SOFA scene scripts for manual use — not run by the optimizer. Launch with `runSofa.exe` or from the dashboard Scenes tab.
+SOFA scenes for manual use and for the optimizer's per-trial motor recording.
+Launch the manual ones with `runSofa.exe` or from the dashboard Scenes tab.
 
 ---
 
 ## Files
 
-**`_manual_scene.py`** — shared scene assembly
+**`_manual_scene.py`** — shared assembly for the two interactive scenes.
+`build_manual_scene()` owns the common part (robot, tray, effector chain,
+draggable target, ImGui accessories); each scene file only adds what makes it
+unique.
 
-Both scenes below drive the same robot with the same effector-target and ImGui setup; `build_manual_scene()` owns that common part (robot, tray, effector chain, draggable target, GUI accessories). The scene files only add what makes them unique.
-
-**`lab_shapeOPT_inverse.py`** — manual inverse-mode control
-
-Loads the gripper in inverse solver mode with the full SOFA ImGui interface: drag-to-target effector control, gripper opening slider, program window, and I/O stream. Use this to manually drive the gripper, inspect the current mesh geometry, or validate a config before optimizing.
+**`lab_shapeOPT_inverse.py`** — manual inverse-mode control. Loads the
+gripper in the inverse solver with the full ImGui interface: drag-to-target
+effector, opening slider, program window, I/O stream. Use it to drive the
+gripper by hand or eyeball a config before optimizing.
 
 ```bash
 runSofa.exe -l SofaPython3 scenes/lab_shapeOPT_inverse.py
 ```
 
-**`lab_shapeOPT_recording.py`** — motor trajectory recorder
-
-Same inverse scene but with a `RecordingController` attached. Captures motor positions at every simulation frame and autosaves them to `runtime/recordings/<test>/motor_recording.json` every second. On startup it reads `runtime/session_config.json` to know which test to target — the dashboard Scenes tab writes that file before launching.
+**`lab_shapeOPT_recording.py`** — the inverse scene plus a
+`RecordingController`. Captures motor positions every frame and autosaves them
+to `runtime/recordings/<test>/motor_recording.json` once a second. On startup
+it reads `runtime/session_config.json` (written by the dashboard Scenes tab)
+to know which test to target.
 
 ```bash
 runSofa.exe -l SofaPython3 scenes/lab_shapeOPT_recording.py
 ```
 
-**`lab_shapeOPT_inverse.crproj`** — EmioLabs platform project file associated with the inverse scene. Not a Python script — opened by the EmioLabs desktop app.
+**`lab_shapeOPT_trial_recorder.py`** — headless, **optimizer-only**. Called by
+`sofaopt_project.py`'s `prepare_trial` hook once per trial: drives this
+trial's gripper + leg through the inverse solver and writes the trajectory
+the direct-mode tests then replay. Reads/writes paths from `OPT_*` env vars.
+Not for manual use.
+
+**`lab_shapeOPT_inverse.crproj` / `lab_shapeOPT_recording.crproj`** — EmioLabs
+platform project files pairing with the two interactive scenes. Not Python —
+opened by the EmioLabs desktop app.
 
 ---
 
@@ -35,5 +48,6 @@ runSofa.exe -l SofaPython3 scenes/lab_shapeOPT_recording.py
 | Situation | Scene |
 |---|---|
 | Inspect or validate a gripper mesh | `lab_shapeOPT_inverse.py` |
-| Record a new motor trajectory for a test | `lab_shapeOPT_recording.py` via the dashboard |
-| Run an optimization test manually | Use the dashboard Scenes → Watch tab instead |
+| Record a new reference trajectory for a test | `lab_shapeOPT_recording.py`, via the dashboard |
+| Run one optimization test with a window open | dashboard Scenes → "watch a test" |
+| Per-trial trajectory during a run | `lab_shapeOPT_trial_recorder.py` (automatic) |

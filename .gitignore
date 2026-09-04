@@ -236,3 +236,6 @@ notion_pages/
 
 # Local scratch notes, not part of the project
 FUTURE_IMPROVEMENTS.txt
+
+# reach_zone sweep output (regenerated on each run)
+runtime/recordings/reach_zone/zone_result.json

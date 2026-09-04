@@ -109,16 +109,19 @@ python -m pytest
 ```
 lab_shapeOPT/
 ├── config/            # Active gripper config files (JSONC) read by generation and optimization
-├── cool_grippers/     # Curated saved gripper configs with preview images — reference designs
-├── dashboard/         # The lab's own dashboard tabs (Generate, Scenes) layered onto sofaopt's dashboard
+├── cool_grippers/     # Curated saved gripper designs — reference configs and starting points
+├── dashboard/         # The lab's own dashboard tabs (Generate, Scenes, Parameter Guide) layered onto sofaopt's
+├── docs/              # Images used by the Parameter Guide tab
 ├── generation/        # Scripts to build a gripper mesh from the active config (standard and fine variants)
 ├── geometry/          # Parametric geometry engine — part definitions, assembly, mesh export, param schema
-├── labtests/          # Registry of composable simulation tests used by the optimizer to score grippers
+├── labtests/          # Auto-discovered simulation tests the optimizer runs to score grippers
 ├── launcher/          # Entry-point scripts — bootstraps the environment and starts the web interface
 ├── project/           # EmioLabs platform project files (platform-specific format, not Python)
-├── runtime/           # Generated at runtime — Optuna DB, session config, trial results
-├── scenes/            # SOFA scene scripts passed directly to runSofa.exe
+├── runtime/           # Generated at runtime — Optuna DB, session config, trial results, mesh exports
+├── scenes/            # Manual SOFA scenes (inverse control, motor recording) — not run by the optimizer
+├── sections/          # Markdown shown in the EmioLabs lab page (assembled by lab_shapeOPT.md)
 ├── tests/             # pytest unit tests for the pure-Python layers
+├── tools/             # Dev install and bundle-build scripts
 ├── names.py           # Single source for cross-component part/file names
 ├── sofaopt_project.py # The sofaopt adapter: params, tests, SOFA runtime, prepare hook
 └── optimize.py        # Headless optimization entry point (dashboard Run button + CLI)
@@ -128,23 +131,21 @@ lab_shapeOPT/
 
 ## Features
 
-- Parametric gripper geometry (~25 parameters: pincer shape, leg attachment dimensions, tilt angles, etc.)
-- Parametric leg geometry (3 params: length, middle curvature via one control point) — default reproduces the stock blueleg, motor clip fused on every export; one shape per trial, plugged into all four of the gripper's leg attachments, optimized in the same trial as the gripper (no separate scoring)
-- CMA-ES evolutionary optimization via Optuna — automatic search across generations (provided by sofaopt)
-- SOFA simulation integration — each candidate is physically evaluated for grasp success
-- Parallel trial execution with process throttling and subprocess cleanup
-- Live progress tracking via `runtime/trials/progress.json`
-- Results analysis: ranked leaderboard, score history plot, rolling average and best-so-far trends
-- Modular labtest system — composable test scenes (grasp-hold, random cube pick, gripper tilt)
+- Parametric gripper geometry (~20 tunable parameters: ring shape, pincer spline, leg-attachment tilt, mesh resolution)
+- Parametric leg geometry (4 tunable parameters: end-point position and spline handle lengths) — default reproduces the stock blueleg, motor clip fused on every export; one shape per trial, plugged into all four of the gripper's leg attachments, optimized in the same trial as the gripper (no separate scoring)
+- Auto-discovered labtests — drop a folder in `labtests/` and it becomes a selectable test (grasp-hold, random cube pick, gripper tilt, reach zone)
+- SOFA simulation integration — each candidate is physically evaluated in the scene
+- The CMA-ES search, parallel runSofa scheduling, scoring pipeline, live dashboard and run archiving all come from **sofaopt**
+- Lab-side dashboard tabs: generate a mesh, launch a scene, browse the parameter guide
 
 ---
 
 ## Tech Stack
 
 - **Python** — core language
-- **CadQuery** — parametric CAD geometry
+- **CadQuery / OCP** — parametric CAD geometry
 - **gmsh** — mesh generation (STL/VTK export)
+- **beziers / scipy** — leg centreline splines
 - **SOFA Framework** — physics-based simulation (installed via EmioLabs)
-- **sofaopt** — optimization framework (Optuna + CMA-ES, parallel runSofa, live dashboard)
-- **pyvista** — offscreen 3D preview rendering
-- **Dash / matplotlib** — results visualization and dashboard
+- **sofaopt** — optimization framework (Optuna + CMA-ES, parallel runSofa scheduling, scoring, Dash dashboard, run archiving)
+- **pyvista** — offscreen 3D preview rendering for trial thumbnails
