@@ -6,7 +6,7 @@ Moves the gripper through a sequence of target positions and measures
 the Y-spread of the effector points as a proxy for achievable tilt.
 
 What this file owns:
-  - WAYPOINTS (default + optional JSON env-var override)
+  - WAYPOINTS
   - TiltController (waypoints + Y-spread measurement + scoring)
   - createScene() wiring
 
@@ -15,7 +15,6 @@ Everything else comes from core.
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -34,8 +33,6 @@ WAYPOINTS = [
     ([0, -150, 40, 0, 0, 0, 1], 10),  # straight forward
     ([40, -150, 0, 0, 0, 0, 1], 10),  # left
 ]
-
-PROGRAM_FILE = str(SCRIPT_DIR / "mypickandplace.crprog")
 
 
 def createScene(rootnode):
@@ -57,7 +54,7 @@ def createScene(rootnode):
         nodes,
         nodes.emio,
         initial_target_pos=[0, -150, 0, 0, 0, 0, 1],
-        program_file=PROGRAM_FILE if os.path.exists(PROGRAM_FILE) else None,
+        program_file=None,
     )
 
     writer = TRIAL.attach(rootnode)
