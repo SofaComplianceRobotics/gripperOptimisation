@@ -111,7 +111,6 @@ lab_shapeOPT/
 ├── config/            # lab_config.jsonc (the hand-edited gripper) + the optimizer's search-space selection
 ├── cool_grippers/     # Curated saved gripper designs — reference configs and starting points
 ├── dashboard/         # The lab's own dashboard tabs (Generate, Scenes, Parameter Guide) layered onto sofaopt's
-├── docs/              # Images used by the Parameter Guide tab
 ├── generation/        # Scripts to build a gripper mesh from the active config (standard and fine variants)
 ├── geometry/          # Parametric geometry engine — part definitions, assembly, mesh export, param schema
 ├── labtests/          # Auto-discovered simulation tests the optimizer runs to score grippers

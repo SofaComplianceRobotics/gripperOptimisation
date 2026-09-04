@@ -5,9 +5,10 @@ documented parameter, holding its description and, side by side, a render of the
 model at the parameter's minimum and maximum. Bounds are read live from the
 project's ParamSpec list; the prose and images live in PARAM_DOCS below.
 
-Images are optional per parameter. Those that exist sit in docs/params/ as
-<param>_low.png / <param>_high.png and are served by the /param-doc-image route
-registered via register_param_guide_routes (wired in dashboard/app.py).
+Images are optional per parameter. Those that exist sit in
+dashboard/param_guide_images/ as <param>_low.png / <param>_high.png and are
+served by the /param-doc-image route registered via
+register_param_guide_routes (wired in dashboard/app.py).
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from dash import html
 from sofaopt.dashboard import context
 
 LAB_ROOT = Path(__file__).resolve().parents[3]
-_PARAM_DOCS_DIR = LAB_ROOT / "docs" / "params"
+_PARAM_DOCS_DIR = LAB_ROOT / "dashboard" / "param_guide_images"
 
 
 @dataclass(frozen=True)
@@ -45,7 +46,7 @@ class ParamDoc:
 
 # Descriptions are a first draft (written from reading geometry/params.py and
 # geometry/leg_params.py, not yet reviewed). Images are added per parameter as
-# reference renders land in docs/params/ (named <param>_low.png /
+# reference renders land in dashboard/param_guide_images/ (named <param>_low.png /
 # <param>_high.png); most params have none yet.
 PARAM_DOCS: dict[str, ParamDoc] = {
     # --- central ring / body ---------------------------------------------

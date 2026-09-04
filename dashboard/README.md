@@ -25,7 +25,8 @@ Entry point: `python launcher/launch_web.py` → `dashboard.app.launch_dashboard
 - `param_guide.py` — Parameter Guide tab: one collapsible entry per documented
   parameter with its description and a low/high render pair. Bounds are read
   live from the project's `ParamSpec` list; prose and images live in
-  `PARAM_DOCS` and `docs/params/`. Also registers the `/param-doc-image` route.
+  `PARAM_DOCS` and `dashboard/param_guide_images/`. Also registers the
+  `/param-doc-image` route.
 
 **`callbacks/`** — `@app.callback` registration only, no HTML. One
 `register_*_callbacks(app)` per tab, called by `app.py` after the layout is
