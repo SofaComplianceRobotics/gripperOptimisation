@@ -1,4 +1,1 @@
-"""Launch wrappers for the lab.
-
-These are preserved for backwards compatibility; prefer top-level `launcher/`.
-"""
+"""Environment bootstrap and entry-point scripts for the lab."""
