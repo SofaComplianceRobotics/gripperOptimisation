@@ -115,9 +115,9 @@ lab_shapeOPT/
 ├── geometry/          # Parametric geometry engine — part definitions, assembly, mesh export, param schema
 ├── labtests/          # Auto-discovered simulation tests the optimizer runs to score grippers
 ├── launcher/          # Entry-point scripts — bootstraps the environment and starts the web interface
+├── manual_scenes/     # Inverse-mode SOFA scenes: hand control, motor-trajectory recording (feeds the tests)
 ├── project/           # EmioLabs platform project files (platform-specific format, not Python)
 ├── runtime/           # Generated at runtime — Optuna DB, session config, trial results, mesh exports
-├── manual_scenes/     # Inverse-mode SOFA scenes: hand control, motor-trajectory recording (feeds the tests)
 ├── sections/          # Markdown shown in the EmioLabs lab page (assembled by lab_shapeOPT.md)
 ├── tests/             # pytest unit tests for the pure-Python layers
 ├── tools/             # Dev install and bundle-build scripts
