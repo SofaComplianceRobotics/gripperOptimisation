@@ -11,7 +11,7 @@ Run and session logs are **not** here — they live in the top-level `logs/` dir
 ```
 runtime/
 ├── exports/            ← Gripper mesh files from the last generation run
-├── leg_preview/        ← Output of preview_leg.py (single-leg quick preview)
+├── previews/           ← Output of generation/preview.py (quick gripper/leg render)
 ├── recordings/         ← Motor trajectory recordings per test (committed, NOT auto-generated)
 ├── trials/             ← Per-trial output from the optimization loop
 │   ├── gen_XXXX/

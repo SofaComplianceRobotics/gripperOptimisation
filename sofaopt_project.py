@@ -336,43 +336,17 @@ def _render_combined_preview(gripper_stl: Path, leg_stl: Path, out_png: Path) ->
     """Render the gripper and the leg side by side into one PNG for one trial.
 
     sofaopt's own preview pipeline only supports a single image per trial
-    (TrialPrep.preview_image), so both parts are composited here rather than
-    passed through separately. Best-effort: a render failure just means no
-    preview for this trial, not a failed trial (matches how sofaopt's own
-    STL-to-PNG rendering treats preview failures).
+    (TrialPrep.preview_image), so both parts are composited here. Shares the
+    renderer with `generation/preview.py` so a trial thumbnail and a manual
+    `python generation/preview.py` look identical. Best-effort: a render
+    failure just means no preview for this trial, not a failed trial.
     """
-    import pyvista as pv
+    from generation.preview import render_mesh_grid
 
-    plotter = None
     try:
-        plotter = pv.Plotter(off_screen=True, shape=(1, 2), window_size=(1600, 600))
-        for col, (title, stl_path) in enumerate(
-            (("Gripper", gripper_stl), ("Leg", leg_stl))
-        ):
-            plotter.subplot(0, col)
-            mesh = pv.read(str(stl_path))
-            plotter.add_mesh(
-                mesh, color="#4a90d9", pbr=True, metallic=0.1, roughness=0.4
-            )
-            plotter.add_light(pv.Light(position=(200, 200, 400), intensity=0.8))
-            plotter.add_text(title, font_size=14)
-            plotter.background_color = "white"
-            # Head-on instead of pyvista's default isometric angle: view
-            # straight down the x axis with y (height) held vertical.
-            plotter.enable_parallel_projection()
-            center = mesh.center
-            plotter.camera_position = [
-                (center[0] + 1.0, center[1], center[2]),
-                center,
-                (0, 1, 0),
-            ]
-            plotter.reset_camera()
-        plotter.screenshot(str(out_png))
+        render_mesh_grid([("Gripper", gripper_stl), ("Leg", leg_stl)], out_png)
     except Exception as e:
         print(f"[warn] Combined preview render failed: {e}")
-    finally:
-        if plotter is not None:
-            plotter.close()
 
 
 def _prepare_trial(params: dict, trial_dir: Path) -> TrialPrep:

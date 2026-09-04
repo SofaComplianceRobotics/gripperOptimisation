@@ -27,9 +27,18 @@ finer mesh for 3D printing, written under a separate name (`names.py`) so it
 never overwrites the simulation mesh. Run it by hand when you want to print a
 design.
 
-**`preview_leg.py`** — generate a leg from the current config (with optional
-`--set key=value` overrides) and render it straight to a PNG under
-`runtime/leg_preview/`. A quick visual check, no simulation.
+**`preview.py`** — build the gripper and/or leg from the current config (with
+optional `--set key=value` overrides) and render a PNG under
+`runtime/previews/`. A quick visual check, no simulation.
+
+```bash
+python generation/preview.py                 # gripper + leg, side by side
+python generation/preview.py --part gripper
+python generation/preview.py --part leg --set leg_p1_dist=140
+```
+
+`sofaopt_project.py` imports this module's `render_mesh_grid` for its
+per-trial thumbnails, so a manual preview and a trial thumbnail match.
 
 ---
 

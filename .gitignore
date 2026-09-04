@@ -222,7 +222,7 @@ __marimo__/
 runtime/trials/
 runtime/study.db
 runtime/exports/
-runtime/leg_preview/
+runtime/previews/
 runtime.lock
 logs/
 archives/
