@@ -7,17 +7,20 @@ Entry-point scripts that bootstrap the runtime environment and start the lab.
 ## Scripts
 
 **`launch_web.py`** — the single entry point, called from the EmioLabs
-platform button and from the terminal. Before handing off to the dashboard it
-sets up the two SOFA environments:
-- **EmioLabs SOFA** (`EMIOLABS_RUNSOFA_EXE`) — the platform build, used for
-  interactive scenes with ImGui and hardware connection.
-- **Headless SOFA** (`RUNSOFA_EXE`, `SOFA_ROOT`) — a separate batch-mode
-  build used for optimization runs (no GUI).
+platform button and from the terminal. Before handing off to the dashboard it:
 
-It also clears `PYTHONHOME` / `PYTHONSTARTUP` / `PYTHONUSERBASE` /
-`PYTHONEXECUTABLE`, which EmioLabs injects and which would otherwise leak
-into the SOFA subprocesses and break their interpreter. Then calls
-`dashboard.app.launch_dashboard(port=8050, open_browser=True)`.
+- Resolves the **one** SOFA build — the emio-labs one — via
+  `resolve_sofa_runtime(prefer_env=False)`, and exports every path the
+  subprocesses need (`SOFA_ROOT`, `RUNSOFA_EXE`, `SOFA_PYTHON_PATH`,
+  `SOFA_PYTHON_EXE`, `SOFA_SITE_PACKAGES`, `EMIOLABS_RUNSOFA_EXE`) pointing at
+  it. `prefer_env=False` means a stale machine-wide `SOFA_ROOT` / `RUNSOFA_EXE`
+  is ignored, so the optimizer's headless runs and the interactive scenes are
+  guaranteed the same physics build (only `EMIOLABS_SOFA_ROOT` overrides).
+- Clears `PYTHONHOME` / `PYTHONSTARTUP` / `PYTHONUSERBASE` / `PYTHONEXECUTABLE`,
+  which EmioLabs injects and which would otherwise leak into the SOFA
+  subprocesses and break their interpreter.
+
+Then calls `dashboard.app.launch_dashboard(port=8050, open_browser=True)`.
 
 **`install_deps.py`** — the lab's "install dependencies" `#python-button`.
 EmioLabs runs it with the bundled Python already first on PATH, so
