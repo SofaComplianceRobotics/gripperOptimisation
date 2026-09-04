@@ -89,7 +89,7 @@ runSofa.exe -l SofaPython3 manual_scenes/lab_shapeOPT_inverse.py
 
 Run the optimization loop:
 ```bash
-python optimize.py
+python launcher/optimize.py
 ```
 
 Open the dashboard:
@@ -114,7 +114,7 @@ lab_shapeOPT/
 ├── generation/        # Scripts to build a gripper mesh from the active config (standard and fine variants)
 ├── geometry/          # Parametric geometry engine — part definitions, assembly, mesh export, param schema
 ├── labtests/          # Auto-discovered simulation tests the optimizer runs to score grippers
-├── launcher/          # Entry-point scripts — bootstraps the environment and starts the web interface
+├── launcher/          # Entry points: launch_web.py, optimize.py, install_deps.py + the env bootstrap
 ├── manual_scenes/     # Inverse-mode SOFA scenes: hand control, motor-trajectory recording (feeds the tests)
 ├── project/           # EmioLabs platform project files (platform-specific format, not Python)
 ├── runtime/           # Generated at runtime — Optuna DB, session config, trial results, mesh exports
@@ -122,8 +122,7 @@ lab_shapeOPT/
 ├── tests/             # pytest unit tests for the pure-Python layers
 ├── tools/             # Dev install and bundle-build scripts
 ├── names.py           # Single source for cross-component part/file names
-├── sofaopt_project.py # The sofaopt adapter: params, tests, SOFA runtime, prepare hook
-└── optimize.py        # Headless optimization entry point (dashboard Run button + CLI)
+└── sofaopt_project.py # The sofaopt adapter: params, tests, SOFA runtime, prepare hook
 ```
 
 ---

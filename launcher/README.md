@@ -22,6 +22,12 @@ platform button and from the terminal. Before handing off to the dashboard it:
 
 Then calls `dashboard.app.launch_dashboard(port=8050, open_browser=True)`.
 
+**`optimize.py`** — headless optimization entry point. `python
+launcher/optimize.py` from a terminal, or the dashboard's Run button (it's
+the project's `run_script`). Test selection and weights come from the `OPT_*`
+environment when the dashboard set them; a bare CLI run uses the
+default-selected tests. Hands off to `sofaopt.run_optimization`.
+
 **`install_deps.py`** — the lab's "install dependencies" `#python-button`.
 EmioLabs runs it with the bundled Python already first on PATH, so
 `sys.executable` is already correct. Installs sofaopt and the pinned

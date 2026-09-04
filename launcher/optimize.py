@@ -1,8 +1,8 @@
 """Headless optimization entry point.
 
-Run directly (``python optimize.py``) or via the dashboard's Run button.
-Test selection/weights come from the OPT_* environment when the dashboard
-set them; a bare CLI run uses the catalog's default-selected tests.
+Run directly (``python launcher/optimize.py``) or via the dashboard's Run
+button. Test selection/weights come from the OPT_* environment when the
+dashboard set them; a bare CLI run uses the catalog's default-selected tests.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-LAB_ROOT = Path(__file__).resolve().parent
+LAB_ROOT = Path(__file__).resolve().parents[1]
 if str(LAB_ROOT) not in sys.path:
     sys.path.insert(0, str(LAB_ROOT))
 

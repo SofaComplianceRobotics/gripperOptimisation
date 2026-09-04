@@ -479,7 +479,7 @@ PROJECT = SofaOptProject(
     # gen, trial trajectory recording), each individually bounded by its own
     # timeout, so the outer sofaopt-level budget must cover all three.
     prepare_timeout=2 * GEOMETRY_EXPORT_TIMEOUT + RECORDING_TIMEOUT,
-    run_script=LAB_ROOT / "optimize.py",
+    run_script=LAB_ROOT / "launcher" / "optimize.py",
     run_python_exe=Path(_SOFA["python_exe"]) if _SOFA["python_exe"] else None,
     config_file=LAB_ROOT / "config" / "lab_config.jsonc",
     title="Lab ShapeOPT",
